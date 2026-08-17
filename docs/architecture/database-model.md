@@ -25,6 +25,9 @@ Use `uuid` internal primary keys for all tables. Store timestamps as `timestampt
 | Payments | `payment_transactions` | Financial movements resulting from attempts or refunds. |
 | Provider matching | `provider_assignments` | Provider offers and accepted/confirmed assignments over time. |
 | Provider matching | `provider_assignment_history` | Append-only provider-offer/assignment transitions. |
+| Provider capability | `provider_services` | Stable provider/package/fulfilment-mode capability. |
+| Provider capability | `provider_locations` | Provider-owned physical service locations. |
+| Provider capability | `provider_service_locations` | Availability of a location-based capability at a physical location. |
 
 ## 2. Entity-by-entity fields
 
@@ -69,7 +72,15 @@ A patient may be a registered user, an invited family member, a dependent, or an
 | `status` | enum or constrained `varchar`, non-null | Suggested: `PENDING`, `ACTIVE`, `SUSPENDED`, `INACTIVE`. |
 | `created_at`, `updated_at`, `deleted_at` | `timestamptz`; first two non-null, latter nullable | Do not hard-delete providers with assignment history. |
 
-Services, locations, availability, home-visit capability, and verification records are future provider-domain tables. They are matching inputs, not fields to overpack into this profile.
+Services and physical locations are separate provider-domain tables and matching inputs, not fields to overpack into this profile. Availability/scheduling, home-visit service areas, and verification records remain future work.
+
+#### `provider_services`, `provider_locations`, and `provider_service_locations`
+
+`provider_services` uniquely identifies `(provider_id, health_check_package_id, fulfilment_mode_id)` and carries `is_active` plus creation/update timestamps. Foreign keys use `RESTRICT`; matching-oriented indexes begin with package/mode/active and provider/active. Prices are deliberately absent.
+
+`provider_locations` contains the provider, display name, two address lines (the second optional), city, state, two-letter uppercase country code, optional latitude/longitude, active flag, and timestamps. Database checks enforce country-code shape and coordinate ranges without introducing premature address normalization.
+
+`provider_service_locations` contains the service, location, provider-owner key, and creation time. Its composite foreign keys require both referenced rows to have the same provider, while the application service also validates ownership and the `PROVIDER_LOCATION` mode for clearer errors. The service/location pair is unique. Removing a link deletes this join row only; normal provider service and location lifecycle uses activation/deactivation.
 
 #### `organisations`
 

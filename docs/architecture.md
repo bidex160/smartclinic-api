@@ -42,6 +42,8 @@ API application
 
 Each module should keep its controller, service, DTOs, persistence entities, and tests close together. Modules collaborate through explicit service interfaces or domain-level contracts rather than through controller calls or direct cross-domain database manipulation.
 
+The Providers module owns provider service capabilities, physical locations, their relationship, and eligibility discovery. Its discovery query is an input to future matching, not a matching or booking-assignment workflow. The Health Checks module continues to own package, fulfilment-mode, and commercial pricing data; capability rows never store price.
+
 ## Layer responsibilities
 
 ```text

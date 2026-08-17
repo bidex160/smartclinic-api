@@ -4,6 +4,16 @@
 
 Provider matching is a separate concern from the booking lifecycle. It selects and secures a capable provider for a booking after the booking is eligible for fulfilment. Matching decisions must be recorded independently because multiple providers may be considered or decline before one accepts.
 
+## Implemented capability foundation
+
+`ProviderService` is the stable capability record for one provider, Health Check package, and fulfilment mode. The tuple is unique; operational retirement and restoration change `is_active` rather than creating duplicate rows. A capability is eligible for discovery only when the provider has `ACTIVE` status and is not deleted, and the capability, package, and fulfilment mode are all active.
+
+`ProviderLocation` stores a provider-owned named physical service location with a minimally structured address, uppercase ISO 3166-1 alpha-2 country code, optional validated coordinates, and active state. `provider_service_locations` links a `PROVIDER_LOCATION` capability to one or more locations. Ownership is checked by the service and enforced by composite database foreign keys. Unlinking deletes the join row because it has no independent audit meaning; provider services and locations themselves are not physically deleted during normal operations.
+
+`ProviderCapabilitiesService.findEligibleProviders(packageId, modeId)` performs capability discovery only. It does not rank, reserve, offer, assign, or schedule a provider. For `PROVIDER_LOCATION`, active linked locations are included in the capability response, but a location is not currently required by the general discovery query. Physical locations cannot be linked to `HOME_VISIT`; home-visit service areas, distance/routing, availability, schedules, offer policy, and assignment remain deferred.
+
+Capability and location management is exposed only under `/api/v1/admin` with JWT authentication and the `ADMIN` or `OPERATIONS` role. These administrative endpoints return explicit response DTOs rather than persistence entities.
+
 The confirmed v1 approach is **hybrid**: the platform supports eligible-provider discovery and provider offers while authorised operations staff can intervene manually. The product does not define a matching algorithm yet. Future matching may consider:
 
 - Whether the provider offers the requested service or package.

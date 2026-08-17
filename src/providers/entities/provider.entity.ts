@@ -3,6 +3,8 @@ import { Column, CreateDateColumn, DeleteDateColumn, Entity, Index, JoinColumn, 
 import { User } from '../../users/entities/user.entity';
 import { ProviderStatus } from '../enums/provider-status.enum';
 import { ProviderAssignment } from './provider-assignment.entity';
+import { ProviderLocation } from './provider-location.entity';
+import { ProviderService } from './provider-service.entity';
 
 @Entity('providers')
 @Index('UQ_providers_user_id', ['userId'], { unique: true, where: '"user_id" IS NOT NULL' })
@@ -37,4 +39,10 @@ export class Provider {
 
   @OneToMany(() => ProviderAssignment, (assignment) => assignment.provider)
   assignments!: ProviderAssignment[];
+
+  @OneToMany(() => ProviderService, (service) => service.provider)
+  services!: ProviderService[];
+
+  @OneToMany(() => ProviderLocation, (location) => location.provider)
+  locations!: ProviderLocation[];
 }
