@@ -17,6 +17,7 @@ Use `uuid` internal primary keys for all tables. Store timestamps as `timestampt
 | Catalogue | `health_check_packages` | Configurable Health Check package definitions. |
 | Catalogue | `fulfilment_modes` | Configurable delivery modes. |
 | Booking | `bookings` | One request to deliver one package to exactly one participant. |
+| Booking | `booking_contacts` | Immutable public-booker contact snapshot for bookings created without an account. |
 | Booking | `booking_status_history` | Append-only booking lifecycle transitions. |
 | Funding | `booking_funding` | One or more funding obligations/sources for a booking. |
 | Payments | `payment_attempts` | Provider-neutral attempts to collect a funding obligation. |
@@ -113,7 +114,7 @@ Home Visit is a fulfilment mode, never a package. Neither table should contain a
 | --- | --- | --- |
 | `id` | `uuid`, primary key | Internal identifier. |
 | `booking_reference` | `varchar`, non-null, unique | Public-facing reference, separate from `id`. |
-| `booker_user_id` | `uuid`, non-null FK to `users` | The person/administrator initiating the booking. |
+| `booker_user_id` | `uuid`, nullable FK to `users` | The person/administrator initiating the booking when a registered account exists. Public bookings leave this null. |
 | `participant_patient_id` | `uuid`, non-null FK to `patients` | Exactly one participant per booking. |
 | `organisation_context_id` | `uuid`, nullable FK to `organisations` | Optional context for an organisation journey; not a substitute for programme eligibility or funding records. |
 | `health_check_package_id` | `uuid`, non-null FK to `health_check_packages` | Selected package. |
@@ -130,6 +131,19 @@ Home Visit is a fulfilment mode, never a package. Neither table should contain a
 | `created_at`, `updated_at` | `timestamptz`, non-null | Current-record audit fields. |
 
 The booking has no `payer_id`, payment-provider reference, provider assignment ID, or health-result fields. Payer/funder is represented through `booking_funding`; provider matching through `provider_assignments`; health data belongs to future clinical records. A future `booking_groups`/`orders` table can associate related bookings, but every booking retains one `participant_patient_id`.
+
+#### `booking_contacts`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal contact-snapshot identifier. |
+| `booking_id` | `uuid`, non-null, unique FK to `bookings` | One public-booker snapshot per booking where one is required. |
+| `given_name`, `family_name` | `varchar`, non-null | Name supplied by the person initiating the public booking. |
+| `email` | `varchar`, nullable | Optional contact email snapshot. |
+| `phone` | `varchar`, non-null | Contact phone snapshot. |
+| `created_at` | `timestamptz`, non-null | Snapshot creation time. |
+
+`booking_contacts` is intentionally distinct from `users` and `patients`. It preserves who initiated a public booking at the time it was created; it does not create an account and is not a future account-linking mechanism. A later account-linking flow may explicitly relate an account to a patient or booking under its own consent and authority rules.
 
 #### `booking_status_history`
 
@@ -233,7 +247,8 @@ This table is append-only: no updates or soft deletes. It records the offer/assi
 ```text
 users 0..1 ── 0..1 patients
 users 0..1 ── 0..1 providers
-users 1 ──── * bookings                 (booker)
+users 0..1 ── * bookings                 (registered booker, when present)
+bookings 0..1 ── 1 booking_contacts      (public booker snapshot)
 patients 1 ─ * bookings                 (participant; exactly one per booking)
 organisations 0..1 ─ * bookings         (optional context)
 health_check_packages 1 ─ * bookings
@@ -284,7 +299,7 @@ The service layer—not a database enum alone—must enforce contextual transiti
 - Unique constraints: `bookings.booking_reference`; `health_check_packages.code`; `fulfilment_modes.code`; `organisations.public_code`; `payment_attempts.idempotency_key`; and partial unique indexes on non-null `users.email_normalized`, `patients.user_id`, and `providers.user_id`.
 - Add a partial unique index on `provider_assignments(booking_id)` where `status = 'CONFIRMED'`, enforcing at most one active confirmed provider assignment per booking. Concurrent `OFFERED` rows remain permitted pending an implementation decision.
 - Add query indexes such as `bookings(participant_patient_id, created_at desc)`, `bookings(booker_user_id, created_at desc)`, `bookings(status, preferred_date)`, `booking_funding(booking_id, status)`, `payment_attempts(booking_funding_id, status)`, `payment_transactions(payment_attempt_id, status)`, and `provider_assignments(booking_id, status)`.
-- `bookings.participant_patient_id`, package, fulfilment mode, and status are non-null. `booker_user_id` is proposed non-null for v1; anonymous booking, system-created bookings, and organisation-only initiation require an explicit future actor model rather than a hidden nullable workaround.
+- `bookings.participant_patient_id`, package, fulfilment mode, and status are non-null. `booker_user_id` is nullable so a public booking can be created without a registered account; a `booking_contacts` snapshot records the public initiator in that journey. A future authenticated/system actor model remains an explicit design concern.
 - Use `ON DELETE RESTRICT` for references from bookings, funding, payments, history, and assignments. Historical records must remain referentially valid. Catalogue records should be retired (`is_active = false`), not deleted.
 - Check constraints: non-negative monetary values; ISO currency code format; percentage greater than zero and at most 100; a valid funding-party combination; end time after start time where both values are present; and assignment timestamp ordering where applicable.
 - Use `numeric(12,2)` for v1 money, never `float`/`double precision`. Confirm precision/scale and currencies before implementation; retain currency alongside every monetary value. Do not sum mixed currencies without an explicitly documented exchange-rate policy.

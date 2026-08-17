@@ -4,10 +4,11 @@ import { Organisation } from '../../organisations/entities/organisation.entity';
 import { Patient } from '../../patients/entities/patient.entity';
 import { ProviderAssignment } from '../../providers/entities/provider-assignment.entity';
 import { User } from '../../users/entities/user.entity';
-import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 import { BookingStatus } from '../enums/booking-status.enum';
 import { BookingFunding } from './booking-funding.entity';
+import { BookingContact } from './booking-contact.entity';
 import { BookingStatusHistory } from './booking-status-history.entity';
 
 @Entity('bookings')
@@ -31,12 +32,12 @@ export class Booking {
   @Column({ name: 'booking_reference', type: 'varchar' })
   bookingReference!: string;
 
-  @Column({ name: 'booker_user_id', type: 'uuid' })
-  bookerUserId!: string;
+  @Column({ name: 'booker_user_id', type: 'uuid', nullable: true })
+  bookerUserId!: string | null;
 
-  @ManyToOne(() => User, (user) => user.bookingsAsBooker, { onDelete: 'RESTRICT' })
+  @ManyToOne(() => User, (user) => user.bookingsAsBooker, { nullable: true, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'booker_user_id' })
-  booker!: User;
+  booker!: User | null;
 
   @Column({ name: 'participant_patient_id', type: 'uuid' })
   participantPatientId!: string;
@@ -120,4 +121,7 @@ export class Booking {
 
   @OneToMany(() => ProviderAssignment, (assignment) => assignment.booking)
   providerAssignments!: ProviderAssignment[];
+
+  @OneToOne(() => BookingContact, (contact) => contact.booking)
+  contact!: BookingContact | null;
 }

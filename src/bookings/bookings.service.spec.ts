@@ -3,6 +3,7 @@ import { QueryFailedError } from 'typeorm';
 
 import { BookingStatusHistory } from './entities/booking-status-history.entity';
 import { Booking } from './entities/booking.entity';
+import * as bookingReference from './booking-reference';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { BookingStatus } from './enums/booking-status.enum';
@@ -73,12 +74,7 @@ describe('BookingsService', () => {
 
   it('creates a draft booking and its initial status-history record atomically', async () => {
     const { service, transactionalBookingRepository, transactionalHistoryRepository } = createService();
-    jest
-      .spyOn(
-        service as unknown as { generateBookingReference: () => string },
-        'generateBookingReference',
-      )
-      .mockReturnValue('SC-2026-ABCDEFGHIJKL');
+    jest.spyOn(bookingReference, 'generateBookingReference').mockReturnValue('SC-2026-ABCDEFGHIJKL');
 
     await expect(service.create(createBookingDto)).resolves.toMatchObject({
       bookingReference: 'SC-2026-ABCDEFGHIJKL',
@@ -156,10 +152,7 @@ describe('BookingsService', () => {
       .mockRejectedValueOnce(collision)
       .mockResolvedValueOnce({ bookingReference: 'SC-2026-RETRIEDREF01' });
     jest
-      .spyOn(
-        service as unknown as { generateBookingReference: () => string },
-        'generateBookingReference',
-      )
+      .spyOn(bookingReference, 'generateBookingReference')
       .mockReturnValueOnce('SC-2026-COLLISION001')
       .mockReturnValueOnce('SC-2026-RETRIEDREF01');
 

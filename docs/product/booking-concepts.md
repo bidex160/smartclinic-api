@@ -4,7 +4,8 @@ This reference fixes the v1 vocabulary for booking and funding. It describes pro
 
 | Concept | V1 definition | Key boundary |
 | --- | --- | --- |
-| **Booker** | The person or authorised organisation administrator who initiates and manages a booking. | The booker is not automatically the participant or funder. |
+| **Booker** | The person or authorised organisation administrator who initiates and manages a booking. A public visitor may be a booker without a registered account. | The booker is not automatically the participant or funder. |
+| **Booking Contact** | An immutable snapshot of the public visitor's name and contact details at booking creation. | It is not a User account, does not grant access, and does not replace future account linking. |
 | **Participant** | The patient who receives one Smart Health Check and whose health data is recorded. | Every booking has exactly one participant. |
 | **Payer/Funder** | An individual, organisation, programme, or other source responsible for some or all funding. | A booking can have multiple funders; it must not rely on one `payerId`. |
 | **Booking** | One request to provide one selected Health Check package to exactly one participant at a requested time/location and fulfilment mode. | A booking is not a family basket or multi-participant appointment. |
@@ -38,3 +39,7 @@ The model supports self-funded, family-funded, diaspora-sponsored, organisation-
 ## Consent and access boundary
 
 Booking for another person requires authority and consent rules that will be designed later for adults, minors, and dependents. Patient health information, booking information, payment information, provider information, and organisation information require distinct future access controls. Booker or funder status alone does not grant health-data access.
+
+## Public booking intake
+
+A public visitor may create a booking without a `User` record. The platform creates a separate `Patient` for the participant and a `BookingContact` snapshot for the visitor; it does not deduplicate patients, auto-create a User account, or mark a visitor as an active user. A later, explicit account-linking journey may connect a registered account where product consent and authority rules permit it.

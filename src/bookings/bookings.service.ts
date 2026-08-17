@@ -1,7 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { randomUUID } from 'node:crypto';
-import { QueryFailedError, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 
 import { FulfilmentMode } from '../health-checks/entities/fulfilment-mode.entity';
 import { HealthCheckPackage } from '../health-checks/entities/health-check-package.entity';
@@ -13,9 +12,12 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { BookingStatus } from './enums/booking-status.enum';
 import { BookingStatusHistory } from './entities/booking-status-history.entity';
 import { Booking } from './entities/booking.entity';
+import {
+  generateBookingReference,
+  isBookingReferenceCollision,
+  MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS,
+} from './booking-reference';
 
-const BOOKING_REFERENCE_CONSTRAINT = 'UQ_bookings_booking_reference';
-const MAX_REFERENCE_GENERATION_ATTEMPTS = 3;
 
 @Injectable()
 export class BookingsService {
@@ -38,14 +40,14 @@ export class BookingsService {
     this.validateCommercialAndTimeFields(createBookingDto);
     await this.validateReferences(createBookingDto);
 
-    for (let attempt = 0; attempt < MAX_REFERENCE_GENERATION_ATTEMPTS; attempt += 1) {
+    for (let attempt = 0; attempt < MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS; attempt += 1) {
       try {
         const booking = await this.bookingRepository.manager.transaction(async (manager) => {
           const bookingRepository = manager.getRepository(Booking);
           const historyRepository = manager.getRepository(BookingStatusHistory);
           const booking = bookingRepository.create({
             ...createBookingDto,
-            bookingReference: this.generateBookingReference(),
+            bookingReference: generateBookingReference(),
             organisationContextId: createBookingDto.organisationContextId ?? null,
             quotedAmount: createBookingDto.quotedAmount ?? null,
             currency: createBookingDto.currency ?? null,
@@ -71,7 +73,7 @@ export class BookingsService {
 
         return this.findByReference(booking.bookingReference);
       } catch (error) {
-        if (!this.isBookingReferenceCollision(error) || attempt === MAX_REFERENCE_GENERATION_ATTEMPTS - 1) {
+        if (!isBookingReferenceCollision(error) || attempt === MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS - 1) {
           throw error;
         }
       }
@@ -132,17 +134,4 @@ export class BookingsService {
     }
   }
 
-  private generateBookingReference(): string {
-    const year = new Date().getUTCFullYear();
-    const suffix = randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase();
-    return `SC-${year}-${suffix}`;
-  }
-
-  private isBookingReferenceCollision(error: unknown): boolean {
-    return (
-      error instanceof QueryFailedError &&
-      (error.driverError as { code?: string; constraint?: string }).code === '23505' &&
-      (error.driverError as { constraint?: string }).constraint === BOOKING_REFERENCE_CONSTRAINT
-    );
-  }
 }

@@ -1,6 +1,7 @@
 import { getMetadataArgsStorage } from 'typeorm';
 
 import { BookingFunding } from '../bookings/entities/booking-funding.entity';
+import { BookingContact } from '../bookings/entities/booking-contact.entity';
 import { BookingStatusHistory } from '../bookings/entities/booking-status-history.entity';
 import { Booking } from '../bookings/entities/booking.entity';
 import { FulfilmentMode } from '../health-checks/entities/fulfilment-mode.entity';
@@ -34,6 +35,7 @@ describe('entity metadata', () => {
         HealthCheckPackage,
         FulfilmentMode,
         Booking,
+        BookingContact,
         BookingStatusHistory,
         BookingFunding,
         PaymentAttempt,
@@ -82,8 +84,8 @@ describe('entity metadata', () => {
 
     expect(findColumn(Patient, 'userId')).toMatchObject({ options: { nullable: true } });
     expect(findColumn(Provider, 'userId')).toMatchObject({ options: { nullable: true } });
+    expect(findColumn(Booking, 'bookerUserId')).toMatchObject({ options: { nullable: true } });
     for (const [entity, propertyName] of [
-      [Booking, 'bookerUserId'],
       [Booking, 'participantPatientId'],
       [BookingFunding, 'bookingId'],
       [PaymentAttempt, 'bookingFundingId'],
