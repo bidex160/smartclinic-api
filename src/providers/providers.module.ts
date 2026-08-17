@@ -13,11 +13,14 @@ import { ProviderLocation } from './entities/provider-location.entity';
 import { ProviderServiceLocation } from './entities/provider-service-location.entity';
 import { ProviderService } from './entities/provider-service.entity';
 import { ProviderCapabilitiesService } from './provider-capabilities.service';
+import { AdminProviderAvailabilityController } from './admin-provider-availability.controller';
+import { ProviderAvailability } from './entities/provider-availability.entity';
+import { ProviderAvailabilityService } from './provider-availability.service';
 
 @Module({
-  imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, HealthCheckPackage, FulfilmentMode])],
-  controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController],
-  providers: [ProviderCapabilitiesService],
-  exports: [ProviderCapabilitiesService],
+  imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, HealthCheckPackage, FulfilmentMode])],
+  controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController],
+  providers: [ProviderCapabilitiesService, ProviderAvailabilityService],
+  exports: [ProviderCapabilitiesService, ProviderAvailabilityService],
 })
 export class ProvidersModule {}

@@ -3,6 +3,7 @@ import { FulfilmentMode } from '../../health-checks/entities/fulfilment-mode.ent
 import { HealthCheckPackage } from '../../health-checks/entities/health-check-package.entity';
 import { Provider } from './provider.entity';
 import { ProviderServiceLocation } from './provider-service-location.entity';
+import { ProviderAvailability } from './provider-availability.entity';
 
 @Entity('provider_services')
 @Unique('UQ_provider_services_provider_package_mode', ['providerId', 'healthCheckPackageId', 'fulfilmentModeId'])
@@ -21,4 +22,5 @@ export class ProviderService {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;
   @OneToMany(() => ProviderServiceLocation, (link) => link.providerService) locationLinks!: ProviderServiceLocation[];
+  @OneToMany(() => ProviderAvailability, (availability) => availability.providerService) availability!: ProviderAvailability[];
 }

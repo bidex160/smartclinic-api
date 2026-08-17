@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
+import { isTimeZone } from 'class-validator';
 import { FulfilmentMode } from '../health-checks/entities/fulfilment-mode.entity';
 import { HealthCheckPackage } from '../health-checks/entities/health-check-package.entity';
 import { CreateProviderLocationDto } from './dto/create-provider-location.dto';
@@ -13,8 +14,15 @@ import { ProviderServiceLocation } from './entities/provider-service-location.en
 import { ProviderService } from './entities/provider-service.entity';
 import { Provider } from './entities/provider.entity';
 import { ProviderStatus } from './enums/provider-status.enum';
+import { DayOfWeek } from './enums/day-of-week.enum';
 
 export const PROVIDER_LOCATION_MODE = 'PROVIDER_LOCATION';
+export interface AvailabilityWindow {
+  requestedDate: string;
+  requestedStartTime: string;
+  requestedEndTime: string;
+  requestedTimezone: string;
+}
 
 @Injectable()
 export class ProviderCapabilitiesService {
@@ -91,10 +99,25 @@ export class ProviderCapabilitiesService {
     if (!result.affected) throw new NotFoundException('Provider service location link not found');
   }
 
-  async findEligibleProviders(healthCheckPackageId: string, fulfilmentModeId: string): Promise<ProviderServiceResponseDto[]> {
-    const rows = await this.services.createQueryBuilder('service').innerJoinAndSelect('service.provider', 'provider').innerJoinAndSelect('service.healthCheckPackage', 'package').innerJoinAndSelect('service.fulfilmentMode', 'mode').leftJoinAndSelect('service.locationLinks', 'locationLinks').leftJoinAndSelect('locationLinks.providerLocation', 'location', 'location.is_active = true').where('service.health_check_package_id = :healthCheckPackageId', { healthCheckPackageId }).andWhere('service.fulfilment_mode_id = :fulfilmentModeId', { fulfilmentModeId }).andWhere('service.is_active = true').andWhere('provider.status = :status', { status: ProviderStatus.ACTIVE }).andWhere('provider.deleted_at IS NULL').andWhere('package.is_active = true').andWhere('mode.is_active = true').orderBy('service.created_at', 'ASC').getMany();
+  async findEligibleProviders(healthCheckPackageId: string, fulfilmentModeId: string, window?: AvailabilityWindow): Promise<ProviderServiceResponseDto[]> {
+    const query = this.services.createQueryBuilder('service').distinct(true).innerJoinAndSelect('service.provider', 'provider').innerJoinAndSelect('service.healthCheckPackage', 'package').innerJoinAndSelect('service.fulfilmentMode', 'mode').leftJoinAndSelect('service.locationLinks', 'locationLinks').leftJoinAndSelect('locationLinks.providerLocation', 'location', 'location.is_active = true').where('service.health_check_package_id = :healthCheckPackageId', { healthCheckPackageId }).andWhere('service.fulfilment_mode_id = :fulfilmentModeId', { fulfilmentModeId }).andWhere('service.is_active = true').andWhere('provider.status = :status', { status: ProviderStatus.ACTIVE }).andWhere('provider.deleted_at IS NULL').andWhere('package.is_active = true').andWhere('mode.is_active = true');
+    if (window) {
+      const dayOfWeek = this.validateAvailabilityWindow(window);
+      query.innerJoin('provider.availability', 'availability', 'availability.is_active = true AND availability.day_of_week = :dayOfWeek AND availability.timezone = :requestedTimezone AND availability.start_time <= :requestedStartTime AND availability.end_time >= :requestedEndTime AND (availability.provider_service_id IS NULL OR availability.provider_service_id = service.id)', { dayOfWeek, requestedTimezone: window.requestedTimezone, requestedStartTime: window.requestedStartTime, requestedEndTime: window.requestedEndTime }).leftJoin('availability.providerLocation', 'availabilityLocation').andWhere('(availability.provider_location_id IS NULL OR availabilityLocation.is_active = true)').andWhere('(availability.provider_location_id IS NULL OR EXISTS (SELECT 1 FROM provider_service_locations availability_link WHERE availability_link.provider_service_id = service.id AND availability_link.provider_location_id = availability.provider_location_id))');
+    }
+    const rows = await query.orderBy('service.created_at', 'ASC').getMany();
     return rows.map(ProviderServiceResponseDto.fromEntity);
   }
+
+  private validateAvailabilityWindow(window: AvailabilityWindow): DayOfWeek {
+    const parsedDate = new Date(`${window.requestedDate}T00:00:00Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(window.requestedDate) || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== window.requestedDate) throw new BadRequestException('requestedDate must be a valid ISO date');
+    if (!/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(window.requestedStartTime) || !/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(window.requestedEndTime) || this.timeToSeconds(window.requestedStartTime) >= this.timeToSeconds(window.requestedEndTime)) throw new BadRequestException('requestedStartTime must be before requestedEndTime and overnight windows are not supported');
+    if (!isTimeZone(window.requestedTimezone)) throw new BadRequestException('requestedTimezone must be a valid IANA timezone');
+    const days = [DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY];
+    return days[parsedDate.getUTCDay()];
+  }
+  private timeToSeconds(value: string): number { const [hours, minutes, seconds = '0'] = value.split(':'); return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds); }
 
   private async requireProvider(id: string): Promise<Provider> { const value = await this.providers.findOne({ where: { id } }); if (!value) throw new NotFoundException('Provider not found'); return value; }
   private async requireService(id: string): Promise<ProviderService> { const value = await this.services.findOne({ where: { id }, relations: { locationLinks: true } }); if (!value) throw new NotFoundException('Provider service not found'); return value; }

@@ -5,6 +5,7 @@ import { ProviderStatus } from '../enums/provider-status.enum';
 import { ProviderAssignment } from './provider-assignment.entity';
 import { ProviderLocation } from './provider-location.entity';
 import { ProviderService } from './provider-service.entity';
+import { ProviderAvailability } from './provider-availability.entity';
 
 @Entity('providers')
 @Index('UQ_providers_user_id', ['userId'], { unique: true, where: '"user_id" IS NOT NULL' })
@@ -45,4 +46,7 @@ export class Provider {
 
   @OneToMany(() => ProviderLocation, (location) => location.provider)
   locations!: ProviderLocation[];
+
+  @OneToMany(() => ProviderAvailability, (availability) => availability.provider)
+  availability!: ProviderAvailability[];
 }

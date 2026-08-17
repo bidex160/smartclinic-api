@@ -1,6 +1,7 @@
 import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm';
 import { Provider } from './provider.entity';
 import { ProviderServiceLocation } from './provider-service-location.entity';
+import { ProviderAvailability } from './provider-availability.entity';
 
 @Entity('provider_locations')
 @Unique('UQ_provider_locations_id_provider', ['id', 'providerId'])
@@ -25,4 +26,5 @@ export class ProviderLocation {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;
   @OneToMany(() => ProviderServiceLocation, (link) => link.providerLocation) serviceLinks!: ProviderServiceLocation[];
+  @OneToMany(() => ProviderAvailability, (availability) => availability.providerLocation) availability!: ProviderAvailability[];
 }

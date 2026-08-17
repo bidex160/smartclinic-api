@@ -10,9 +10,17 @@ Provider matching is a separate concern from the booking lifecycle. It selects a
 
 `ProviderLocation` stores a provider-owned named physical service location with a minimally structured address, uppercase ISO 3166-1 alpha-2 country code, optional validated coordinates, and active state. `provider_service_locations` links a `PROVIDER_LOCATION` capability to one or more locations. Ownership is checked by the service and enforced by composite database foreign keys. Unlinking deletes the join row because it has no independent audit meaning; provider services and locations themselves are not physically deleted during normal operations.
 
-`ProviderCapabilitiesService.findEligibleProviders(packageId, modeId)` performs capability discovery only. It does not rank, reserve, offer, assign, or schedule a provider. For `PROVIDER_LOCATION`, active linked locations are included in the capability response, but a location is not currently required by the general discovery query. Physical locations cannot be linked to `HOME_VISIT`; home-visit service areas, distance/routing, availability, schedules, offer policy, and assignment remain deferred.
+`ProviderAvailability` records recurring weekly blocks using a named weekday, local start/end `time`, and an IANA timezone. A block may apply to the whole provider or be scoped to a provider service and/or location. Scoped records must refer to active resources owned by the same active provider when created or activated. Overnight blocks are not supported; they must be represented as two blocks.
+
+Active blocks for the same provider, weekday, service scope, and location scope cannot overlap. Adjacent half-open intervals are allowed. The application checks this for clear conflict responses, and PostgreSQL enforces it with an exclusion constraint for concurrency safety. Date-specific leave, holidays, blackout dates, emergency closures, and other exceptions remain deferred.
+
+`ProviderCapabilitiesService.findEligibleProviders(packageId, modeId, window?)` performs capability discovery only. Without a window it retains capability-only behavior. With a requested date, local start/end, and explicit IANA timezone, it requires an active weekly block where requested start is at or after block start and requested end is at or before block end. V1 compares blocks in the same timezone identifier rather than silently converting between zones. Location-scoped availability must use an active location linked to the matching capability. It does not rank, reserve, offer, assign, or schedule a provider.
+
+For `PROVIDER_LOCATION`, active linked locations are included in the capability response. Physical locations cannot be linked to `HOME_VISIT`; home-visit service areas, distance/routing, offer policy, and assignment remain deferred.
 
 Capability and location management is exposed only under `/api/v1/admin` with JWT authentication and the `ADMIN` or `OPERATIONS` role. These administrative endpoints return explicit response DTOs rather than persistence entities.
+
+The current booking preference stores a local date and time range without a timezone. Availability-aware discovery therefore cannot safely consume a booking directly until the booking timezone/address policy is decided. The discovery interface requires timezone explicitly and the public booking contract is unchanged.
 
 The confirmed v1 approach is **hybrid**: the platform supports eligible-provider discovery and provider offers while authorised operations staff can intervene manually. The product does not define a matching algorithm yet. Future matching may consider:
 

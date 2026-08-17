@@ -2,7 +2,7 @@
 
 ## Scope and status
 
-This is the proposed initial relational design for PostgreSQL and TypeORM. It is a design review artifact only: it creates no TypeORM entities, migrations, or application code. Health-result/clinical-record tables, authentication tables, booking groups, organisation programmes, provider availability, and payment-provider event tables are deliberately outside this initial model.
+This document describes the relational design as it evolves. Health-result/clinical-record tables, booking groups, organisation programmes, date-specific provider availability exceptions, and payment-provider event tables remain outside the current model.
 
 Use `uuid` internal primary keys for all tables. Store timestamps as `timestamptz`; use `created_at` and `updated_at` unless a record is immutable or append-only. Names below are database names and do not prescribe TypeScript class names.
 
@@ -28,6 +28,7 @@ Use `uuid` internal primary keys for all tables. Store timestamps as `timestampt
 | Provider capability | `provider_services` | Stable provider/package/fulfilment-mode capability. |
 | Provider capability | `provider_locations` | Provider-owned physical service locations. |
 | Provider capability | `provider_service_locations` | Availability of a location-based capability at a physical location. |
+| Provider availability | `provider_availability` | Recurring weekly provider availability, optionally scoped to service/location. |
 
 ## 2. Entity-by-entity fields
 
@@ -81,6 +82,12 @@ Services and physical locations are separate provider-domain tables and matching
 `provider_locations` contains the provider, display name, two address lines (the second optional), city, state, two-letter uppercase country code, optional latitude/longitude, active flag, and timestamps. Database checks enforce country-code shape and coordinate ranges without introducing premature address normalization.
 
 `provider_service_locations` contains the service, location, provider-owner key, and creation time. Its composite foreign keys require both referenced rows to have the same provider, while the application service also validates ownership and the `PROVIDER_LOCATION` mode for clearer errors. The service/location pair is unique. Removing a link deletes this join row only; normal provider service and location lifecycle uses activation/deactivation.
+
+#### `provider_availability`
+
+Each row contains provider, optional provider-service and provider-location scopes, a named `day_of_week_enum`, local start/end `time`, IANA timezone, active flag, and timestamps. Composite foreign keys prevent cross-provider service or location references. A check requires start before end, so v1 blocks cannot cross midnight.
+
+Active overlaps are prohibited for the same provider/day/service-scope/location-scope using a GiST exclusion constraint over half-open time ranges. Null service and location values are normalized only inside that constraint so general-scope blocks compare consistently. Adjacent blocks are permitted. IANA validity is checked by API DTO validation because PostgreSQL does not provide a stable built-in IANA identifier constraint.
 
 #### `organisations`
 

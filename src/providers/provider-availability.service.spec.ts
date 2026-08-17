@@ -1,0 +1,23 @@
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import { ProviderAvailabilityService } from './provider-availability.service';
+import { DayOfWeek } from './enums/day-of-week.enum';
+import { ProviderStatus } from './enums/provider-status.enum';
+const ids = { provider: '10000000-0000-4000-8000-000000000001', other: '10000000-0000-4000-8000-000000000002', service: '20000000-0000-4000-8000-000000000001', location: '30000000-0000-4000-8000-000000000001', availability: '40000000-0000-4000-8000-000000000001' };
+const now = new Date();
+const repository = () => ({ findOne: jest.fn(), find: jest.fn(), create: jest.fn((v) => v), save: jest.fn(async (v) => ({ id: v.id ?? ids.availability, createdAt: now, updatedAt: now, ...v })), createQueryBuilder: jest.fn() });
+describe('ProviderAvailabilityService', () => {
+  let availability: any, providers: any, services: any, locations: any, subject: ProviderAvailabilityService, overlap: boolean;
+  const value = (changes = {}) => ({ id: ids.availability, providerId: ids.provider, providerServiceId: null, providerLocationId: null, dayOfWeek: DayOfWeek.MONDAY, startTime: '09:00', endTime: '17:00', timezone: 'Africa/Lagos', isActive: true, createdAt: now, updatedAt: now, ...changes });
+  const dto = { dayOfWeek: DayOfWeek.MONDAY, startTime: '09:00', endTime: '17:00', timezone: 'Africa/Lagos' };
+  beforeEach(() => { overlap = false; availability = repository(); providers = repository(); services = repository(); locations = repository(); const qb: any = {}; for (const method of ['where', 'andWhere']) qb[method] = jest.fn().mockReturnValue(qb); qb.getExists = jest.fn(async () => overlap); availability.createQueryBuilder.mockReturnValue(qb); providers.findOne.mockResolvedValue({ id: ids.provider, status: ProviderStatus.ACTIVE }); services.findOne.mockResolvedValue({ id: ids.service, providerId: ids.provider, isActive: true }); locations.findOne.mockResolvedValue({ id: ids.location, providerId: ids.provider, isActive: true }); availability.findOne.mockResolvedValue(value()); subject = new ProviderAvailabilityService(availability, providers, services, locations); });
+  it('creates availability', async () => expect((await subject.create(ids.provider, dto)).isActive).toBe(true));
+  it('updates availability', async () => expect((await subject.update(ids.availability, { endTime: '18:00' })).endTime).toBe('18:00'));
+  it('activates and deactivates availability', async () => { expect((await subject.deactivate(ids.availability)).isActive).toBe(false); availability.findOne.mockResolvedValue(value({ isActive: false })); expect((await subject.activate(ids.availability)).isActive).toBe(true); });
+  it('rejects an invalid or overnight time range', async () => expect(subject.create(ids.provider, { ...dto, startTime: '17:00', endTime: '09:00' })).rejects.toBeInstanceOf(BadRequestException));
+  it('rejects an inactive provider', async () => { providers.findOne.mockResolvedValue({ id: ids.provider, status: ProviderStatus.INACTIVE }); await expect(subject.create(ids.provider, dto)).rejects.toBeInstanceOf(BadRequestException); });
+  it('rejects a cross-provider service', async () => { services.findOne.mockResolvedValue({ providerId: ids.other, isActive: true }); await expect(subject.create(ids.provider, { ...dto, providerServiceId: ids.service })).rejects.toBeInstanceOf(ConflictException); });
+  it('rejects a cross-provider location', async () => { locations.findOne.mockResolvedValue({ providerId: ids.other, isActive: true }); await expect(subject.create(ids.provider, { ...dto, providerLocationId: ids.location })).rejects.toBeInstanceOf(ConflictException); });
+  it.each([['service', 'providerServiceId'], ['location', 'providerLocationId']])('rejects an inactive %s', async (_name, field) => { const scoped = field === 'providerServiceId' ? services : locations; scoped.findOne.mockResolvedValue({ providerId: ids.provider, isActive: false }); await expect(subject.create(ids.provider, { ...dto, [field]: field === 'providerServiceId' ? ids.service : ids.location })).rejects.toBeInstanceOf(BadRequestException); });
+  it('rejects overlapping active availability', async () => { overlap = true; await expect(subject.create(ids.provider, { ...dto, startTime: '10:00', endTime: '12:00' })).rejects.toBeInstanceOf(ConflictException); });
+  it('allows adjacent non-overlapping blocks', async () => expect(subject.create(ids.provider, { ...dto, startTime: '17:00', endTime: '18:00' })).resolves.toBeDefined());
+});
