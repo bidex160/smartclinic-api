@@ -8,10 +8,12 @@ import { FulfilmentModesController } from './fulfilment-modes.controller';
 import { FulfilmentModesService } from './fulfilment-modes.service';
 import { HealthCheckPackagesController } from './health-check-packages.controller';
 import { HealthCheckPackagesService } from './health-check-packages.service';
+import { PackagePricingService } from './package-pricing.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([HealthCheckPackage, FulfilmentMode, PackagePrice])],
   controllers: [HealthCheckPackagesController, FulfilmentModesController],
-  providers: [HealthCheckPackagesService, FulfilmentModesService],
+  providers: [HealthCheckPackagesService, FulfilmentModesService, PackagePricingService],
+  exports: [PackagePricingService],
 })
 export class HealthChecksModule {}

@@ -10,6 +10,14 @@ Initial packages are Essential and Complete. The initial fulfilment modes are `P
 
 The current catalogue seed records the documented baseline measurements as benefits for both initial packages. Product must still approve the package-specific benefit differences, estimated durations, and all commercial price rows before they can be presented as distinct catalogue values. No placeholder prices are seeded.
 
+## Server-side booking quotes
+
+At booking creation, the API resolves the selected package and fulfilment mode against the active, effective catalogue price. A price is eligible only when it is active, its `effectiveFrom` date has started, and its `effectiveTo` is absent or still in the future. Clients do not submit or determine a booking amount or currency.
+
+V1 booking creation uses the Nigeria-first `NGN` catalogue policy. The catalogue schema can retain prices in other currencies, but the booking API neither selects them nor performs currency conversion. If no eligible NGN price exists, the API rejects the booking with a `422 Unprocessable Entity` response.
+
+The resolved amount and currency are copied to the booking as an immutable quote snapshot. Later catalogue price changes affect new bookings only; they do not alter historical booking quotes.
+
 ## Booking parties
 
 A health check may be booked for the booker, another individual or family member, a sponsored participant, or a participant covered by an organisation programme. Each booking represents exactly one participant/patient. A family booking is a set of individual bookings; a future booking group/order may relate them. The following concepts must remain distinct:

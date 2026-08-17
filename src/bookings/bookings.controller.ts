@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiConflictResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBadRequestResponse, ApiConflictResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags, ApiUnprocessableEntityResponse } from '@nestjs/swagger';
 
 import { BookingResponseDto } from './dto/booking-response.dto';
 import { BookingReferenceParamsDto } from './dto/booking-reference-params.dto';
@@ -16,6 +16,7 @@ export class BookingsController {
   @ApiOperation({ summary: 'Create a draft booking for one participant' })
   @ApiCreatedResponse({ type: BookingResponseDto })
   @ApiBadRequestResponse({ description: 'The input or referenced booking records are invalid.' })
+  @ApiUnprocessableEntityResponse({ description: 'No current catalogue price is available for the selected package and fulfilment mode.' })
   @ApiConflictResponse({ description: 'A booking reference could not be generated.' })
   create(@Body() createBookingDto: CreateBookingDto): Promise<BookingResponseDto> {
     return this.bookingsService.create(createBookingDto);

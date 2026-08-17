@@ -107,7 +107,7 @@ Organisation administrators, programmes, eligibility, and participant membership
 | `is_active` | `boolean`, non-null | Retire modes rather than delete them. |
 | `created_at`, `updated_at` | `timestamptz`, non-null | Catalogue audit fields. |
 
-Home Visit is a fulfilment mode, never a package. Neither table contains a single mutable `price`; `package_prices` provides package/mode/currency/effective-date pricing without implementing a broader pricing engine. A booking retains the selected quote amount and currency as a commercial snapshot once pricing is introduced.
+Home Visit is a fulfilment mode, never a package. Neither table contains a single mutable `price`; `package_prices` provides package/mode/currency/effective-date pricing without implementing a broader pricing engine. Booking creation selects an active/effective v1 NGN price server-side and copies its amount and currency into an immutable booking quote snapshot.
 
 #### `package_prices`
 
@@ -138,7 +138,7 @@ An exclusion constraint prevents overlapping active date ranges for the same pac
 | `health_check_package_id` | `uuid`, non-null FK to `health_check_packages` | Selected package. |
 | `fulfilment_mode_id` | `uuid`, non-null FK to `fulfilment_modes` | Selected delivery mode. |
 | `status` | booking-status enum, non-null | Current fulfilment state only. |
-| `quoted_amount` | `numeric(12,2)`, nullable initially | Monetary snapshot once a price is quoted; do not use floating point. |
+| `quoted_amount` | `numeric(12,2)`, nullable initially | Server-selected monetary snapshot; do not use floating point. Catalogue changes never mutate an existing booking. |
 | `currency` | `char(3)`, nullable initially | ISO 4217 code paired with every monetary value. |
 | `preferred_date` | `date`, nullable | Requested date before an appointment is confirmed. |
 | `preferred_time_window_start`, `preferred_time_window_end` | `time`, nullable | Requested local time range; timezone policy remains open. |

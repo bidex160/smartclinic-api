@@ -49,8 +49,8 @@ export class BookingResponseDto {
   @ApiPropertyOptional({ example: '12500.00', nullable: true })
   quotedAmount!: string | null;
 
-  @ApiPropertyOptional({ example: 'NGN', nullable: true })
-  currency!: string | null;
+  @ApiPropertyOptional({ example: 'NGN', nullable: true, description: 'Currency selected by the server with the quoted amount.' })
+  quotedCurrency!: string | null;
 
   @ApiPropertyOptional({ format: 'date', nullable: true })
   preferredDate!: string | null;
@@ -90,7 +90,7 @@ export class BookingResponseDto {
         familyName: booking.participant.familyName,
       },
       quotedAmount: booking.quotedAmount,
-      currency: booking.currency,
+      quotedCurrency: booking.currency,
       preferredDate: booking.preferredDate,
       preferredTimeWindowStart: booking.preferredTimeWindowStart,
       preferredTimeWindowEnd: booking.preferredTimeWindowEnd,

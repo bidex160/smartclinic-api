@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 
 import { FulfilmentMode } from '../health-checks/entities/fulfilment-mode.entity';
 import { HealthCheckPackage } from '../health-checks/entities/health-check-package.entity';
+import { PackagePricingService } from '../health-checks/package-pricing.service';
 import { Organisation } from '../organisations/entities/organisation.entity';
 import { Patient } from '../patients/entities/patient.entity';
 import { User } from '../users/entities/user.entity';
@@ -34,10 +35,11 @@ export class BookingsService {
     private readonly healthCheckPackageRepository: Repository<HealthCheckPackage>,
     @InjectRepository(FulfilmentMode)
     private readonly fulfilmentModeRepository: Repository<FulfilmentMode>,
+    private readonly packagePricingService: PackagePricingService,
   ) {}
 
   async create(createBookingDto: CreateBookingDto): Promise<BookingResponseDto> {
-    this.validateCommercialAndTimeFields(createBookingDto);
+    this.validatePreferredTimeWindow(createBookingDto);
     await this.validateReferences(createBookingDto);
 
     for (let attempt = 0; attempt < MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS; attempt += 1) {
@@ -45,12 +47,18 @@ export class BookingsService {
         const booking = await this.bookingRepository.manager.transaction(async (manager) => {
           const bookingRepository = manager.getRepository(Booking);
           const historyRepository = manager.getRepository(BookingStatusHistory);
+          const quote = await this.packagePricingService.resolveCurrentPrice(
+            createBookingDto.healthCheckPackageId,
+            createBookingDto.fulfilmentModeId,
+            new Date(),
+            manager,
+          );
           const booking = bookingRepository.create({
             ...createBookingDto,
             bookingReference: generateBookingReference(),
             organisationContextId: createBookingDto.organisationContextId ?? null,
-            quotedAmount: createBookingDto.quotedAmount ?? null,
-            currency: createBookingDto.currency ?? null,
+            quotedAmount: quote.amount,
+            currency: quote.currency,
             preferredDate: createBookingDto.preferredDate ?? null,
             preferredTimeWindowStart: createBookingDto.preferredTimeWindowStart ?? null,
             preferredTimeWindowEnd: createBookingDto.preferredTimeWindowEnd ?? null,
@@ -120,11 +128,7 @@ export class BookingsService {
     }
   }
 
-  private validateCommercialAndTimeFields(createBookingDto: CreateBookingDto): void {
-    if ((createBookingDto.quotedAmount === undefined) !== (createBookingDto.currency === undefined)) {
-      throw new BadRequestException('quotedAmount and currency must be provided together');
-    }
-
+  private validatePreferredTimeWindow(createBookingDto: CreateBookingDto): void {
     if (
       createBookingDto.preferredTimeWindowStart !== undefined &&
       createBookingDto.preferredTimeWindowEnd !== undefined &&

@@ -61,6 +61,10 @@ Cancellation, rescheduling, no-show, expiry, and refund outcomes are policy conc
 
 The current booking state is appropriately an enum because it represents one mutually exclusive fulfilment position. It must be accompanied by an append-only relational booking transition history containing at least prior state, new state, actor or system source, timestamp, and reason where applicable. The history is necessary for auditability and must not be reconstructed from mutable timestamps.
 
+## Quote snapshot
+
+Creating a booking resolves an active, effective catalogue price server-side for its package and fulfilment mode, then stores the selected amount and currency on the booking. The snapshot is part of the creation transaction and is retained for historical accuracy; changing or retiring a catalogue price never changes an existing booking's quote. A booking cannot be created when no eligible v1 `NGN` price is available.
+
 ## Decisions required before entities
 
 - Is funding always required before matching, or may approved organisation programmes or selected pay-later journeys match first?

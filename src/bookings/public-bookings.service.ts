@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 
 import { FulfilmentMode } from '../health-checks/entities/fulfilment-mode.entity';
 import { HealthCheckPackage } from '../health-checks/entities/health-check-package.entity';
+import { PackagePricingService } from '../health-checks/package-pricing.service';
 import { Patient } from '../patients/entities/patient.entity';
 import { PatientStatus } from '../patients/enums/patient-status.enum';
 import {
@@ -27,6 +28,7 @@ export class PublicBookingsService {
     private readonly healthCheckPackageRepository: Repository<HealthCheckPackage>,
     @InjectRepository(FulfilmentMode)
     private readonly fulfilmentModeRepository: Repository<FulfilmentMode>,
+    private readonly packagePricingService: PackagePricingService,
   ) {}
 
   async create(createPublicBookingDto: CreatePublicBookingDto): Promise<BookingResponseDto> {
@@ -41,6 +43,12 @@ export class PublicBookingsService {
           const contactRepository = manager.getRepository(BookingContact);
           const historyRepository = manager.getRepository(BookingStatusHistory);
           const { booker, participant, booking: bookingDetails } = createPublicBookingDto;
+          const quote = await this.packagePricingService.resolveCurrentPrice(
+            bookingDetails.healthCheckPackageId,
+            bookingDetails.fulfilmentModeId,
+            new Date(),
+            manager,
+          );
 
           const patient = await patientRepository.save(
             patientRepository.create({
@@ -63,8 +71,8 @@ export class PublicBookingsService {
               healthCheckPackageId: bookingDetails.healthCheckPackageId,
               fulfilmentModeId: bookingDetails.fulfilmentModeId,
               status: BookingStatus.DRAFT,
-              quotedAmount: null,
-              currency: null,
+              quotedAmount: quote.amount,
+              currency: quote.currency,
               preferredDate: bookingDetails.preferredDate ?? null,
               preferredTimeWindowStart: bookingDetails.preferredTimeFrom ?? null,
               preferredTimeWindowEnd: bookingDetails.preferredTimeTo ?? null,

@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { FulfilmentMode } from '../health-checks/entities/fulfilment-mode.entity';
 import { HealthCheckPackage } from '../health-checks/entities/health-check-package.entity';
+import { HealthChecksModule } from '../health-checks/health-checks.module';
 import { Organisation } from '../organisations/entities/organisation.entity';
 import { Patient } from '../patients/entities/patient.entity';
 import { User } from '../users/entities/user.entity';
@@ -17,6 +18,7 @@ import { Booking } from './entities/booking.entity';
 
 @Module({
   imports: [
+    HealthChecksModule,
     TypeOrmModule.forFeature([
       Booking,
       BookingContact,

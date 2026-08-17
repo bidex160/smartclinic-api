@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 
 import { BookingStatusHistory } from './entities/booking-status-history.entity';
@@ -14,19 +14,19 @@ describe('BookingsService', () => {
     participantPatientId: '4c7b8fe6-f9c1-4f01-9a0c-68daf48e1e0e',
     healthCheckPackageId: 'd3f17322-2dab-42bd-a006-35c3b864849d',
     fulfilmentModeId: '3c233f29-a510-4602-a337-df7e2d1e5a4a',
-    quotedAmount: '12500.00',
-    currency: 'NGN',
     preferredDate: '2026-08-20',
     preferredTimeWindowStart: '09:00',
     preferredTimeWindowEnd: '12:00',
   };
 
-  function createService(exists = true) {
+  function createService(exists = true, priceError?: Error) {
     const savedBooking = {
       ...createBookingDto,
       id: 'e1585f20-fa0e-4e8f-9a8a-a6ba805ef5a5',
       bookingReference: 'SC-2026-ABCDEFGHIJKL',
       organisationContextId: null,
+      quotedAmount: '12500.00',
+      currency: 'NGN',
       preferredLocationNote: null,
       status: BookingStatus.DRAFT,
       createdAt: new Date('2026-08-17T12:00:00.000Z'),
@@ -53,6 +53,11 @@ describe('BookingsService', () => {
       findOne: jest.fn().mockResolvedValue(savedBooking),
     };
     const referenceRepository = { exists: jest.fn().mockResolvedValue(exists) };
+    const packagePricingService = {
+      resolveCurrentPrice: priceError
+        ? jest.fn().mockRejectedValue(priceError)
+        : jest.fn().mockResolvedValue({ amount: '12500.00', currency: 'NGN' }),
+    };
     const service = new BookingsService(
       bookingRepository as never,
       referenceRepository as never,
@@ -60,6 +65,7 @@ describe('BookingsService', () => {
       referenceRepository as never,
       referenceRepository as never,
       referenceRepository as never,
+      packagePricingService as never,
     );
 
     return {
@@ -69,6 +75,7 @@ describe('BookingsService', () => {
       transactionalBookingRepository,
       transactionalHistoryRepository,
       referenceRepository,
+      packagePricingService,
     };
   }
 
@@ -83,7 +90,12 @@ describe('BookingsService', () => {
       participant: { givenName: 'Ada' },
     });
     expect(transactionalBookingRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({ bookingReference: 'SC-2026-ABCDEFGHIJKL', status: BookingStatus.DRAFT }),
+      expect.objectContaining({
+        bookingReference: 'SC-2026-ABCDEFGHIJKL',
+        status: BookingStatus.DRAFT,
+        quotedAmount: '12500.00',
+        currency: 'NGN',
+      }),
     );
     expect(transactionalHistoryRepository.create).toHaveBeenCalledWith({
       bookingId: 'e1585f20-fa0e-4e8f-9a8a-a6ba805ef5a5',
@@ -93,12 +105,9 @@ describe('BookingsService', () => {
     });
   });
 
-  it('rejects inconsistent commercial and requested-time fields before persistence', async () => {
+  it('rejects an invalid requested-time window before persistence', async () => {
     const { service, bookingRepository } = createService();
 
-    await expect(service.create({ ...createBookingDto, currency: undefined })).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
     await expect(
       service.create({ ...createBookingDto, preferredTimeWindowStart: '12:00', preferredTimeWindowEnd: '09:00' }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -112,8 +121,18 @@ describe('BookingsService', () => {
     expect(bookingRepository.manager.transaction).not.toHaveBeenCalled();
   });
 
+  it('does not create an unpriced registered booking when no current catalogue price exists', async () => {
+    const { service, transactionalBookingRepository } = createService(
+      true,
+      new UnprocessableEntityException('No current catalogue price is available'),
+    );
+
+    await expect(service.create(createBookingDto)).rejects.toBeInstanceOf(UnprocessableEntityException);
+    expect(transactionalBookingRepository.save).not.toHaveBeenCalled();
+  });
+
   it('retrieves a booking by public reference with only explicitly mapped fields', async () => {
-    const { service, bookingRepository } = createService();
+    const { service, bookingRepository, packagePricingService } = createService();
 
     await expect(service.findByReference('SC-2026-ABCDEFGHIJKL')).resolves.toEqual({
       bookingReference: 'SC-2026-ABCDEFGHIJKL',
@@ -122,7 +141,7 @@ describe('BookingsService', () => {
       fulfilmentMode: { code: 'PROVIDER_LOCATION', name: 'Provider location' },
       participant: { givenName: 'Ada', familyName: 'Okafor' },
       quotedAmount: '12500.00',
-      currency: 'NGN',
+      quotedCurrency: 'NGN',
       preferredDate: '2026-08-20',
       preferredTimeWindowStart: '09:00',
       preferredTimeWindowEnd: '12:00',
@@ -134,6 +153,7 @@ describe('BookingsService', () => {
       where: { bookingReference: 'SC-2026-ABCDEFGHIJKL' },
       relations: { healthCheckPackage: true, fulfilmentMode: true, participant: true },
     });
+    expect(packagePricingService.resolveCurrentPrice).not.toHaveBeenCalled();
   });
 
   it('returns not found for an unknown public booking reference', async () => {
@@ -141,6 +161,22 @@ describe('BookingsService', () => {
     bookingRepository.findOne.mockResolvedValueOnce(null);
 
     await expect(service.findByReference('SC-2026-FFFFFFFFFFFF')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('always snapshots the server-resolved quote, even when a caller bypasses DTO validation', async () => {
+    const { service, transactionalBookingRepository, packagePricingService } = createService();
+    const maliciousInput = {
+      ...createBookingDto,
+      quotedAmount: '0.01',
+      currency: 'USD',
+    } as CreateBookingDto;
+
+    await service.create(maliciousInput);
+
+    expect(packagePricingService.resolveCurrentPrice).toHaveBeenCalled();
+    expect(transactionalBookingRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ quotedAmount: '12500.00', currency: 'NGN' }),
+    );
   });
 
   it('retries a database-enforced public-reference collision in a new transaction', async () => {

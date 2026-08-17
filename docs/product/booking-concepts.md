@@ -9,6 +9,7 @@ This reference fixes the v1 vocabulary for booking and funding. It describes pro
 | **Participant** | The patient who receives one Smart Health Check and whose health data is recorded. | Every booking has exactly one participant. |
 | **Payer/Funder** | An individual, organisation, programme, or other source responsible for some or all funding. | A booking can have multiple funders; it must not rely on one `payerId`. |
 | **Booking** | One request to provide one selected Health Check package to exactly one participant at a requested time/location and fulfilment mode. | A booking is not a family basket or multi-participant appointment. |
+| **Booking Quote** | The server-selected package/mode catalogue amount and currency copied to a booking when it is created. | The client never supplies the authoritative amount; later catalogue changes do not rewrite the snapshot. |
 | **Booking Group** | A future optional grouping/order concept for related individual bookings, such as a family request. | It groups bookings but never changes the one-participant-per-booking rule. |
 | **Health Check Package** | A configurable description of the Health Check service selected for a booking. Initial values are Essential and Complete. | Package is separate from fulfilment mode; more packages may be added. |
 | **Fulfilment Mode** | A configurable way the selected package is delivered. Initial values are `PROVIDER_LOCATION` and `HOME_VISIT`. | Home Visit is a mode, not a package. Pricing may depend on package plus mode. |

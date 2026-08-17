@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, UnprocessableEntityException } from '@nestjs/common';
 
 import { BookingContact } from './entities/booking-contact.entity';
 import { BookingStatusHistory } from './entities/booking-status-history.entity';
@@ -32,7 +32,12 @@ describe('PublicBookingsService', () => {
     },
   };
 
-  function createService(options: { packageExists?: boolean; modeExists?: boolean; contactSaveError?: Error } = {}) {
+  function createService(options: {
+    packageExists?: boolean;
+    modeExists?: boolean;
+    contactSaveError?: Error;
+    priceError?: Error;
+  } = {}) {
     const patientRepository = {
       create: jest.fn((input: object) => input),
       save: jest.fn().mockResolvedValue({ id: '2f4a443d-5c93-4f8f-a05a-8ddf37d91b7a' }),
@@ -65,8 +70,8 @@ describe('PublicBookingsService', () => {
       findOne: jest.fn().mockResolvedValue({
         bookingReference: 'SC-2026-7F23B0C9D1E4',
         status: 'DRAFT',
-        quotedAmount: null,
-        currency: null,
+        quotedAmount: '12500.00',
+        currency: 'NGN',
         preferredDate: '2026-08-20',
         preferredTimeWindowStart: '09:00',
         preferredTimeWindowEnd: '12:00',
@@ -80,10 +85,16 @@ describe('PublicBookingsService', () => {
     };
     const healthCheckPackageRepository = { exists: jest.fn().mockResolvedValue(options.packageExists ?? true) };
     const fulfilmentModeRepository = { exists: jest.fn().mockResolvedValue(options.modeExists ?? true) };
+    const packagePricingService = {
+      resolveCurrentPrice: options.priceError
+        ? jest.fn().mockRejectedValue(options.priceError)
+        : jest.fn().mockResolvedValue({ amount: '12500.00', currency: 'NGN' }),
+    };
     const service = new PublicBookingsService(
       bookingRepository as never,
       healthCheckPackageRepository as never,
       fulfilmentModeRepository as never,
+      packagePricingService as never,
     );
 
     return {
@@ -93,6 +104,7 @@ describe('PublicBookingsService', () => {
       bookingTransactionRepository,
       contactRepository,
       historyRepository,
+      packagePricingService,
     };
   }
 
@@ -110,7 +122,12 @@ describe('PublicBookingsService', () => {
       expect.objectContaining({ userId: null, givenName: 'Ada', familyName: 'Okafor' }),
     );
     expect(bookingTransactionRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({ bookerUserId: null, participantPatientId: '2f4a443d-5c93-4f8f-a05a-8ddf37d91b7a' }),
+      expect.objectContaining({
+        bookerUserId: null,
+        participantPatientId: '2f4a443d-5c93-4f8f-a05a-8ddf37d91b7a',
+        quotedAmount: '12500.00',
+        currency: 'NGN',
+      }),
     );
     expect(contactRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ givenName: 'Ada', familyName: 'Okafor', phone: '+2348012345678' }),
@@ -153,5 +170,14 @@ describe('PublicBookingsService', () => {
 
     await expect(service.create(createPublicBookingDto)).rejects.toThrow('contact save failed');
     expect(historyRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('does not create an unpriced booking when no current catalogue price exists', async () => {
+    const noPrice = createService({
+      priceError: new UnprocessableEntityException('No current catalogue price is available'),
+    });
+
+    await expect(noPrice.service.create(createPublicBookingDto)).rejects.toBeInstanceOf(UnprocessableEntityException);
+    expect(noPrice.patientRepository.save).not.toHaveBeenCalled();
   });
 });
