@@ -1,0 +1,97 @@
+# Backend Architecture
+
+## System boundary
+
+The SmartClinic API is a standalone backend service. It exposes a REST API to the separately maintained frontend and, later, authorised provider, organisation, and payment-provider integrations. It is not a monorepo and does not contain frontend code.
+
+## Technology baseline
+
+| Concern | Initial choice |
+| --- | --- |
+| Framework | NestJS 11 / TypeScript |
+| API style | REST |
+| API contract documentation | Swagger / OpenAPI |
+| Persistence | PostgreSQL via TypeORM |
+| Request validation and transformation | class-validator and class-transformer |
+
+## Implemented technical foundation
+
+The API is initialised as a NestJS 11 application. It currently provides only a platform-level health endpoint: `GET /api/v1/health`. No Health Check, Booking, Payment, authentication, or provider-matching business entities are implemented yet.
+
+All API endpoints are prefixed with `/api/v1`. Swagger/OpenAPI documentation is available at `/api/docs` and already declares bearer authentication for the future authentication module.
+
+The application uses a global validation pipe with whitelisting, transformation, and rejection of non-whitelisted input. CORS permits the configured frontend origin and enables credentials for future authenticated browser requests. A minimal global exception filter returns predictable JSON errors without client stack traces, while Nest's built-in logger provides more detail in development.
+
+## Module-oriented design
+
+The application will be organised into NestJS modules aligned to product domains:
+
+```text
+API application
+├── Authentication
+├── Users
+├── Patients
+├── Providers
+├── Health Checks
+├── Bookings
+├── Payments
+├── Sponsorships
+├── Organisations
+└── Notifications
+```
+
+Each module should keep its controller, service, DTOs, persistence entities, and tests close together. Modules collaborate through explicit service interfaces or domain-level contracts rather than through controller calls or direct cross-domain database manipulation.
+
+## Layer responsibilities
+
+```text
+HTTP request
+  → controller: routing, guards, HTTP mapping
+  → DTO: transformation and validation of external input
+  → service: business rules and use-case orchestration
+  → repository/entity: persistence in PostgreSQL
+```
+
+Controllers stay thin. Services contain business decisions. DTOs and TypeORM entities are separate models so database representation does not become the public API contract.
+
+## Payment-provider boundary
+
+Bookings express funding needs in provider-neutral terms. The Payments module owns funding obligations, payment attempts, payment transactions, provider selection, and provider adapters. Bookings do not contain provider-specific identifiers, statuses, SDK details, or webhook payloads.
+
+```text
+Bookings service → Payments application interface → provider adapter → external provider
+```
+
+Adapters for Paystack, Flutterwave, Moniepoint, or other providers can be added later. A new provider must not require changes to booking business logic.
+
+## Configuration and schema changes
+
+Configuration, credentials, and provider secrets are supplied through environment variables and centralised typed configuration in `src/config`. The provided `.env.example` defines local defaults. Do not access configuration ad hoc throughout domain code.
+
+PostgreSQL is configured with TypeORM, `autoLoadEntities`, a dedicated CLI data source (`src/database/data-source.ts`), and migrations. `migrationsRun` is `false` by default so schema changes remain explicit. Production schema evolution uses reviewed TypeORM migrations; TypeORM `synchronize` is disabled in production and in the migration data source.
+
+`TYPEORM_SYNCHRONIZE=true` is accepted only in the `development` environment, is `false` by default, and must be used only for disposable local development databases. It cannot enable synchronisation in production. The project currently has migration infrastructure only; no business/domain migrations exist.
+
+## Development commands
+
+See [Development guide](development.md) for prerequisites and local setup. The main commands are:
+
+```bash
+npm install
+npm run start:dev
+npm run build
+npm run test
+npm run test:e2e
+```
+
+Migration commands use the dedicated TypeORM data source:
+
+```bash
+npm run migration:generate -- src/database/migrations/DescriptiveMigrationName
+npm run migration:run
+npm run migration:revert
+```
+
+## Delivery approach
+
+Build domains incrementally, beginning with the smallest secure vertical slices. Add tests around business-critical rules as those rules are introduced. Avoid creating entities, integrations, or abstractions ahead of an approved feature.

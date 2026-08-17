@@ -1,0 +1,341 @@
+# Proposed Database Model
+
+## Scope and status
+
+This is the proposed initial relational design for PostgreSQL and TypeORM. It is a design review artifact only: it creates no TypeORM entities, migrations, or application code. Health-result/clinical-record tables, authentication tables, booking groups, organisation programmes, provider availability, and payment-provider event tables are deliberately outside this initial model.
+
+Use `uuid` internal primary keys for all tables. Store timestamps as `timestamptz`; use `created_at` and `updated_at` unless a record is immutable or append-only. Names below are database names and do not prescribe TypeScript class names.
+
+## 1. Entity overview
+
+| Domain | Proposed table | Purpose |
+| --- | --- | --- |
+| Core identity | `users` | Platform identities; authentication details are added later. |
+| Core identity | `patients` | People receiving care, whether or not they have user accounts. |
+| Core identity | `providers` | Provider profile and operational eligibility. |
+| Core identity | `organisations` | Organisation identity and future programme/funding context. |
+| Catalogue | `health_check_packages` | Configurable Health Check package definitions. |
+| Catalogue | `fulfilment_modes` | Configurable delivery modes. |
+| Booking | `bookings` | One request to deliver one package to exactly one participant. |
+| Booking | `booking_status_history` | Append-only booking lifecycle transitions. |
+| Funding | `booking_funding` | One or more funding obligations/sources for a booking. |
+| Payments | `payment_attempts` | Provider-neutral attempts to collect a funding obligation. |
+| Payments | `payment_transactions` | Financial movements resulting from attempts or refunds. |
+| Provider matching | `provider_assignments` | Provider offers and accepted/confirmed assignments over time. |
+| Provider matching | `provider_assignment_history` | Append-only provider-offer/assignment transitions. |
+
+## 2. Entity-by-entity fields
+
+### Core identity
+
+#### `users`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal identifier. |
+| `email` | `varchar`, nullable | Sensitive contact identifier. It may be absent until authentication/onboarding is implemented. |
+| `email_normalized` | `varchar`, nullable | Lower-cased/canonical form for a unique lookup; avoid database-specific case comparisons in application code. |
+| `display_name` | `varchar`, nullable | Minimal identity display value, not a patient clinical record. |
+| `status` | enum or constrained `varchar`, non-null | Suggested values: `ACTIVE`, `INVITED`, `SUSPENDED`, `DEACTIVATED`. |
+| `created_at`, `updated_at`, `deleted_at` | `timestamptz`; first two non-null, latter nullable | Soft deletion/deactivation requires a later retention policy. |
+
+Authentication credentials, tokens, roles, and login-audit records are not part of this initial design.
+
+#### `patients`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal participant identifier. |
+| `user_id` | `uuid`, nullable FK to `users` | Optional one-to-one link for a registered patient. |
+| `given_name`, `family_name` | `varchar`, non-null | Sensitive personal data. |
+| `date_of_birth` | `date`, nullable | Sensitive personal data; collect only when product/clinical requirements require it. |
+| `phone`, `email` | `varchar`, nullable | Sensitive contact data, distinct from any linked user account. |
+| `status` | enum or constrained `varchar`, non-null | Suggested: `ACTIVE`, `INACTIVE`, `ARCHIVED`. |
+| `created_at`, `updated_at`, `deleted_at` | `timestamptz`; first two non-null, latter nullable | Retention must be decided before use. |
+
+A patient may be a registered user, an invited family member, a dependent, or another person booked on behalf of. Therefore `patients.user_id` is nullable. Where present, make it unique so one user has at most one direct patient profile in v1. Do not require a patient to have a user record to create a booking.
+
+#### `providers`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal provider identifier. |
+| `user_id` | `uuid`, nullable FK to `users`, unique when present | Provider account linkage is optional until provider authentication/onboarding is implemented. |
+| `display_name` | `varchar`, non-null | Name presented to authorised operations/users. |
+| `professional_reference` | `varchar`, nullable | Sensitive/confidential registration or licence reference; scope and verification are future decisions. |
+| `status` | enum or constrained `varchar`, non-null | Suggested: `PENDING`, `ACTIVE`, `SUSPENDED`, `INACTIVE`. |
+| `created_at`, `updated_at`, `deleted_at` | `timestamptz`; first two non-null, latter nullable | Do not hard-delete providers with assignment history. |
+
+Services, locations, availability, home-visit capability, and verification records are future provider-domain tables. They are matching inputs, not fields to overpack into this profile.
+
+#### `organisations`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal organisation identifier. |
+| `name` | `varchar`, non-null | Legal or operating name. |
+| `public_code` | `varchar`, non-null, unique | Stable human/API-facing organisation identifier. |
+| `status` | enum or constrained `varchar`, non-null | Suggested: `ACTIVE`, `SUSPENDED`, `INACTIVE`. |
+| `created_at`, `updated_at`, `deleted_at` | `timestamptz`; first two non-null, latter nullable | Retire rather than hard-delete funded-history organisations. |
+
+Organisation administrators, programmes, eligibility, and participant membership require future explicit join tables. Do not make `patients.organisation_id` the multi-tenancy model: a patient may participate in multiple programmes over time.
+
+### Catalogue
+
+#### `health_check_packages`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal catalogue identifier. |
+| `code` | `varchar`, non-null, unique | Initial values: `ESSENTIAL`, `COMPLETE`. Stable machine-readable code. |
+| `name` | `varchar`, non-null | Display name. |
+| `description` | `text`, nullable | Non-clinical catalogue description. |
+| `is_active` | `boolean`, non-null | Retire packages rather than delete them. |
+| `created_at`, `updated_at` | `timestamptz`, non-null | Catalogue audit fields. |
+
+#### `fulfilment_modes`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal catalogue identifier. |
+| `code` | `varchar`, non-null, unique | Initial values: `PROVIDER_LOCATION`, `HOME_VISIT`. |
+| `name` | `varchar`, non-null | Display name. |
+| `is_active` | `boolean`, non-null | Retire modes rather than delete them. |
+| `created_at`, `updated_at` | `timestamptz`, non-null | Catalogue audit fields. |
+
+Home Visit is a fulfilment mode, never a package. Neither table should contain a single mutable `price` as the long-term source of truth. The minimum future pricing extension is a `health_check_package_prices` table with `package_id`, `fulfilment_mode_id`, `currency`, `amount`, `effective_from`, `effective_to` (nullable), and audit timestamps. This supports package/mode/currency/effective-date pricing without implementing a broader pricing engine. A booking retains the selected quote amount and currency as a commercial snapshot once pricing is introduced.
+
+### Booking
+
+#### `bookings`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal identifier. |
+| `booking_reference` | `varchar`, non-null, unique | Public-facing reference, separate from `id`. |
+| `booker_user_id` | `uuid`, non-null FK to `users` | The person/administrator initiating the booking. |
+| `participant_patient_id` | `uuid`, non-null FK to `patients` | Exactly one participant per booking. |
+| `organisation_context_id` | `uuid`, nullable FK to `organisations` | Optional context for an organisation journey; not a substitute for programme eligibility or funding records. |
+| `health_check_package_id` | `uuid`, non-null FK to `health_check_packages` | Selected package. |
+| `fulfilment_mode_id` | `uuid`, non-null FK to `fulfilment_modes` | Selected delivery mode. |
+| `status` | booking-status enum, non-null | Current fulfilment state only. |
+| `quoted_amount` | `numeric(12,2)`, nullable initially | Monetary snapshot once a price is quoted; do not use floating point. |
+| `currency` | `char(3)`, nullable initially | ISO 4217 code paired with every monetary value. |
+| `preferred_date` | `date`, nullable | Requested date before an appointment is confirmed. |
+| `preferred_time_window_start`, `preferred_time_window_end` | `time`, nullable | Requested local time range; timezone policy remains open. |
+| `scheduled_starts_at`, `scheduled_ends_at` | `timestamptz`, nullable | Confirmed appointment values, not required for a draft. |
+| `preferred_location_note` | `text`, nullable | Minimum v1 preference field; do not place detailed address/health data here. |
+| `cancellation_reason` | `varchar`, nullable | Set only when relevant; policy controls permitted values. |
+| `expires_at` | `timestamptz`, nullable | Explicit expiry deadline when an expiry policy applies. |
+| `created_at`, `updated_at` | `timestamptz`, non-null | Current-record audit fields. |
+
+The booking has no `payer_id`, payment-provider reference, provider assignment ID, or health-result fields. Payer/funder is represented through `booking_funding`; provider matching through `provider_assignments`; health data belongs to future clinical records. A future `booking_groups`/`orders` table can associate related bookings, but every booking retains one `participant_patient_id`.
+
+#### `booking_status_history`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal identifier. |
+| `booking_id` | `uuid`, non-null FK to `bookings` | Parent booking. |
+| `from_status` | booking-status enum, nullable | Null only for initial creation. |
+| `to_status` | booking-status enum, non-null | New state. |
+| `actor_user_id` | `uuid`, nullable FK to `users` | Null for an automated/system transition. |
+| `reason_code`, `reason_note` | `varchar`/`text`, nullable | Required by policy for cancellation, expiry, and unfulfillable changes. |
+| `created_at` | `timestamptz`, non-null | Transition time. |
+
+This table is append-only: no updates or soft deletes. The current booking status is stored on `bookings` for efficient reads, while this table is the audit trail.
+
+#### `booking_funding`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal funding-obligation identifier. |
+| `booking_id` | `uuid`, non-null FK to `bookings` | A booking has one or more funding rows. |
+| `source_type` | funding-source enum, non-null | Initial: `SELF`, `FAMILY`, `SPONSOR`, `ORGANISATION`, `OTHER`. |
+| `responsible_user_id` | `uuid`, nullable FK to `users` | Individual responsible party, when applicable. |
+| `responsible_organisation_id` | `uuid`, nullable FK to `organisations` | Organisation responsible party, when applicable. |
+| `amount` | `numeric(12,2)`, nullable | Required before actual collection/settlement. |
+| `percentage` | `numeric(5,2)`, nullable | Optional allocation expression; range 0–100. |
+| `currency` | `char(3)`, non-null | Currency of amount/obligation. |
+| `status` | funding-status enum, non-null | Suggested: `PENDING`, `APPROVED`, `DECLINED`, `EXPIRED`, `CANCELLED`, `SETTLED`. |
+| `created_at`, `updated_at` | `timestamptz`, non-null | Current funding-obligation audit fields. |
+
+Use explicit nullable foreign keys rather than a generic polymorphic `party_type`/`party_id`. A check constraint should allow at most one of the two current responsible-party FKs and require one for `SELF`, `FAMILY`, `SPONSOR`, and `ORGANISATION` as applicable. Future sponsored programmes should add an explicit programme FK/table rather than overload `OTHER` indefinitely. A funding source may fund 100%, or multiple rows may fund fixed amounts or percentages. Before payment, percentages must resolve to exact amounts against the immutable booking quote.
+
+### Payments
+
+#### `payment_attempts`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal identifier. |
+| `booking_funding_id` | `uuid`, non-null FK to `booking_funding` | The obligation being collected. |
+| `amount`, `currency` | `numeric(12,2)` and `char(3)`, non-null | Immutable collection request snapshot. |
+| `status` | payment-attempt enum, non-null | `CREATED`, `AWAITING_CUSTOMER_ACTION`, `PENDING_CONFIRMATION`, `SUCCEEDED`, `FAILED`, `CANCELLED`. |
+| `idempotency_key` | `varchar`, non-null, unique | Prevents duplicate attempt creation. |
+| `provider_code` | `varchar`, nullable | Selected Payments-domain adapter/integration, not a Booking field. |
+| `provider_reference` | `varchar`, nullable | Opaque provider reference permitted only inside Payments. |
+| `created_at`, `updated_at` | `timestamptz`, non-null | Attempt audit fields. |
+
+`provider_code` and `provider_reference` are intentionally Payments-domain fields. Named provider IDs, SDK objects, raw webhook payloads, and provider-specific statuses never appear in `bookings`. Protected provider-event/raw-payload storage should be a future Payments-only table with restricted access and retention rules.
+
+#### `payment_transactions`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal identifier. |
+| `payment_attempt_id` | `uuid`, nullable FK to `payment_attempts` | Source attempt for collections; nullable only for a future finance/reconciliation path that is explicitly designed. |
+| `parent_transaction_id` | `uuid`, nullable self-FK | Links a refund to the successful collection it reverses. |
+| `transaction_type` | enum, non-null | Initial: `COLLECTION`, `REFUND`; add other types only with a defined accounting need. |
+| `status` | transaction-status enum, non-null | `PENDING`, `SUCCEEDED`, `FAILED`. Refund aggregate state is derived from linked transactions. |
+| `amount`, `currency` | `numeric(12,2)` and `char(3)`, non-null | Immutable monetary movement. |
+| `provider_reference` | `varchar`, nullable | Payments-domain opaque reference only. |
+| `occurred_at` | `timestamptz`, nullable | Confirmed provider/finance event time. |
+| `created_at` | `timestamptz`, non-null | Record creation time. |
+
+Transactions are immutable financial records: do not soft-delete or rewrite a successful collection to represent a refund. Create a linked refund transaction instead. If a pending transaction needs status updates, retain provider-event/audit evidence in the future Payments event table.
+
+### Provider matching
+
+#### `provider_assignments`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal assignment/offer identifier. |
+| `booking_id` | `uuid`, non-null FK to `bookings` | A booking has multiple offers/attempts over time. |
+| `provider_id` | `uuid`, non-null FK to `providers` | Offered or assigned provider. |
+| `status` | assignment-status enum, non-null | `OFFERED`, `ACCEPTED`, `CONFIRMED`, `DECLINED`, `EXPIRED`, `CANCELLED`. |
+| `offered_at` | `timestamptz`, non-null | Offer creation time. |
+| `responded_at` | `timestamptz`, nullable | Provider response time. |
+| `accepted_at`, `confirmed_at` | `timestamptz`, nullable | Distinguish acceptance from confirmed active assignment. |
+| `expires_at` | `timestamptz`, nullable | Provider response deadline. |
+| `reason_code`, `reason_note` | `varchar`/`text`, nullable | Decline, expiry, cancellation, or operational reason. |
+| `created_at`, `updated_at` | `timestamptz`, non-null | Current-record audit fields. |
+
+`PENDING_MATCH` and `UNMATCHED` are matching-cycle outcomes, not a provider's offer status. With this initial table set, the booking's `PENDING_PROVIDER_MATCH`/`UNFULFILLABLE` status records that outcome. A future `provider_matching_cycles` table can capture algorithm/manual search runs and eligibility snapshots without changing assignment history.
+
+#### `provider_assignment_history`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal identifier. |
+| `provider_assignment_id` | `uuid`, non-null FK to `provider_assignments` | Parent offer/assignment. |
+| `from_status` | assignment-status enum, nullable | Null only for initial offer creation. |
+| `to_status` | assignment-status enum, non-null | New state. |
+| `actor_user_id` | `uuid`, nullable FK to `users` | Null for automated transitions. |
+| `reason_code`, `reason_note` | `varchar`/`text`, nullable | Reason and supporting note where permitted. |
+| `created_at` | `timestamptz`, non-null | Transition time. |
+
+This table is append-only: no updates or soft deletes. It records the offer/assignment lifecycle independently of the booking lifecycle.
+
+## 3. Relationships and cardinality
+
+```text
+users 0..1 ── 0..1 patients
+users 0..1 ── 0..1 providers
+users 1 ──── * bookings                 (booker)
+patients 1 ─ * bookings                 (participant; exactly one per booking)
+organisations 0..1 ─ * bookings         (optional context)
+health_check_packages 1 ─ * bookings
+fulfilment_modes 1 ─ * bookings
+
+bookings 1 ─ * booking_status_history
+bookings 1 ─ * booking_funding
+booking_funding 1 ─ 0..* payment_attempts
+payment_attempts 1 ─ 0..* payment_transactions
+payment_transactions 0..1 ─ * payment_transactions  (refund links)
+bookings 1 ─ * provider_assignments
+provider_assignments 1 ─ * provider_assignment_history
+providers 1 ─ * provider_assignments
+```
+
+`booking_funding` is the sole initial model for payer/funder responsibility. Its explicit user/organisation relationships ensure the payer is not silently treated as the booker or participant. A user can be booker, linked patient, and funder in a self-funded journey, but those are independently recorded relationships.
+
+## 4. Lifecycle and state ownership
+
+| Concern | Current state owner | History/source of truth |
+| --- | --- | --- |
+| Booking fulfilment | `bookings.status` | `booking_status_history` append-only transitions. |
+| Funding obligation | `booking_funding.status` | Current record plus future funding-event history if approvals become complex. |
+| Payment collection attempt | `payment_attempts.status` | Attempt record plus future protected provider-event records. |
+| Financial movement | `payment_transactions.status` | Immutable transactions; refunds are linked transactions. |
+| Provider offer/assignment | `provider_assignments.status` | `provider_assignment_history` append-only transitions. |
+
+Valid booking transitions are:
+
+```text
+DRAFT → AWAITING_FUNDING → PENDING_PROVIDER_MATCH → PROVIDER_ASSIGNED
+      → SCHEDULED → IN_PROGRESS → COMPLETED
+
+PENDING_PROVIDER_MATCH → UNFULFILLABLE
+UNFULFILLABLE → PENDING_PROVIDER_MATCH | CANCELLED
+AWAITING_FUNDING → EXPIRED
+PENDING_PROVIDER_MATCH → EXPIRED       (only when expiry policy applies)
+DRAFT | AWAITING_FUNDING | PENDING_PROVIDER_MATCH | PROVIDER_ASSIGNED | SCHEDULED
+  → CANCELLED
+PROVIDER_ASSIGNED | SCHEDULED → PENDING_PROVIDER_MATCH  (approved rematching)
+```
+
+The service layer—not a database enum alone—must enforce contextual transition rules, actor authority, funding policy, and required reasons. PostgreSQL enums are suitable for stable, controlled lifecycle values, but constrained `varchar` columns/check constraints are easier to extend through migrations. Prefer PostgreSQL enums for the relatively stable booking/attempt/assignment states only if the team accepts explicit enum-alter migrations; otherwise use constrained `varchar` values and TypeScript enums at the application boundary.
+
+## 5. Indexes, constraints, and data integrity
+
+- Primary-key and all foreign-key columns require indexes appropriate to join/query patterns. PostgreSQL does not automatically index every foreign key.
+- Unique constraints: `bookings.booking_reference`; `health_check_packages.code`; `fulfilment_modes.code`; `organisations.public_code`; `payment_attempts.idempotency_key`; and partial unique indexes on non-null `users.email_normalized`, `patients.user_id`, and `providers.user_id`.
+- Add a partial unique index on `provider_assignments(booking_id)` where `status = 'CONFIRMED'`, enforcing at most one active confirmed provider assignment per booking. Concurrent `OFFERED` rows remain permitted pending an implementation decision.
+- Add query indexes such as `bookings(participant_patient_id, created_at desc)`, `bookings(booker_user_id, created_at desc)`, `bookings(status, preferred_date)`, `booking_funding(booking_id, status)`, `payment_attempts(booking_funding_id, status)`, `payment_transactions(payment_attempt_id, status)`, and `provider_assignments(booking_id, status)`.
+- `bookings.participant_patient_id`, package, fulfilment mode, and status are non-null. `booker_user_id` is proposed non-null for v1; anonymous booking, system-created bookings, and organisation-only initiation require an explicit future actor model rather than a hidden nullable workaround.
+- Use `ON DELETE RESTRICT` for references from bookings, funding, payments, history, and assignments. Historical records must remain referentially valid. Catalogue records should be retired (`is_active = false`), not deleted.
+- Check constraints: non-negative monetary values; ISO currency code format; percentage greater than zero and at most 100; a valid funding-party combination; end time after start time where both values are present; and assignment timestamp ordering where applicable.
+- Use `numeric(12,2)` for v1 money, never `float`/`double precision`. Confirm precision/scale and currencies before implementation; retain currency alongside every monetary value. Do not sum mixed currencies without an explicitly documented exchange-rate policy.
+
+## 6. Audit and history strategy
+
+All mutable core/catalogue/current-state records have `created_at` and `updated_at`. Add `deleted_at` only to identity/profile records where a future retention policy permits soft deletion.
+
+The following records must be append-only and never soft-deleted:
+
+- `booking_status_history`
+- `provider_assignment_history`
+- `payment_transactions`
+- Future payment provider-event/reconciliation records
+
+`bookings`, `booking_funding`, `payment_attempts`, and `provider_assignments` retain current state for efficient reads, with history/events used to explain material changes. Future audit tables should record actor, timestamp, source (user/system/integration), reason, and correlation/idempotency references. Do not treat `updated_at` as an audit history.
+
+## 7. Security and data sensitivity
+
+Sensitive personal data includes user and patient names, emails, phones, dates of birth, home-visit location notes/addresses, provider professional references, and payment references/amounts. Booking preference/location data may reveal sensitive circumstances even without clinical results.
+
+Health measurements, symptoms, diagnoses, results, and clinical notes must not appear in any table proposed here. They belong in a later Health Checks/clinical model with separately designed access controls. Booking authority or payment responsibility does not by itself grant health-record access.
+
+At the application level, future authorisation must distinguish patient health, booking, payment, provider, and organisation access. Restrict operational and database access to payment provider references and raw provider events; never store payment card data or provider SDK objects in these tables.
+
+## 8. Soft deletion recommendation
+
+Use retirement/status changes before soft deletion wherever a row is referenced by bookings or financial history. `health_check_packages` and `fulfilment_modes` should use `is_active`, not `deleted_at`.
+
+`users`, `patients`, `providers`, and `organisations` may eventually use `deleted_at`/deactivation for privacy and account lifecycle needs, subject to retention and legal requirements. Soft deletion must not break historical foreign keys, and uniqueness rules must define whether contact identifiers may be reused.
+
+Do **not** soft-delete bookings, booking history, funding records with payment history, payment attempts, payment transactions, provider assignments, or assignment history. Use lifecycle statuses, cancellation, expiry, reversal/refund records, or archival controls instead.
+
+## 9. Multi-tenancy and future extension points
+
+This v1 model is not full multi-tenancy. `bookings.organisation_context_id` and `booking_funding.responsible_organisation_id` preserve essential organisation context without asserting that every record belongs to one tenant.
+
+Future organisation work needs explicit `organisation_programmes`, `organisation_memberships`/eligible-participant records, organisation-admin membership, and programme funding-allocation tables. Provider organisations, service locations, availability, and service/package capability need their own provider-network tables. These future records should carry an organisation/programme FK where ownership, eligibility, reporting, or access control requires it; do not add a blanket `organisation_id` to every current table.
+
+Other planned extensions are a booking-group/order table, package-price table, detailed booking-address model, consent/authority records, matching cycles/eligibility snapshots, payment provider events, notification delivery, and clinical health-check/result records.
+
+## 10. Open design decisions before entities
+
+- Is a registered user always required as `booker_user_id`, or must v1 support anonymous/external operational bookings?
+- What minimum patient demographics and contact fields are required, and what consent/guardian evidence is required for adults, minors, and dependents?
+- Which timezone and address model applies to preferred time windows and Home Visit scheduling?
+- When is a price quoted/locked, and are discounts, taxes, deposits, instalments, or multiple currencies in v1 scope?
+- Must a funding row use an amount, percentage, or both; how are rounding and mixed funding reconciled?
+- What funding statuses and approval/expiry rules apply to sponsors and organisation programmes?
+- Should sequential versus concurrent provider offers be selected per booking, package, or operational policy?
+- What matching threshold creates `UNFULFILLABLE`, and what rematching/override permissions apply?
+- What booking cancellation, rescheduling, no-show, expiry, and refund policies must be configured?
+- Which status storage approach does the team prefer: PostgreSQL enum types or constrained `varchar` columns?
+- What public booking-reference format, sequence scope, collision strategy, and retention policy should apply? A format such as `SC-2026-000001` is human-friendly, but it must be generated transactionally, remain unique, never be reused, and never be treated as an authorisation secret. An opaque UUID remains the internal key.

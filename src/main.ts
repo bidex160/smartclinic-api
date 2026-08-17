@@ -1,0 +1,48 @@
+import { Logger, ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+
+import { AppModule } from './app.module';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { createAppConfiguration } from './config/environment';
+
+async function bootstrap(): Promise<void> {
+  const configuration = createAppConfiguration();
+  const app = await NestFactory.create(AppModule, {
+    logger:
+      configuration.environment === 'production'
+        ? ['log', 'warn', 'error']
+        : ['log', 'warn', 'error', 'debug', 'verbose'],
+  });
+
+  app.setGlobalPrefix('api/v1');
+  app.enableCors({
+    origin: configuration.frontendUrl,
+    credentials: true,
+  });
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+  app.useGlobalFilters(new HttpExceptionFilter());
+
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('SmartClinic Health Platform API')
+    .setDescription('REST API for the SmartClinic health platform.')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, document);
+
+  await app.listen(configuration.port);
+  Logger.log(
+    `SmartClinic API listening on port ${configuration.port}`,
+    'Bootstrap',
+  );
+}
+
+void bootstrap();

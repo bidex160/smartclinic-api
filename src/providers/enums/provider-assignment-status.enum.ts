@@ -1,0 +1,8 @@
+export enum ProviderAssignmentStatus {
+  OFFERED = 'OFFERED',
+  ACCEPTED = 'ACCEPTED',
+  CONFIRMED = 'CONFIRMED',
+  DECLINED = 'DECLINED',
+  EXPIRED = 'EXPIRED',
+  CANCELLED = 'CANCELLED',
+}
