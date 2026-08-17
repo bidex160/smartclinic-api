@@ -24,7 +24,11 @@ Provider capability and provider-location reads and mutations are likewise admin
 
 Provider availability management under `/api/v1/admin/providers/:providerId/availability` and `/api/v1/admin/provider-availability` has the same JWT and `ADMIN`/`OPERATIONS` requirement. Availability is operational network data and is not exposed publicly.
 
-Provider matching commands to start/retry matching, confirm accepted assignments, and expire stale offers are restricted to authenticated `ADMIN` or `OPERATIONS` users under `/api/v1/admin`. Provider accept/decline behavior exists only as ownership-checking service operations; it has no HTTP route until a provider-authenticated role and resource relationship are available.
+Provider matching commands to start/retry matching, confirm accepted assignments, and expire stale offers are restricted to authenticated `ADMIN` or `OPERATIONS` users under `/api/v1/admin`.
+
+Provider self-service routes under `/api/v1/provider/offers` require the explicit `PROVIDER` role and resolve the authenticated user through the unique `Provider.user_id` link. The linked provider must remain `ACTIVE` and not deleted. `USER`, `ADMIN`, or `OPERATIONS` alone grants no provider access; a multi-role user must also explicitly hold `PROVIDER`. Role assignment and provider linking are controlled onboarding/admin responsibilities, never automatic registration behavior.
+
+Provider offer responses are deliberately minimized: they omit account IDs, provider IDs, booking database IDs, funding/payment data, patient records, contacts, date of birth, and the unstructured location note. Non-owned and unknown offer IDs both return the same safe 404.
 
 ## Authentication foundation
 
@@ -32,7 +36,7 @@ Email/password accounts use a normalized-email unique lookup and a separate cred
 
 Login creates a server-side refresh session with only a hash of a cryptographically random opaque token. The raw refresh token is delivered only in an HttpOnly cookie, rotates on every refresh, and is never returned in JSON. Logout revokes the current session; logout-all revokes the authenticated user's sessions. Browser clients must send credentialed requests to the configured frontend origin.
 
-Initial roles are `USER`, `ADMIN`, and `OPERATIONS`. The reusable `@Roles()` decorator and roles guard protect the package-price management routes and support future administrative APIs.
+Roles are `USER`, `ADMIN`, `OPERATIONS`, and `PROVIDER`. Public registration assigns only `USER`. The reusable `@Roles()` decorator and roles guard protect administrative and provider-scoped APIs.
 
 ## Data handling
 

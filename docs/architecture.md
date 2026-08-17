@@ -44,7 +44,9 @@ Each module should keep its controller, service, DTOs, persistence entities, and
 
 The Providers module owns provider service capabilities, physical locations, recurring weekly availability, eligibility discovery, and provider-offer/assignment state. Eligibility discovery remains separate from ranking and final assignment decisions. The Health Checks module continues to own package, fulfilment-mode, and commercial pricing data; capability and availability rows never store price.
 
-The first matching workflow is hybrid and sequential: eligibility discovery supplies candidates, operations initiates offers and confirms accepted assignments, and provider responses remain service-only pending provider authentication. Assignment and booking transitions are transactional and append their respective history records. Automated ranking, assignment, notifications, and scheduled expiry execution remain outside this foundation.
+The first matching workflow is hybrid and sequential: eligibility discovery supplies candidates, operations initiates offers and confirms accepted assignments, and authenticated providers list/respond only to assignments resolved through their `User → Provider` link. Assignment and booking transitions are transactional and append their respective history records. Automated ranking, assignment, notifications, and scheduled expiry execution remain outside this foundation.
+
+Provider offer controllers use the `PROVIDER` role plus an active-provider resolver. The role alone is insufficient without a live provider link, and administrative roles do not inherit provider access. Provider-facing read models intentionally expose only minimal operational booking data.
 
 ## Layer responsibilities
 

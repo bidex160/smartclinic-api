@@ -36,7 +36,9 @@ The offer expiry is `offered_at + PROVIDER_OFFER_TTL_MINUTES`, configured throug
 
 Provider acceptance changes the assignment from `OFFERED` to `ACCEPTED` but does not advance the booking. An `ADMIN` or `OPERATIONS` user confirms it separately, changing the assignment to `CONFIRMED` and the booking to `PROVIDER_ASSIGNED`. Every assignment and booking state change appends the corresponding history record.
 
-Provider accept/decline operations exist at the service layer with provider ownership and expiry checks. They are not exposed over HTTP because there is no authenticated `PROVIDER` role/guard context yet. Administrative start, confirm, and stale-expiry commands are protected under `/api/v1/admin`.
+Provider accept/decline operations are exposed under `/api/v1/provider/offers` only to authenticated users with the explicit `PROVIDER` role and an active, non-deleted `Provider.user_id` link. Provider identity is derived from authentication and is never accepted from request input. Listing and reads are ownership-scoped; an unknown or non-owned offer returns the same 404. Responses contain only the operational booking/package/schedule and minimal participant name needed for the provider decision.
+
+Administrative start, confirmation, and stale-expiry commands remain protected under `/api/v1/admin`. Operations initiates and confirms matching; providers may list, accept, or decline only their own offers. Offer expiry rules remain unchanged and expired offers cannot be revived through provider routes.
 
 Future matching may consider:
 
