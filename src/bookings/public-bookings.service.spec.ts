@@ -28,6 +28,7 @@ describe('PublicBookingsService', () => {
       preferredDate: '2026-08-20',
       preferredTimeFrom: '09:00',
       preferredTimeTo: '12:00',
+      preferredTimezone: 'Africa/Lagos',
       locationNote: 'Reception desk',
     },
   };
@@ -75,6 +76,7 @@ describe('PublicBookingsService', () => {
         preferredDate: '2026-08-20',
         preferredTimeWindowStart: '09:00',
         preferredTimeWindowEnd: '12:00',
+        preferredTimezone: 'Africa/Lagos',
         preferredLocationNote: 'Reception desk',
         createdAt: new Date('2026-08-17T12:00:00.000Z'),
         updatedAt: new Date('2026-08-17T12:00:00.000Z'),
@@ -127,6 +129,7 @@ describe('PublicBookingsService', () => {
         participantPatientId: '2f4a443d-5c93-4f8f-a05a-8ddf37d91b7a',
         quotedAmount: '12500.00',
         currency: 'NGN',
+        preferredTimezone: 'Africa/Lagos',
       }),
     );
     expect(contactRepository.create).toHaveBeenCalledWith(
@@ -163,6 +166,13 @@ describe('PublicBookingsService', () => {
     const invalidMode = createService({ modeExists: false });
     await expect(invalidMode.service.create(createPublicBookingDto)).rejects.toBeInstanceOf(BadRequestException);
     expect(invalidMode.bookingRepository.manager.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects public scheduling without timezone or with a partial range', async () => {
+    const { service, bookingRepository } = createService();
+    await expect(service.create({ ...createPublicBookingDto, booking: { ...createPublicBookingDto.booking, preferredTimezone: undefined } })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create({ ...createPublicBookingDto, booking: { ...createPublicBookingDto.booking, preferredTimeTo: undefined } })).rejects.toBeInstanceOf(BadRequestException);
+    expect(bookingRepository.manager.transaction).not.toHaveBeenCalled();
   });
 
   it('propagates transactional failures so the database transaction can roll back every record', async () => {

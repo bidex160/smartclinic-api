@@ -1,0 +1,47 @@
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BookingStatusHistory } from '../bookings/entities/booking-status-history.entity';
+import { Booking } from '../bookings/entities/booking.entity';
+import { BookingStatus } from '../bookings/enums/booking-status.enum';
+import { ProviderAssignmentHistory } from './entities/provider-assignment-history.entity';
+import { ProviderAssignment } from './entities/provider-assignment.entity';
+import { ProviderAssignmentStatus } from './enums/provider-assignment-status.enum';
+import { ProviderMatchingService } from './provider-matching.service';
+
+const ids = { booking: '10000000-0000-4000-8000-000000000001', provider1: '20000000-0000-4000-8000-000000000001', provider2: '20000000-0000-4000-8000-000000000002', assignment: '30000000-0000-4000-8000-000000000001', actor: '40000000-0000-4000-8000-000000000001' };
+const now = new Date('2026-08-24T08:00:00.000Z');
+
+describe('ProviderMatchingService', () => {
+  let bookings: any, assignments: any, bookingHistory: any, assignmentHistory: any, capabilities: any, subject: ProviderMatchingService;
+  const booking = (changes = {}) => ({ id: ids.booking, bookingReference: 'SC-2026-ABCDEFGHIJKL', status: BookingStatus.PENDING_PROVIDER_MATCH, healthCheckPackageId: '50000000-0000-4000-8000-000000000001', fulfilmentModeId: '60000000-0000-4000-8000-000000000001', preferredDate: '2026-08-24', preferredTimeWindowStart: '09:00', preferredTimeWindowEnd: '11:00', preferredTimezone: 'Africa/Lagos', healthCheckPackage: { isActive: true }, fulfilmentMode: { isActive: true }, ...changes }) as Booking;
+  const offer = (changes = {}) => ({ id: ids.assignment, bookingId: ids.booking, providerId: ids.provider1, status: ProviderAssignmentStatus.OFFERED, offeredAt: now, expiresAt: new Date(now.getTime() + 30 * 60_000), respondedAt: null, acceptedAt: null, confirmedAt: null, reasonCode: null, reasonNote: null, booking: booking(), ...changes }) as ProviderAssignment;
+  const eligible = (providerId: string) => ({ id: `service-${providerId}`, providerId, healthCheckPackageId: 'package', fulfilmentModeId: 'mode', isActive: true, providerLocationIds: [], createdAt: now, updatedAt: now });
+
+  beforeEach(() => {
+    bookingHistory = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) };
+    assignmentHistory = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) };
+    bookings = { findOne: jest.fn().mockResolvedValue(booking()), save: jest.fn(async (value) => value) };
+    assignments = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(offer()), exists: jest.fn().mockResolvedValue(false), create: jest.fn((value) => value), save: jest.fn(async (value) => ({ id: value.id ?? ids.assignment, ...value })) };
+    const manager: any = { getRepository: jest.fn((entity) => entity === Booking ? bookings : entity === ProviderAssignment ? assignments : entity === BookingStatusHistory ? bookingHistory : assignmentHistory) };
+    manager.transaction = jest.fn(async (work: (value: any) => unknown) => work(manager));
+    assignments.manager = manager;
+    capabilities = { findEligibleProviders: jest.fn().mockResolvedValue([eligible(ids.provider1), eligible(ids.provider2)]) };
+    subject = new ProviderMatchingService(bookings, assignments, capabilities, { providerMatching: { offerTtlMinutes: 30 } } as never);
+  });
+
+  it('requires complete booking scheduling context', async () => { bookings.findOne.mockResolvedValue(booking({ preferredTimezone: null })); await expect(subject.startMatching('SC-2026-ABCDEFGHIJKL', ids.actor, now)).rejects.toBeInstanceOf(BadRequestException); });
+  it.each([BookingStatus.DRAFT, BookingStatus.AWAITING_FUNDING, BookingStatus.COMPLETED, BookingStatus.CANCELLED, BookingStatus.EXPIRED, BookingStatus.IN_PROGRESS])('rejects ineligible booking state %s', async (status) => { bookings.findOne.mockResolvedValue(booking({ status })); await expect(subject.startMatching('SC-2026-ABCDEFGHIJKL', ids.actor, now)).rejects.toBeInstanceOf(ConflictException); });
+  it('discovers eligible providers and creates only the first sequential offer with configured expiry and history', async () => {
+    const result = await subject.startMatching('SC-2026-ABCDEFGHIJKL', ids.actor, now);
+    expect(capabilities.findEligibleProviders).toHaveBeenCalledWith(expect.any(String), expect.any(String), expect.objectContaining({ requestedTimezone: 'Africa/Lagos' }));
+    expect(result.assignment).toMatchObject({ providerId: ids.provider1, status: ProviderAssignmentStatus.OFFERED, expiresAt: new Date('2026-08-24T08:30:00.000Z') });
+    expect(assignments.save).toHaveBeenCalledTimes(1);
+    expect(assignmentHistory.save).toHaveBeenCalledWith(expect.objectContaining({ fromStatus: null, toStatus: ProviderAssignmentStatus.OFFERED }));
+  });
+  it('moves a booking to UNFULFILLABLE with history when no eligible provider remains', async () => { capabilities.findEligibleProviders.mockResolvedValue([]); const result = await subject.startMatching('SC-2026-ABCDEFGHIJKL', ids.actor, now); expect(result).toEqual({ bookingStatus: BookingStatus.UNFULFILLABLE, assignment: null }); expect(bookingHistory.save).toHaveBeenCalledWith(expect.objectContaining({ fromStatus: BookingStatus.PENDING_PROVIDER_MATCH, toStatus: BookingStatus.UNFULFILLABLE })); });
+  it('accepts an owned unexpired offer and appends assignment history', async () => { const result = await subject.acceptOffer(ids.assignment, ids.provider1, now); expect(result.status).toBe(ProviderAssignmentStatus.ACCEPTED); expect(assignmentHistory.save).toHaveBeenCalledWith(expect.objectContaining({ toStatus: ProviderAssignmentStatus.ACCEPTED })); });
+  it('rejects acceptance by a different provider or after expiry', async () => { await expect(subject.acceptOffer(ids.assignment, ids.provider2, now)).rejects.toBeInstanceOf(ConflictException); assignments.findOne.mockResolvedValue(offer({ expiresAt: now })); await expect(subject.acceptOffer(ids.assignment, ids.provider1, now)).rejects.toBeInstanceOf(ConflictException); });
+  it('declines an offer and creates the next sequential offer', async () => { assignments.find.mockResolvedValue([offer({ status: ProviderAssignmentStatus.DECLINED })]); const result = await subject.declineOffer(ids.assignment, ids.provider1, 'Unavailable', now); expect(result.declined.status).toBe(ProviderAssignmentStatus.DECLINED); expect(result.next.assignment?.providerId).toBe(ids.provider2); expect(assignmentHistory.save).toHaveBeenCalledWith(expect.objectContaining({ toStatus: ProviderAssignmentStatus.DECLINED, reasonNote: 'Unavailable' })); });
+  it('confirms an accepted assignment, advances the booking, and appends both histories', async () => { assignments.findOne.mockResolvedValue(offer({ status: ProviderAssignmentStatus.ACCEPTED, acceptedAt: now })); const result = await subject.confirmAssignment(ids.assignment, ids.actor, now); expect(result.status).toBe(ProviderAssignmentStatus.CONFIRMED); expect(assignmentHistory.save).toHaveBeenCalledWith(expect.objectContaining({ toStatus: ProviderAssignmentStatus.CONFIRMED })); expect(bookingHistory.save).toHaveBeenCalledWith(expect.objectContaining({ toStatus: BookingStatus.PROVIDER_ASSIGNED })); });
+  it('prevents a second confirmed assignment', async () => { assignments.findOne.mockResolvedValue(offer({ status: ProviderAssignmentStatus.ACCEPTED })); assignments.exists.mockResolvedValue(true); await expect(subject.confirmAssignment(ids.assignment, ids.actor, now)).rejects.toBeInstanceOf(ConflictException); });
+  it('expires stale offers with history and continues to the next provider', async () => { const stale = offer({ expiresAt: now, booking: booking() }); assignments.find.mockResolvedValueOnce([stale]).mockResolvedValueOnce([stale]); const result = await subject.expireStaleOffers(ids.actor, now); expect(result.expiredCount).toBe(1); expect(result.nextOffers[0].assignment?.providerId).toBe(ids.provider2); expect(assignmentHistory.save).toHaveBeenCalledWith(expect.objectContaining({ toStatus: ProviderAssignmentStatus.EXPIRED })); });
+});

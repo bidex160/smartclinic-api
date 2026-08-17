@@ -1,14 +1,17 @@
 import { Type } from 'class-transformer';
 import {
   IsDateString,
+  IsDefined,
   IsEmail,
   IsEnum,
   IsOptional,
   IsString,
+  IsTimeZone,
   IsUUID,
   Matches,
   MaxLength,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -98,14 +101,22 @@ class PublicBookingDetailsDto {
   preferredDate?: string;
 
   @ApiPropertyOptional({ example: '09:00', nullable: true })
-  @IsOptional()
+  @ValidateIf((value: PublicBookingDetailsDto) => value.preferredTimeFrom != null || value.preferredTimeTo != null)
+  @IsDefined({ message: 'preferredTimeFrom is required when preferredTimeTo is supplied' })
   @Matches(TIME_PATTERN, { message: 'preferredTimeFrom must be a valid time' })
   preferredTimeFrom?: string;
 
   @ApiPropertyOptional({ example: '12:00', nullable: true })
-  @IsOptional()
+  @ValidateIf((value: PublicBookingDetailsDto) => value.preferredTimeFrom != null || value.preferredTimeTo != null)
+  @IsDefined({ message: 'preferredTimeTo is required when preferredTimeFrom is supplied' })
   @Matches(TIME_PATTERN, { message: 'preferredTimeTo must be a valid time' })
   preferredTimeTo?: string;
+
+  @ApiPropertyOptional({ example: 'Africa/Lagos', nullable: true, description: 'IANA timezone used to interpret the preferred date and time window.' })
+  @ValidateIf((value: PublicBookingDetailsDto) => value.preferredDate != null || value.preferredTimeFrom != null || value.preferredTimeTo != null || value.preferredTimezone != null)
+  @IsDefined({ message: 'preferredTimezone is required when a scheduling preference is supplied' })
+  @IsTimeZone()
+  preferredTimezone?: string;
 
   @ApiPropertyOptional({ maxLength: 1000, nullable: true })
   @IsOptional()

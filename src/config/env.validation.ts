@@ -1,5 +1,5 @@
 import { plainToInstance, Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, MinLength, validateSync } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Min, MinLength, validateSync } from 'class-validator';
 
 class EnvironmentVariables {
   @IsIn(['development', 'test', 'production'])
@@ -43,6 +43,11 @@ class EnvironmentVariables {
 
   @IsString()
   JWT_EXPIRES_IN = '15m';
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  PROVIDER_OFFER_TTL_MINUTES = 30;
 }
 
 export function validateEnvironment(config: Record<string, unknown>): EnvironmentVariables {

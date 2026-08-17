@@ -47,4 +47,15 @@ describe('CreateBookingDto', () => {
       ]),
     );
   });
+
+  it('accepts a complete schedule with a valid IANA timezone', async () => {
+    await expect(validate(plainToInstance(CreateBookingDto, { ...validInput, preferredDate: '2026-08-20', preferredTimeWindowStart: '09:00', preferredTimeWindowEnd: '12:00', preferredTimezone: 'Africa/Lagos' }))).resolves.toHaveLength(0);
+  });
+  it('rejects scheduling without a timezone and rejects invalid timezones', async () => {
+    expect(await validate(plainToInstance(CreateBookingDto, { ...validInput, preferredDate: '2026-08-20' }))).not.toHaveLength(0);
+    expect(await validate(plainToInstance(CreateBookingDto, { ...validInput, preferredDate: '2026-08-20', preferredTimezone: 'Lagos' }))).not.toHaveLength(0);
+  });
+  it('rejects a partial time range', async () => {
+    expect(await validate(plainToInstance(CreateBookingDto, { ...validInput, preferredTimeWindowStart: '09:00', preferredTimezone: 'Africa/Lagos' }))).not.toHaveLength(0);
+  });
 });

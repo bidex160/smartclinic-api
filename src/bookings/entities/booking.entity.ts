@@ -92,6 +92,9 @@ export class Booking {
   @Column({ name: 'preferred_time_window_end', type: 'time', nullable: true })
   preferredTimeWindowEnd!: string | null;
 
+  @Column({ name: 'preferred_timezone', type: 'varchar', nullable: true })
+  preferredTimezone!: string | null;
+
   @Column({ name: 'preferred_location_note', type: 'text', nullable: true })
   preferredLocationNote!: string | null;
 

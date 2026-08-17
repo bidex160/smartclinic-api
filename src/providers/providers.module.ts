@@ -16,11 +16,15 @@ import { ProviderCapabilitiesService } from './provider-capabilities.service';
 import { AdminProviderAvailabilityController } from './admin-provider-availability.controller';
 import { ProviderAvailability } from './entities/provider-availability.entity';
 import { ProviderAvailabilityService } from './provider-availability.service';
+import { Booking } from '../bookings/entities/booking.entity';
+import { BookingStatusHistory } from '../bookings/entities/booking-status-history.entity';
+import { AdminProviderMatchingController } from './admin-provider-matching.controller';
+import { ProviderMatchingService } from './provider-matching.service';
 
 @Module({
-  imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, HealthCheckPackage, FulfilmentMode])],
-  controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController],
-  providers: [ProviderCapabilitiesService, ProviderAvailabilityService],
-  exports: [ProviderCapabilitiesService, ProviderAvailabilityService],
+  imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, HealthCheckPackage, FulfilmentMode, Booking, BookingStatusHistory])],
+  controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderMatchingController],
+  providers: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderMatchingService],
+  exports: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderMatchingService],
 })
 export class ProvidersModule {}

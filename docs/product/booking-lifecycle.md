@@ -51,6 +51,8 @@ The state sequence maps the earlier suggested milestones as follows: `PENDING_PA
 
 Provider rejection is not normally a booking rejection: it records a declined provider offer and returns the booking to `PENDING_PROVIDER_MATCH`. If matching cannot find a suitable provider, the booking moves to `UNFULFILLABLE`, not automatically to `CANCELLED`. Operations may later retry matching, change fulfilment details, or cancel it in line with policy.
 
+In the implemented sequential workflow, starting matching does not advance `DRAFT` or `AWAITING_FUNDING`; those states are rejected until the funding/lifecycle owner explicitly moves the booking to `PENDING_PROVIDER_MATCH`. Provider acceptance remains an assignment-level `ACCEPTED` state. Only operations/admin confirmation changes it to `CONFIRMED` and advances the booking, with history, to `PROVIDER_ASSIGNED`. Decline and offer expiry leave the booking pending while another eligible provider is tried. Exhausting eligible providers moves it to `UNFULFILLABLE`, never `CANCELLED`.
+
 Funding rejection or payment failure is likewise not a booking state. It updates the funding summary and leaves the booking in `AWAITING_FUNDING` until paid, re-funded, cancelled, or expired.
 
 ## Configurable operating policies
@@ -64,6 +66,14 @@ The current booking state is appropriately an enum because it represents one mut
 ## Quote snapshot
 
 Creating a booking resolves an active, effective catalogue price server-side for its package and fulfilment mode, then stores the selected amount and currency on the booking. The snapshot is part of the creation transaction and is retained for historical accuracy; changing or retiring a catalogue price never changes an existing booking's quote. A booking cannot be created when no eligible v1 `NGN` price is available.
+
+## Preferred scheduling context
+
+A booking may omit scheduling preference entirely. If a preferred date or either preferred time is supplied, `preferred_timezone` is required and must be an IANA timezone such as `Africa/Lagos` or `Europe/London`. Both preferred times must be supplied together and the end must be after the start. The date and time values are interpreted as local values in `preferred_timezone`; they are not server-local or UTC timestamps.
+
+This complete scheduling context can be transformed into provider-availability discovery input. Existing development rows may retain a null timezone, but an incomplete scheduling context produces an explicit “not ready for availability matching” result rather than an assumed zone.
+
+Location semantics remain separate: `PROVIDER_LOCATION` may later require a selected provider location or geographic preference, while `HOME_VISIT` requires a structured visit address and service-area policy. `preferred_location_note` is free text and must not be treated as a verified or routable address.
 
 ## Decisions required before entities
 

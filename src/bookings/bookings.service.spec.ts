@@ -17,6 +17,7 @@ describe('BookingsService', () => {
     preferredDate: '2026-08-20',
     preferredTimeWindowStart: '09:00',
     preferredTimeWindowEnd: '12:00',
+    preferredTimezone: 'Africa/Lagos',
   };
 
   function createService(exists = true, priceError?: Error) {
@@ -95,6 +96,7 @@ describe('BookingsService', () => {
         status: BookingStatus.DRAFT,
         quotedAmount: '12500.00',
         currency: 'NGN',
+        preferredTimezone: 'Africa/Lagos',
       }),
     );
     expect(transactionalHistoryRepository.create).toHaveBeenCalledWith({
@@ -111,6 +113,13 @@ describe('BookingsService', () => {
     await expect(
       service.create({ ...createBookingDto, preferredTimeWindowStart: '12:00', preferredTimeWindowEnd: '09:00' }),
     ).rejects.toBeInstanceOf(BadRequestException);
+    expect(bookingRepository.manager.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects incomplete scheduling context before persistence', async () => {
+    const { service, bookingRepository } = createService();
+    await expect(service.create({ ...createBookingDto, preferredTimezone: undefined })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create({ ...createBookingDto, preferredTimeWindowEnd: undefined })).rejects.toBeInstanceOf(BadRequestException);
     expect(bookingRepository.manager.transaction).not.toHaveBeenCalled();
   });
 
@@ -145,6 +154,7 @@ describe('BookingsService', () => {
       preferredDate: '2026-08-20',
       preferredTimeWindowStart: '09:00',
       preferredTimeWindowEnd: '12:00',
+      preferredTimezone: 'Africa/Lagos',
       locationNote: null,
       createdAt: new Date('2026-08-17T12:00:00.000Z'),
       updatedAt: new Date('2026-08-17T12:00:00.000Z'),

@@ -160,7 +160,8 @@ An exclusion constraint prevents overlapping active date ranges for the same pac
 | `quoted_amount` | `numeric(12,2)`, nullable initially | Server-selected monetary snapshot; do not use floating point. Catalogue changes never mutate an existing booking. |
 | `currency` | `char(3)`, nullable initially | ISO 4217 code paired with every monetary value. |
 | `preferred_date` | `date`, nullable | Requested date before an appointment is confirmed. |
-| `preferred_time_window_start`, `preferred_time_window_end` | `time`, nullable | Requested local time range; timezone policy remains open. |
+| `preferred_time_window_start`, `preferred_time_window_end` | `time`, nullable | Requested local time range; both values are required together and end must be later. |
+| `preferred_timezone` | `varchar`, nullable | IANA timezone used to interpret preferred date/time. Nullable for older/no-preference rows; required by application validation when scheduling preference is supplied. |
 | `scheduled_starts_at`, `scheduled_ends_at` | `timestamptz`, nullable | Confirmed appointment values, not required for a draft. |
 | `preferred_location_note` | `text`, nullable | Minimum v1 preference field; do not place detailed address/health data here. |
 | `cancellation_reason` | `varchar`, nullable | Set only when relevant; policy controls permitted values. |
@@ -265,6 +266,8 @@ Transactions are immutable financial records: do not soft-delete or rewrite a su
 
 `PENDING_MATCH` and `UNMATCHED` are matching-cycle outcomes, not a provider's offer status. With this initial table set, the booking's `PENDING_PROVIDER_MATCH`/`UNFULFILLABLE` status records that outcome. A future `provider_matching_cycles` table can capture algorithm/manual search runs and eligibility snapshots without changing assignment history.
 
+The v1 matching application uses these rows as sequential offers. It locks the booking and checks for an existing `OFFERED`, `ACCEPTED`, or `CONFIRMED` row before creating the next offer. The existing partial unique index remains the final database guarantee that a booking has at most one `CONFIRMED` assignment. Offer TTL comes from `PROVIDER_OFFER_TTL_MINUTES`; no additional assignment columns or migration are required.
+
 #### `provider_assignment_history`
 
 | Field | Proposed type / nullability | Notes |
@@ -276,6 +279,8 @@ Transactions are immutable financial records: do not soft-delete or rewrite a su
 | `actor_user_id` | `uuid`, nullable FK to `users` | Null for automated transitions. |
 | `reason_code`, `reason_note` | `varchar`/`text`, nullable | Reason and supporting note where permitted. |
 | `created_at` | `timestamptz`, non-null | Transition time. |
+
+Every initial offer and subsequent accept, decline, expiry, or confirmation appends a row. Operations/admin actors are recorded by user id; provider responses remain service-only and use a null actor until authenticated provider identity is implemented.
 
 This table is append-only: no updates or soft deletes. It records the offer/assignment lifecycle independently of the booking lifecycle.
 
@@ -384,7 +389,7 @@ Other planned extensions are a booking-group/order table, package-price table, d
 
 - Is a registered user always required as `booker_user_id`, or must v1 support anonymous/external operational bookings?
 - What minimum patient demographics and contact fields are required, and what consent/guardian evidence is required for adults, minors, and dependents?
-- Which timezone and address model applies to preferred time windows and Home Visit scheduling?
+- Which structured address and service-area model applies to Home Visit scheduling?
 - When is a price quoted/locked, and are discounts, taxes, deposits, instalments, or multiple currencies in v1 scope?
 - Must a funding row use an amount, percentage, or both; how are rounding and mixed funding reconciled?
 - What funding statuses and approval/expiry rules apply to sponsors and organisation programmes?

@@ -20,6 +20,7 @@ describe('CreatePublicBookingDto', () => {
       fulfilmentModeId: '3c233f29-a510-4602-a337-df7e2d1e5a4a',
       preferredTimeFrom: '09:00',
       preferredTimeTo: '12:00',
+      preferredTimezone: 'Africa/Lagos',
     },
   };
 
@@ -49,5 +50,14 @@ describe('CreatePublicBookingDto', () => {
         expect.objectContaining({ property: 'unsupported' }),
       ]),
     );
+  });
+
+  it('rejects schedule fields without a timezone, invalid timezones, and partial time ranges', async () => {
+    const withoutTimezone = { ...validInput, booking: { ...validInput.booking, preferredTimezone: undefined } };
+    const invalidTimezone = { ...validInput, booking: { ...validInput.booking, preferredTimezone: 'Lagos' } };
+    const partial = { ...validInput, booking: { ...validInput.booking, preferredTimeTo: undefined } };
+    expect(await validate(plainToInstance(CreatePublicBookingDto, withoutTimezone))).not.toHaveLength(0);
+    expect(await validate(plainToInstance(CreatePublicBookingDto, invalidTimezone))).not.toHaveLength(0);
+    expect(await validate(plainToInstance(CreatePublicBookingDto, partial))).not.toHaveLength(0);
   });
 });

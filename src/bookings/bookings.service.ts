@@ -18,6 +18,7 @@ import {
   isBookingReferenceCollision,
   MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS,
 } from './booking-reference';
+import { validateBookingSchedulingPreference } from './booking-scheduling';
 
 
 @Injectable()
@@ -39,7 +40,7 @@ export class BookingsService {
   ) {}
 
   async create(createBookingDto: CreateBookingDto): Promise<BookingResponseDto> {
-    this.validatePreferredTimeWindow(createBookingDto);
+    validateBookingSchedulingPreference(createBookingDto);
     await this.validateReferences(createBookingDto);
 
     for (let attempt = 0; attempt < MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS; attempt += 1) {
@@ -62,6 +63,7 @@ export class BookingsService {
             preferredDate: createBookingDto.preferredDate ?? null,
             preferredTimeWindowStart: createBookingDto.preferredTimeWindowStart ?? null,
             preferredTimeWindowEnd: createBookingDto.preferredTimeWindowEnd ?? null,
+            preferredTimezone: createBookingDto.preferredTimezone ?? null,
             preferredLocationNote: createBookingDto.preferredLocationNote ?? null,
             status: BookingStatus.DRAFT,
           });
@@ -125,16 +127,6 @@ export class BookingsService {
 
     if (!bookerExists || !participantExists || !healthCheckPackageExists || !fulfilmentModeExists || !organisationExists) {
       throw new BadRequestException('One or more booking references are invalid or unavailable');
-    }
-  }
-
-  private validatePreferredTimeWindow(createBookingDto: CreateBookingDto): void {
-    if (
-      createBookingDto.preferredTimeWindowStart !== undefined &&
-      createBookingDto.preferredTimeWindowEnd !== undefined &&
-      createBookingDto.preferredTimeWindowEnd <= createBookingDto.preferredTimeWindowStart
-    ) {
-      throw new BadRequestException('preferredTimeWindowEnd must be after preferredTimeWindowStart');
     }
   }
 

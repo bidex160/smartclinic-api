@@ -24,6 +24,8 @@ Provider capability and provider-location reads and mutations are likewise admin
 
 Provider availability management under `/api/v1/admin/providers/:providerId/availability` and `/api/v1/admin/provider-availability` has the same JWT and `ADMIN`/`OPERATIONS` requirement. Availability is operational network data and is not exposed publicly.
 
+Provider matching commands to start/retry matching, confirm accepted assignments, and expire stale offers are restricted to authenticated `ADMIN` or `OPERATIONS` users under `/api/v1/admin`. Provider accept/decline behavior exists only as ownership-checking service operations; it has no HTTP route until a provider-authenticated role and resource relationship are available.
+
 ## Authentication foundation
 
 Email/password accounts use a normalized-email unique lookup and a separate credential record containing only a bcrypt password hash. Authentication returns a short-lived JWT access token configured with `JWT_SECRET` and `JWT_EXPIRES_IN`; no secret is hardcoded for runtime environments. Protected routes verify both the token and that the current user remains `ACTIVE` and not deleted.

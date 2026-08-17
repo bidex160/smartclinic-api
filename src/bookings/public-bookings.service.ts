@@ -18,6 +18,7 @@ import { BookingContact } from './entities/booking-contact.entity';
 import { BookingStatusHistory } from './entities/booking-status-history.entity';
 import { Booking } from './entities/booking.entity';
 import { BookingStatus } from './enums/booking-status.enum';
+import { validateBookingSchedulingPreference } from './booking-scheduling';
 
 @Injectable()
 export class PublicBookingsService {
@@ -32,7 +33,12 @@ export class PublicBookingsService {
   ) {}
 
   async create(createPublicBookingDto: CreatePublicBookingDto): Promise<BookingResponseDto> {
-    this.validatePreferredTimeWindow(createPublicBookingDto);
+    validateBookingSchedulingPreference({
+      preferredDate: createPublicBookingDto.booking.preferredDate,
+      preferredTimeWindowStart: createPublicBookingDto.booking.preferredTimeFrom,
+      preferredTimeWindowEnd: createPublicBookingDto.booking.preferredTimeTo,
+      preferredTimezone: createPublicBookingDto.booking.preferredTimezone,
+    });
     await this.validateCatalogue(createPublicBookingDto);
 
     for (let attempt = 0; attempt < MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS; attempt += 1) {
@@ -76,6 +82,7 @@ export class PublicBookingsService {
               preferredDate: bookingDetails.preferredDate ?? null,
               preferredTimeWindowStart: bookingDetails.preferredTimeFrom ?? null,
               preferredTimeWindowEnd: bookingDetails.preferredTimeTo ?? null,
+              preferredTimezone: bookingDetails.preferredTimezone ?? null,
               preferredLocationNote: bookingDetails.locationNote ?? null,
             }),
           );
@@ -125,13 +132,6 @@ export class PublicBookingsService {
 
     if (!healthCheckPackageExists || !fulfilmentModeExists) {
       throw new BadRequestException('The selected Health Check package or fulfilment mode is unavailable');
-    }
-  }
-
-  private validatePreferredTimeWindow(createPublicBookingDto: CreatePublicBookingDto): void {
-    const { preferredTimeFrom, preferredTimeTo } = createPublicBookingDto.booking;
-    if (preferredTimeFrom !== undefined && preferredTimeTo !== undefined && preferredTimeTo <= preferredTimeFrom) {
-      throw new BadRequestException('preferredTimeTo must be after preferredTimeFrom');
     }
   }
 

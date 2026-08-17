@@ -5,6 +5,7 @@ export interface AppConfiguration {
   port: number;
   frontendUrl: string;
   auth: { jwtSecret: string; jwtExpiresIn: string; refreshTokenTtl: number; cookieSecure: boolean; cookieSameSite: 'lax'|'strict'|'none'; cookieDomain?: string };
+  providerMatching: { offerTtlMinutes: number };
   database: {
     enabled: boolean;
     host: string;
@@ -38,6 +39,9 @@ export function createAppConfiguration(
       cookieSecure: environment.AUTH_COOKIE_SECURE === 'true' || environmentName === 'production',
       cookieSameSite: (environment.AUTH_COOKIE_SAME_SITE as 'lax'|'strict'|'none' | undefined) ?? 'lax',
       cookieDomain: environment.AUTH_COOKIE_DOMAIN,
+    },
+    providerMatching: {
+      offerTtlMinutes: getNumber(environment.PROVIDER_OFFER_TTL_MINUTES, 30),
     },
     database: {
       enabled: environment.DATABASE_ENABLED !== 'false',

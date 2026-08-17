@@ -20,9 +20,25 @@ For `PROVIDER_LOCATION`, active linked locations are included in the capability 
 
 Capability and location management is exposed only under `/api/v1/admin` with JWT authentication and the `ADMIN` or `OPERATIONS` role. These administrative endpoints return explicit response DTOs rather than persistence entities.
 
-The current booking preference stores a local date and time range without a timezone. Availability-aware discovery therefore cannot safely consume a booking directly until the booking timezone/address policy is decided. The discovery interface requires timezone explicitly and the public booking contract is unchanged.
+Bookings now store an optional IANA `preferredTimezone`. A focused adapter produces availability-discovery input only when date, both times, and timezone are complete; older or incomplete records return an explicit not-ready result. Availability discovery can therefore consume complete booking schedule context without assigning or ranking providers.
 
-The confirmed v1 approach is **hybrid**: the platform supports eligible-provider discovery and provider offers while authorised operations staff can intervene manually. The product does not define a matching algorithm yet. Future matching may consider:
+Location matching remains deferred. `PROVIDER_LOCATION` may require a selected provider location or geographic preference. `HOME_VISIT` will require a structured visit address and service-area logic. The free-text booking location note is not interpreted as either.
+
+The implemented v1 approach is **hybrid**: the system discovers eligible providers while authorised operations staff initiate matching and confirm an accepted assignment. It deliberately does not rank providers or automatically make a final assignment.
+
+## Sequential offer workflow
+
+Matching starts only for a booking already in `PENDING_PROVIDER_MATCH`, or as an authorised retry from `UNFULFILLABLE`. `DRAFT` and `AWAITING_FUNDING` are rejected because funding/lifecycle policy has not made them matchable. Complete date, time-window, and timezone context is required.
+
+V1 offers are sequential. Eligibility query order provides a deterministic candidate order without a ranking score. One `OFFERED`, `ACCEPTED`, or `CONFIRMED` assignment may be active in the service workflow at a time; offer creation locks the booking and rechecks active assignments. Providers previously offered the booking are excluded when selecting the next candidate.
+
+The offer expiry is `offered_at + PROVIDER_OFFER_TTL_MINUTES`, configured through the environment. Expiry is processed by an explicit operations command for now; scheduled execution is deferred. Expiry or decline appends assignment history, leaves the booking pending, and attempts the next eligible provider. If none remains, the booking moves to `UNFULFILLABLE` with booking history; it is never automatically cancelled.
+
+Provider acceptance changes the assignment from `OFFERED` to `ACCEPTED` but does not advance the booking. An `ADMIN` or `OPERATIONS` user confirms it separately, changing the assignment to `CONFIRMED` and the booking to `PROVIDER_ASSIGNED`. Every assignment and booking state change appends the corresponding history record.
+
+Provider accept/decline operations exist at the service layer with provider ownership and expiry checks. They are not exposed over HTTP because there is no authenticated `PROVIDER` role/guard context yet. Administrative start, confirm, and stale-expiry commands are protected under `/api/v1/admin`.
+
+Future matching may consider:
 
 - Whether the provider offers the requested service or package.
 - Service location and travel/service area.
@@ -68,9 +84,8 @@ This intentionally replaces the ambiguous booking milestone `PROVIDER_ACCEPTED` 
 
 Matching needs relational records, not only a booking enum: a single booking can have multiple matching cycles, provider candidates, offers, declines, expiries, and reassignment actions. Each offer and assignment should preserve actor, timestamps, reason, relevant eligibility snapshot, and state-transition history. Sensitive provider and participant information must be visible only to authorised users and only at the point it is necessary.
 
-## Decisions required before entities
+## Remaining decisions
 
-- Should implementation send provider offers sequentially or concurrently? This is intentionally deferred to matching implementation.
 - What is the response deadline, and may it differ by package, location, or home visit?
 - What participant details can a provider see before accepting an offer?
 - Can a participant reject or change an assigned provider, and under what policy?
