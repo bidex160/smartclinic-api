@@ -6,6 +6,7 @@ import { BookingStatusHistory } from '../bookings/entities/booking-status-histor
 import { Booking } from '../bookings/entities/booking.entity';
 import { FulfilmentMode } from '../health-checks/entities/fulfilment-mode.entity';
 import { HealthCheckPackage } from '../health-checks/entities/health-check-package.entity';
+import { PackagePrice } from '../health-checks/entities/package-price.entity';
 import { Organisation } from '../organisations/entities/organisation.entity';
 import { Patient } from '../patients/entities/patient.entity';
 import { PaymentAttempt } from '../payments/entities/payment-attempt.entity';
@@ -33,6 +34,7 @@ describe('entity metadata', () => {
         Provider,
         Organisation,
         HealthCheckPackage,
+        PackagePrice,
         FulfilmentMode,
         Booking,
         BookingContact,
@@ -66,6 +68,7 @@ describe('entity metadata', () => {
       Provider,
       Organisation,
       HealthCheckPackage,
+      PackagePrice,
       FulfilmentMode,
       Booking,
       BookingStatusHistory,

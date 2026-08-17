@@ -89,10 +89,11 @@ After applying migrations, seed the initial catalogue independently from applica
 npm run seed
 ```
 
-The seed inserts the `ESSENTIAL` and `COMPLETE` Health Check packages and the
-`PROVIDER_LOCATION` and `HOME_VISIT` fulfilment modes. It uses each table's
-unique machine-readable `code` and is safe to run repeatedly; it does not add
-or change package pricing.
+The seed inserts or updates the `ESSENTIAL` and `COMPLETE` Health Check package
+metadata and inserts the `PROVIDER_LOCATION` and `HOME_VISIT` fulfilment modes.
+It uses stable machine-readable `code` values and is safe to run repeatedly.
+It does not create package-price rows: approved amount, currency, and effective
+date values are required before prices can be added.
 
 ## Tests
 

@@ -6,7 +6,9 @@ The Smart Health Check is SmartClinic's primary service and the subject of the p
 
 The initial check records blood pressure, blood glucose, BMI, temperature, oxygen saturation, and pulse. This list defines the initial product scope only; it does not define database fields, clinical workflow, reference ranges, or result interpretation.
 
-Initial packages are Essential and Complete. The initial fulfilment modes are `PROVIDER_LOCATION` and `HOME_VISIT`; Home Visit is not a package. Package content, eligibility, fulfilment modes, and pricing are configurable business data when the catalogue is implemented. The final price may depend on both package and fulfilment mode. Additional values can be introduced later, and prices must not be hardcoded.
+Initial packages are Essential and Complete. The initial fulfilment modes are `PROVIDER_LOCATION` and `HOME_VISIT`; Home Visit is not a package. Package benefits, estimated duration, eligibility, fulfilment modes, and pricing are configurable business data. The final price may depend on both package and fulfilment mode and its effective date. Additional values can be introduced later, and prices must not be hardcoded.
+
+The current catalogue seed records the documented baseline measurements as benefits for both initial packages. Product must still approve the package-specific benefit differences, estimated durations, and all commercial price rows before they can be presented as distinct catalogue values. No placeholder prices are seeded.
 
 ## Booking parties
 
@@ -38,7 +40,9 @@ The Smart Health Check itself should not initially receive a standalone lifecycl
 ## Decisions required before entities
 
 - Can a booker create a booking for any adult, only linked family members, or only with participant confirmation?
-- What distinguishes Essential and Complete beyond name and price?
+- What package-specific benefits distinguish Essential and Complete?
+- What estimated duration applies to each package and fulfilment mode?
+- Which package/mode/currency prices, effective dates, taxes, and discounts are commercially approved?
 - What consent, guardian, and dependent-participant rules apply?
 - What access controls apply separately to health data, booking data, payment data, provider data, and organisation data?
 - Which party may view booking details, payment details, and health-check results?

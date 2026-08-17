@@ -1,6 +1,8 @@
 import { Booking } from '../../bookings/entities/booking.entity';
 import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
+import { PackagePrice } from './package-price.entity';
+
 @Entity('fulfilment_modes')
 export class FulfilmentMode {
   @PrimaryGeneratedColumn('uuid')
@@ -23,4 +25,7 @@ export class FulfilmentMode {
 
   @OneToMany(() => Booking, (booking) => booking.fulfilmentMode)
   bookings!: Booking[];
+
+  @OneToMany(() => PackagePrice, (packagePrice) => packagePrice.fulfilmentMode)
+  packagePrices!: PackagePrice[];
 }

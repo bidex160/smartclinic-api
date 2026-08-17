@@ -9,12 +9,30 @@ export const HEALTH_CHECK_PACKAGE_SEEDS = [
     code: 'ESSENTIAL',
     name: 'Essential Health Check',
     description: 'A foundational SmartClinic health screening package.',
+    benefits: [
+      'Blood pressure measurement',
+      'Blood glucose measurement',
+      'BMI assessment',
+      'Temperature measurement',
+      'Oxygen saturation measurement',
+      'Pulse measurement',
+    ],
+    estimatedDurationMinutes: null,
     isActive: true,
   },
   {
     code: 'COMPLETE',
     name: 'Complete Health Check',
     description: 'A comprehensive SmartClinic health screening package.',
+    benefits: [
+      'Blood pressure measurement',
+      'Blood glucose measurement',
+      'BMI assessment',
+      'Temperature measurement',
+      'Oxygen saturation measurement',
+      'Pulse measurement',
+    ],
+    estimatedDurationMinutes: null,
     isActive: true,
   },
 ] as const;
@@ -35,11 +53,13 @@ export const FULFILMENT_MODE_SEEDS = [
 export async function seedCatalogue(connection: DataSource): Promise<void> {
   await connection
     .getRepository(HealthCheckPackage)
-    .createQueryBuilder()
-    .insert()
-    .values([...HEALTH_CHECK_PACKAGE_SEEDS])
-    .orIgnore()
-    .execute();
+    .upsert(
+      HEALTH_CHECK_PACKAGE_SEEDS.map((healthCheckPackage) => ({
+        ...healthCheckPackage,
+        benefits: [...healthCheckPackage.benefits],
+      })),
+      ['code'],
+    );
 
   await connection
     .getRepository(FulfilmentMode)

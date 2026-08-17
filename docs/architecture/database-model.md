@@ -16,6 +16,7 @@ Use `uuid` internal primary keys for all tables. Store timestamps as `timestampt
 | Core identity | `organisations` | Organisation identity and future programme/funding context. |
 | Catalogue | `health_check_packages` | Configurable Health Check package definitions. |
 | Catalogue | `fulfilment_modes` | Configurable delivery modes. |
+| Catalogue | `package_prices` | Effective-dated public catalogue prices by package and fulfilment mode. |
 | Booking | `bookings` | One request to deliver one package to exactly one participant. |
 | Booking | `booking_contacts` | Immutable public-booker contact snapshot for bookings created without an account. |
 | Booking | `booking_status_history` | Append-only booking lifecycle transitions. |
@@ -91,6 +92,8 @@ Organisation administrators, programmes, eligibility, and participant membership
 | `code` | `varchar`, non-null, unique | Initial values: `ESSENTIAL`, `COMPLETE`. Stable machine-readable code. |
 | `name` | `varchar`, non-null | Display name. |
 | `description` | `text`, nullable | Non-clinical catalogue description. |
+| `benefits` | `text[]`, non-null | Public package benefits; an empty list means benefits still need approved catalogue content. |
+| `estimated_duration_minutes` | `integer`, nullable | Public estimated duration once approved; must be positive when present. |
 | `is_active` | `boolean`, non-null | Retire packages rather than delete them. |
 | `created_at`, `updated_at` | `timestamptz`, non-null | Catalogue audit fields. |
 
@@ -104,7 +107,22 @@ Organisation administrators, programmes, eligibility, and participant membership
 | `is_active` | `boolean`, non-null | Retire modes rather than delete them. |
 | `created_at`, `updated_at` | `timestamptz`, non-null | Catalogue audit fields. |
 
-Home Visit is a fulfilment mode, never a package. Neither table should contain a single mutable `price` as the long-term source of truth. The minimum future pricing extension is a `health_check_package_prices` table with `package_id`, `fulfilment_mode_id`, `currency`, `amount`, `effective_from`, `effective_to` (nullable), and audit timestamps. This supports package/mode/currency/effective-date pricing without implementing a broader pricing engine. A booking retains the selected quote amount and currency as a commercial snapshot once pricing is introduced.
+Home Visit is a fulfilment mode, never a package. Neither table contains a single mutable `price`; `package_prices` provides package/mode/currency/effective-date pricing without implementing a broader pricing engine. A booking retains the selected quote amount and currency as a commercial snapshot once pricing is introduced.
+
+#### `package_prices`
+
+| Field | Proposed type / nullability | Notes |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Internal catalogue-price identifier. |
+| `health_check_package_id` | `uuid`, non-null FK to `health_check_packages` | Priced package. |
+| `fulfilment_mode_id` | `uuid`, non-null FK to `fulfilment_modes` | Priced delivery mode. |
+| `amount`, `currency` | `numeric(12,2)`, `char(3)`, non-null | Positive amount and uppercase ISO 4217 currency. |
+| `effective_from` | `date`, non-null | Inclusive start date. |
+| `effective_to` | `date`, nullable | Exclusive end date; null is open-ended. |
+| `is_active` | `boolean`, non-null | Inactive prices are not publicly selectable. |
+| `created_at`, `updated_at` | `timestamptz`, non-null | Catalogue audit fields. |
+
+An exclusion constraint prevents overlapping active date ranges for the same package, fulfilment mode, and currency. Public catalogue responses return only active prices effective on the current date; historical and future prices remain internal.
 
 ### Booking
 
@@ -253,6 +271,8 @@ patients 1 ─ * bookings                 (participant; exactly one per booking)
 organisations 0..1 ─ * bookings         (optional context)
 health_check_packages 1 ─ * bookings
 fulfilment_modes 1 ─ * bookings
+health_check_packages 1 ─ * package_prices
+fulfilment_modes 1 ─ * package_prices
 
 bookings 1 ─ * booking_status_history
 bookings 1 ─ * booking_funding
