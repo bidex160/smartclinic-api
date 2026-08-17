@@ -8,10 +8,11 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { RolesGuard } from './roles.guard';
+import { AuthSession } from './entities/auth-session.entity';
 
 const configuration = createAppConfiguration();
 @Module({
-  imports: [TypeOrmModule.forFeature([User, UserCredential]), JwtModule.register({ secret: configuration.auth.jwtSecret, signOptions: { expiresIn: configuration.auth.jwtExpiresIn as never } })],
+  imports: [TypeOrmModule.forFeature([User, UserCredential, AuthSession]), JwtModule.register({ secret: configuration.auth.jwtSecret, signOptions: { expiresIn: configuration.auth.jwtExpiresIn as never } })],
   controllers: [AuthController], providers: [AuthService, JwtAuthGuard, RolesGuard], exports: [AuthService, JwtAuthGuard, RolesGuard, JwtModule],
 })
 export class AuthModule {}

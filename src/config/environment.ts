@@ -4,7 +4,7 @@ export interface AppConfiguration {
   environment: EnvironmentName;
   port: number;
   frontendUrl: string;
-  auth: { jwtSecret: string; jwtExpiresIn: string };
+  auth: { jwtSecret: string; jwtExpiresIn: string; refreshTokenTtl: number; cookieSecure: boolean; cookieSameSite: 'lax'|'strict'|'none'; cookieDomain?: string };
   database: {
     enabled: boolean;
     host: string;
@@ -34,6 +34,10 @@ export function createAppConfiguration(
     auth: {
       jwtSecret: environment.JWT_SECRET ?? (environmentName === 'test' ? 'test-only-jwt-secret-must-not-be-used-in-production' : ''),
       jwtExpiresIn: environment.JWT_EXPIRES_IN ?? '15m',
+      refreshTokenTtl: getNumber(environment.AUTH_REFRESH_TOKEN_TTL, 60 * 60 * 24 * 14),
+      cookieSecure: environment.AUTH_COOKIE_SECURE === 'true' || environmentName === 'production',
+      cookieSameSite: (environment.AUTH_COOKIE_SAME_SITE as 'lax'|'strict'|'none' | undefined) ?? 'lax',
+      cookieDomain: environment.AUTH_COOKIE_DOMAIN,
     },
     database: {
       enabled: environment.DATABASE_ENABLED !== 'false',

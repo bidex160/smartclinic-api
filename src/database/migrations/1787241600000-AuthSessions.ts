@@ -1,0 +1,5 @@
+import { MigrationInterface, QueryRunner } from 'typeorm';
+export class AuthSessions1787241600000 implements MigrationInterface { name='AuthSessions1787241600000';
+  async up(q: QueryRunner): Promise<void> { await q.query(`CREATE TABLE "auth_sessions" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "user_id" uuid NOT NULL, "refresh_token_hash" varchar NOT NULL, "expires_at" timestamptz NOT NULL, "revoked_at" timestamptz, "last_used_at" timestamptz, "user_agent" varchar, "ip_address" varchar, "created_at" timestamptz NOT NULL DEFAULT now(), "updated_at" timestamptz NOT NULL DEFAULT now(), CONSTRAINT "PK_auth_sessions" PRIMARY KEY ("id"), CONSTRAINT "UQ_auth_sessions_refresh_token_hash" UNIQUE ("refresh_token_hash"), CONSTRAINT "FK_auth_sessions_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT)`); await q.query(`CREATE INDEX "IDX_auth_sessions_user_active" ON "auth_sessions" ("user_id", "expires_at") WHERE "revoked_at" IS NULL`); }
+  async down(q: QueryRunner): Promise<void> { await q.query(`DROP TABLE "auth_sessions"`); }
+}

@@ -16,7 +16,8 @@ describe('AuthService', () => {
     };
     const credentialRepo: any = {};
     const jwt = { signAsync: jest.fn().mockResolvedValue('token') };
-    return { service: new AuthService(userRepo, credentialRepo, jwt as never), userRepo, jwt, savedUser };
+    const sessionRepo: any = { create: jest.fn((value: any) => value), save: jest.fn(), findOne: jest.fn(), createQueryBuilder: jest.fn() };
+    return { service: new AuthService(userRepo, credentialRepo, sessionRepo, jwt as never), userRepo, jwt, savedUser };
   }
   it('registers a normalized USER with a bcrypt credential and safe response', async () => {
     const { service, savedUser } = setup();
