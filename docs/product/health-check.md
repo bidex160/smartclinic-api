@@ -21,7 +21,7 @@ The resolved amount and currency are copied to the booking as an immutable quote
 
 Operations will manage `PackagePrice` records through an authenticated, authorised admin capability. A price may start immediately or be scheduled for a future date. A normal price change closes the preceding active range at the new price's `effectiveFrom` date and creates a new historical row; it does not rewrite a historical amount. Prices can be deactivated without deletion.
 
-Changing catalogue pricing does not require a deployment. Authentication and an administrator/operations authorisation policy are prerequisites for exposing the management HTTP endpoints; no unauthenticated price-management API is public.
+Changing catalogue pricing does not require a deployment. The management API is available only to authenticated `ADMIN` and `OPERATIONS` users; unauthenticated and regular-user requests are denied.
 
 ## Booking parties
 

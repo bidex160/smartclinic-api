@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 
 import { CreatePackagePriceDto } from './dto/create-package-price.dto';
+import { PackagePriceListQueryDto } from './dto/package-price-list-query.dto';
 import { PackagePriceResponseDto } from './dto/package-price-response.dto';
 import { FulfilmentMode } from './entities/fulfilment-mode.entity';
 import { HealthCheckPackage } from './entities/health-check-package.entity';
@@ -43,8 +44,9 @@ export class PackagePricesService {
     }
   }
 
-  async findAll(): Promise<PackagePriceResponseDto[]> {
+  async findAll(query: PackagePriceListQueryDto = {}): Promise<PackagePriceResponseDto[]> {
     const packagePrices = await this.packagePriceRepository.find({
+      where: query,
       order: { healthCheckPackageId: 'ASC', fulfilmentModeId: 'ASC', effectiveFrom: 'DESC' },
     });
     return packagePrices.map(PackagePriceResponseDto.fromEntity);

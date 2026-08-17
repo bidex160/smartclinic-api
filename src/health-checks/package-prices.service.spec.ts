@@ -90,6 +90,7 @@ describe('PackagePricesService', () => {
     await expect(service.findAll()).resolves.toEqual([expect.objectContaining({ id: price.id, isActive: false })]);
     await expect(service.findOne(price.id)).resolves.toEqual(expect.objectContaining({ id: price.id }));
     expect(priceRepository.find).toHaveBeenCalledWith({
+      where: {},
       order: { healthCheckPackageId: 'ASC', fulfilmentModeId: 'ASC', effectiveFrom: 'DESC' },
     });
     await expect(service.findOne('missing-price')).rejects.toBeInstanceOf(NotFoundException);
