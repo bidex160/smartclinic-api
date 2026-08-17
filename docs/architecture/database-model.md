@@ -122,7 +122,7 @@ Home Visit is a fulfilment mode, never a package. Neither table contains a singl
 | `is_active` | `boolean`, non-null | Inactive prices are not publicly selectable. |
 | `created_at`, `updated_at` | `timestamptz`, non-null | Catalogue audit fields. |
 
-An exclusion constraint prevents overlapping active date ranges for the same package, fulfilment mode, and currency. Public catalogue responses return only active prices effective on the current date; historical and future prices remain internal.
+An exclusion constraint prevents overlapping active date ranges for the same package, fulfilment mode, and currency. Price-management operations create new rows and may close a preceding range; they never rewrite a historical amount or delete a record. Public catalogue responses return only active prices effective on the current date; historical and future prices remain internal. Prices are operational data, are not seeded, and do not require deployment to change.
 
 ### Booking
 

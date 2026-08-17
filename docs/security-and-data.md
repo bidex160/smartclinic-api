@@ -18,6 +18,8 @@ Authorisation is not implemented yet. It must eventually distinguish access to p
 
 Booking on behalf of another person also requires future authority and consent rules. These must address adult participants, minors, and dependent participants. Being the booker or funder does not automatically grant access to the participant's health information.
 
+Package-price creation, scheduling, listing, and deactivation are operations/admin functions. Their HTTP endpoints must not be exposed until authentication and explicit administrator/operations authorisation are implemented.
+
 ## Data handling
 
 - Keep database entities distinct from API DTOs.

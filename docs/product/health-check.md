@@ -8,7 +8,7 @@ The initial check records blood pressure, blood glucose, BMI, temperature, oxyge
 
 Initial packages are Essential and Complete. The initial fulfilment modes are `PROVIDER_LOCATION` and `HOME_VISIT`; Home Visit is not a package. Package benefits, estimated duration, eligibility, fulfilment modes, and pricing are configurable business data. The final price may depend on both package and fulfilment mode and its effective date. Additional values can be introduced later, and prices must not be hardcoded.
 
-The approved v1 package definitions below distinguish Essential and Complete and define their estimated durations. The catalogue seed should reflect these approved package benefits and durations. Commercial price rows remain unapproved until the pricing table below contains final amounts and an effective date. No placeholder prices are seeded.
+The approved v1 package definitions below distinguish Essential and Complete and define their estimated durations. The catalogue seed reflects these approved package benefits and durations only. Commercial prices are operational, effective-dated data in `package_prices`; they are never hardcoded or seeded. The pricing table below still requires final amounts and an effective date.
 ## Server-side booking quotes
 
 At booking creation, the API resolves the selected package and fulfilment mode against the active, effective catalogue price. A price is eligible only when it is active, its `effectiveFrom` date has started, and its `effectiveTo` is absent or still in the future. Clients do not submit or determine a booking amount or currency.
@@ -16,6 +16,12 @@ At booking creation, the API resolves the selected package and fulfilment mode a
 V1 booking creation uses the Nigeria-first `NGN` catalogue policy. The catalogue schema can retain prices in other currencies, but the booking API neither selects them nor performs currency conversion. If no eligible NGN price exists, the API rejects the booking with a `422 Unprocessable Entity` response.
 
 The resolved amount and currency are copied to the booking as an immutable quote snapshot. Later catalogue price changes affect new bookings only; they do not alter historical booking quotes.
+
+## Price management
+
+Operations will manage `PackagePrice` records through an authenticated, authorised admin capability. A price may start immediately or be scheduled for a future date. A normal price change closes the preceding active range at the new price's `effectiveFrom` date and creates a new historical row; it does not rewrite a historical amount. Prices can be deactivated without deletion.
+
+Changing catalogue pricing does not require a deployment. Authentication and an administrator/operations authorisation policy are prerequisites for exposing the management HTTP endpoints; no unauthenticated price-management API is public.
 
 ## Booking parties
 
