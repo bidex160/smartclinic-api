@@ -28,6 +28,7 @@ describe('PublicBookingsService', () => {
       preferredDate: '2026-08-20',
       preferredTimeFrom: '09:00',
       preferredTimeTo: '12:00',
+      locationNote: 'Reception desk',
     },
   };
 
@@ -69,6 +70,7 @@ describe('PublicBookingsService', () => {
         preferredDate: '2026-08-20',
         preferredTimeWindowStart: '09:00',
         preferredTimeWindowEnd: '12:00',
+        preferredLocationNote: 'Reception desk',
         createdAt: new Date('2026-08-17T12:00:00.000Z'),
         updatedAt: new Date('2026-08-17T12:00:00.000Z'),
         healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential Health Check' },
@@ -101,6 +103,7 @@ describe('PublicBookingsService', () => {
       expect.objectContaining({
         bookingReference: 'SC-2026-7F23B0C9D1E4',
         participant: { givenName: 'Ada', familyName: 'Okafor' },
+        locationNote: 'Reception desk',
       }),
     );
     expect(patientRepository.create).toHaveBeenCalledWith(

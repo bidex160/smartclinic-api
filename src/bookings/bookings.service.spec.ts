@@ -126,6 +126,7 @@ describe('BookingsService', () => {
       preferredDate: '2026-08-20',
       preferredTimeWindowStart: '09:00',
       preferredTimeWindowEnd: '12:00',
+      locationNote: null,
       createdAt: new Date('2026-08-17T12:00:00.000Z'),
       updatedAt: new Date('2026-08-17T12:00:00.000Z'),
     });

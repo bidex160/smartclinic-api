@@ -61,6 +61,12 @@ export class BookingResponseDto {
   @ApiPropertyOptional({ nullable: true })
   preferredTimeWindowEnd!: string | null;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'The booking location preference supplied by the booker.',
+  })
+  locationNote!: string | null;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: Date;
 
@@ -88,6 +94,7 @@ export class BookingResponseDto {
       preferredDate: booking.preferredDate,
       preferredTimeWindowStart: booking.preferredTimeWindowStart,
       preferredTimeWindowEnd: booking.preferredTimeWindowEnd,
+      locationNote: booking.preferredLocationNote,
       createdAt: booking.createdAt,
       updatedAt: booking.updatedAt,
     };
