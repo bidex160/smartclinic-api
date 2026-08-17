@@ -7,6 +7,30 @@ import {
 } from './catalogue.seed';
 
 describe('seedCatalogue', () => {
+  it('defines the approved V1 benefits and durations without any package prices', () => {
+    expect(HEALTH_CHECK_PACKAGE_SEEDS).toEqual([
+      expect.objectContaining({
+        code: 'ESSENTIAL',
+        benefits: ['Blood pressure', 'Blood glucose', 'BMI', 'Temperature', 'Oxygen saturation', 'Pulse'],
+        estimatedDurationMinutes: 15,
+      }),
+      expect.objectContaining({
+        code: 'COMPLETE',
+        benefits: [
+          'Blood pressure',
+          'Blood glucose',
+          'BMI',
+          'Temperature',
+          'Oxygen saturation',
+          'Pulse',
+          'Additional clinician review',
+          'Expanded interpretation of recorded measurements',
+        ],
+        estimatedDurationMinutes: 30,
+      }),
+    ]);
+  });
+
   it('inserts the stable catalogue codes with conflict-safe idempotency', async () => {
     const packageUpsert = jest.fn().mockResolvedValue(undefined);
     const modeExecute = jest.fn().mockResolvedValue(undefined);
