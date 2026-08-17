@@ -13,6 +13,8 @@ import { AdminProviderMatchingController } from '../src/providers/admin-provider
 import { ProviderMatchingService } from '../src/providers/provider-matching.service';
 import { AdminProviderAssignmentsService } from '../src/providers/admin-provider-assignments.service';
 import { UserRole } from '../src/users/enums/user-role.enum';
+import { AdminProviderAvailabilityExceptionsController } from '../src/providers/admin-provider-availability-exceptions.controller';
+import { ProviderAvailabilityExceptionsService } from '../src/providers/provider-availability-exceptions.service';
 
 describe('Admin provider capabilities (e2e)', () => {
   let app: INestApplication;
@@ -20,9 +22,10 @@ describe('Admin provider capabilities (e2e)', () => {
   beforeAll(async () => {
     const service = { listServices: jest.fn().mockResolvedValue([]), listLocations: jest.fn().mockResolvedValue([]), getService: jest.fn(), createService: jest.fn(), activateService: jest.fn(), deactivateService: jest.fn(), linkLocation: jest.fn(), unlinkLocation: jest.fn(), getLocation: jest.fn(), createLocation: jest.fn(), updateLocation: jest.fn(), activateLocation: jest.fn(), deactivateLocation: jest.fn() };
     const availability = { list: jest.fn().mockResolvedValue([]), get: jest.fn(), create: jest.fn(), update: jest.fn(), activate: jest.fn(), deactivate: jest.fn() };
+    const exceptions = { list: jest.fn().mockResolvedValue([]), get: jest.fn(), create: jest.fn(), update: jest.fn(), activate: jest.fn(), deactivate: jest.fn() };
     const matching = { startMatching: jest.fn().mockResolvedValue({ bookingStatus: 'PENDING_PROVIDER_MATCH', assignment: { id: '10000000-0000-4000-8000-000000000001', bookingId: 'secret-booking', providerId: 'secret-provider', status: 'OFFERED', expiresAt: new Date('2026-08-24T08:30:00Z'), reasonCode: 'INTERNAL' } }), confirmAssignment: jest.fn(), expireStaleOffers: jest.fn().mockResolvedValue({ expiredCount: 2, nextOffers: [{ bookingStatus: 'PENDING_PROVIDER_MATCH', assignment: { id: 'next-secret' } }, { bookingStatus: 'UNFULFILLABLE', assignment: null }] }) };
     const assignments = { list: jest.fn().mockResolvedValue([]), get: jest.fn().mockResolvedValue({ assignmentId: '10000000-0000-4000-8000-000000000001' }) };
-    const module = await Test.createTestingModule({ controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderMatchingController], providers: [RolesGuard, Reflector, { provide: ProviderCapabilitiesService, useValue: service }, { provide: ProviderAvailabilityService, useValue: availability }, { provide: ProviderMatchingService, useValue: matching }, { provide: AdminProviderAssignmentsService, useValue: assignments }] }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); const token = req.headers.authorization; if (!token) throw new UnauthorizedException(); req.user = { id: '10000000-0000-4000-8000-000000000099', roles: token === 'Bearer admin' ? [UserRole.ADMIN] : token === 'Bearer operations' ? [UserRole.OPERATIONS] : [UserRole.USER] }; return true; } }).compile();
+    const module = await Test.createTestingModule({ controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderAvailabilityExceptionsController, AdminProviderMatchingController], providers: [RolesGuard, Reflector, { provide: ProviderCapabilitiesService, useValue: service }, { provide: ProviderAvailabilityService, useValue: availability }, { provide: ProviderAvailabilityExceptionsService, useValue: exceptions }, { provide: ProviderMatchingService, useValue: matching }, { provide: AdminProviderAssignmentsService, useValue: assignments }] }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); const token = req.headers.authorization; if (!token) throw new UnauthorizedException(); req.user = { id: '10000000-0000-4000-8000-000000000099', roles: token === 'Bearer admin' ? [UserRole.ADMIN] : token === 'Bearer operations' ? [UserRole.OPERATIONS] : [UserRole.USER] }; return true; } }).compile();
     app = module.createNestApplication(); app.setGlobalPrefix('api/v1'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true })); await app.init();
   });
   afterAll(async () => app.close());
@@ -36,6 +39,11 @@ describe('Admin provider capabilities (e2e)', () => {
   it('returns 403 for USER availability access', () => request(app.getHttpServer()).get(availabilityPath).set('Authorization', 'Bearer user').expect(403));
   it('allows ADMIN availability access', () => request(app.getHttpServer()).get(availabilityPath).set('Authorization', 'Bearer admin').expect(200).expect([]));
   it('allows OPERATIONS availability access', () => request(app.getHttpServer()).get(availabilityPath).set('Authorization', 'Bearer operations').expect(200).expect([]));
+  const exceptionsPath = `/api/v1/admin/providers/${providerId}/availability-exceptions`;
+  it('returns 401 for unauthenticated exception access', () => request(app.getHttpServer()).get(exceptionsPath).expect(401));
+  it('returns 403 for USER exception access', () => request(app.getHttpServer()).get(exceptionsPath).set('Authorization', 'Bearer user').expect(403));
+  it('allows ADMIN exception access', () => request(app.getHttpServer()).get(exceptionsPath).set('Authorization', 'Bearer admin').expect(200).expect([]));
+  it('allows OPERATIONS exception access', () => request(app.getHttpServer()).get(exceptionsPath).set('Authorization', 'Bearer operations').expect(200).expect([]));
   const matchingPath = '/api/v1/admin/bookings/SC-2026-ABCDEF123456/matching/start';
   it('returns 401 for unauthenticated matching commands', () => request(app.getHttpServer()).post(matchingPath).expect(401));
   it('returns 403 for USER matching commands', () => request(app.getHttpServer()).post(matchingPath).set('Authorization', 'Bearer user').expect(403));

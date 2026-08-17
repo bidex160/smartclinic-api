@@ -2,7 +2,7 @@
 
 ## Scope and status
 
-This document describes the relational design as it evolves. Health-result/clinical-record tables, booking groups, organisation programmes, date-specific provider availability exceptions, and payment-provider event tables remain outside the current model.
+This document describes the relational design as it evolves. Health-result/clinical-record tables, booking groups, organisation programmes, and payment-provider event tables remain outside the current model.
 
 Use `uuid` internal primary keys for all tables. Store timestamps as `timestamptz`; use `created_at` and `updated_at` unless a record is immutable or append-only. Names below are database names and do not prescribe TypeScript class names.
 
@@ -29,6 +29,7 @@ Use `uuid` internal primary keys for all tables. Store timestamps as `timestampt
 | Provider capability | `provider_locations` | Provider-owned physical service locations. |
 | Provider capability | `provider_service_locations` | Availability of a location-based capability at a physical location. |
 | Provider availability | `provider_availability` | Recurring weekly provider availability, optionally scoped to service/location. |
+| Provider availability | `provider_availability_exceptions` | One-off full-day or partial-day additions/removals, optionally scoped to service/location. |
 
 ## 2. Entity-by-entity fields
 
@@ -88,6 +89,10 @@ Services and physical locations are separate provider-domain tables and matching
 Each row contains provider, optional provider-service and provider-location scopes, a named `day_of_week_enum`, local start/end `time`, IANA timezone, active flag, and timestamps. Composite foreign keys prevent cross-provider service or location references. A check requires start before end, so v1 blocks cannot cross midnight.
 
 Active overlaps are prohibited for the same provider/day/service-scope/location-scope using a GiST exclusion constraint over half-open time ranges. Null service and location values are normalized only inside that constraint so general-scope blocks compare consistently. Adjacent blocks are permitted. IANA validity is checked by API DTO validation because PostgreSQL does not provide a stable built-in IANA identifier constraint.
+
+#### `provider_availability_exceptions`
+
+Each row belongs to a provider and date, has an IANA timezone, an `AVAILABLE` or `UNAVAILABLE` type, optional service/location scope, optional reason, active flag and timestamps. Null start/end together mean the whole local date; otherwise both are required and start must precede end. Composite foreign keys ensure scoped services and locations belong to the same provider. Matching uses recurring coverage or a covering `AVAILABLE` exception as its baseline, then excludes any overlapping `UNAVAILABLE` exception. A GiST exclusion constraint prevents overlapping active rows in an identical scope and timezone, while permitting adjacent half-open ranges.
 
 #### `organisations`
 

@@ -24,11 +24,14 @@ import { CurrentProviderService } from './current-provider.service';
 import { ProviderOffersController } from './provider-offers.controller';
 import { ProviderOffersService } from './provider-offers.service';
 import { AdminProviderAssignmentsService } from './admin-provider-assignments.service';
+import { ProviderAvailabilityException } from './entities/provider-availability-exception.entity';
+import { ProviderAvailabilityExceptionsService } from './provider-availability-exceptions.service';
+import { AdminProviderAvailabilityExceptionsController } from './admin-provider-availability-exceptions.controller';
 
 @Module({
-  imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, HealthCheckPackage, FulfilmentMode, Booking, BookingStatusHistory])],
-  controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderMatchingController, ProviderOffersController],
-  providers: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderMatchingService, CurrentProviderService, ProviderOffersService, AdminProviderAssignmentsService],
+  imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, ProviderAvailabilityException, HealthCheckPackage, FulfilmentMode, Booking, BookingStatusHistory])],
+  controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderAvailabilityExceptionsController, AdminProviderMatchingController, ProviderOffersController],
+  providers: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderAvailabilityExceptionsService, ProviderMatchingService, CurrentProviderService, ProviderOffersService, AdminProviderAssignmentsService],
   exports: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderMatchingService, CurrentProviderService],
 })
 export class ProvidersModule {}

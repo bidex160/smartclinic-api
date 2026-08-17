@@ -2,6 +2,7 @@ import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, 
 import { Provider } from './provider.entity';
 import { ProviderServiceLocation } from './provider-service-location.entity';
 import { ProviderAvailability } from './provider-availability.entity';
+import { ProviderAvailabilityException } from './provider-availability-exception.entity';
 
 @Entity('provider_locations')
 @Unique('UQ_provider_locations_id_provider', ['id', 'providerId'])
@@ -27,4 +28,5 @@ export class ProviderLocation {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;
   @OneToMany(() => ProviderServiceLocation, (link) => link.providerLocation) serviceLinks!: ProviderServiceLocation[];
   @OneToMany(() => ProviderAvailability, (availability) => availability.providerLocation) availability!: ProviderAvailability[];
+  @OneToMany(() => ProviderAvailabilityException, (exception) => exception.providerLocation) availabilityExceptions!: ProviderAvailabilityException[];
 }

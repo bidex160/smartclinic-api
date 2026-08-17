@@ -24,6 +24,8 @@ Provider capability and provider-location reads and mutations are likewise admin
 
 Provider availability management under `/api/v1/admin/providers/:providerId/availability` and `/api/v1/admin/provider-availability` has the same JWT and `ADMIN`/`OPERATIONS` requirement. Availability is operational network data and is not exposed publicly.
 
+One-off availability exceptions under `/api/v1/admin/providers/:providerId/availability-exceptions` and `/api/v1/admin/provider-availability-exceptions` are protected by the same JWT plus explicit `ADMIN`/`OPERATIONS` roles. Input uses validated DTOs, responses are explicit operational DTOs, and the routes are not public or provider self-service APIs.
+
 Provider matching commands and assignment-management reads are restricted to authenticated `ADMIN` or `OPERATIONS` users under `/api/v1/admin`. This includes starting/retrying matching, listing and inspecting assignments, confirming accepted assignments, and expiring stale offers. Assignment read models expose provider/booking operational context but omit contacts, payment/funding data, credentials, broad patient data, and raw histories.
 
 Start-matching and stale-expiry command responses use minimized operational summaries rather than returning matching-service internals. They expose no provider candidate IDs, internal booking UUIDs, reason codes/notes, raw transitions, or per-assignment expiry detail beyond the intentionally returned new `assignmentId` and offer deadline.
