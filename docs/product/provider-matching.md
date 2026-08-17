@@ -42,6 +42,8 @@ Administrative start, confirmation, and stale-expiry commands remain protected u
 
 Operations assignment management also exposes protected list and detail reads at `/api/v1/admin/provider-assignments`. Staff may filter by booking reference, provider, or assignment status and receive a dedicated operational projection containing assignment timestamps, booking/package/schedule state, minimal participant name, and provider display identity. It excludes funding, payments, contacts, credentials, and raw histories. Confirmation reuses the existing transactional command; an accepted provider response remains distinct from operations confirmation, and only confirmation advances the booking to `PROVIDER_ASSIGNED`.
 
+Matching command responses are separate minimized HTTP summaries. Starting matching returns the public booking reference, booking status, `OFFER_CREATED` or `UNFULFILLABLE` outcome, and only the new assignment identifier/status/expiry when present. Stale-offer processing returns counts for expired offers, continued matching, and unfulfillable outcomes. Candidate/provider IDs, internal booking UUIDs, per-candidate results, and transition reason metadata remain inside the domain service.
+
 Future matching may consider:
 
 - Whether the provider offers the requested service or package.

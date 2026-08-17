@@ -24,8 +24,3 @@ export class MatchingResultResponseDto {
   @ApiProperty({ enum: BookingStatus }) bookingStatus!: BookingStatus;
   @ApiPropertyOptional({ type: ProviderAssignmentResponseDto, nullable: true }) assignment!: ProviderAssignmentResponseDto | null;
 }
-
-export class ExpireStaleOffersResponseDto {
-  @ApiProperty() expiredCount!: number;
-  @ApiProperty({ type: MatchingResultResponseDto, isArray: true }) nextOffers!: MatchingResultResponseDto[];
-}

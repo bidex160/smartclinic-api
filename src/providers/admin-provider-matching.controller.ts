@@ -6,7 +6,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { BookingReferenceParamsDto } from '../bookings/dto/booking-reference-params.dto';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../users/enums/user-role.enum';
-import { ExpireStaleOffersResponseDto, MatchingResultResponseDto } from './dto/provider-assignment-response.dto';
+import { AdminExpireStaleOffersResponseDto, AdminStartMatchingResponseDto } from './dto/admin-matching-operation-response.dto';
 import { AdminProviderAssignmentQueryDto } from './dto/admin-provider-assignment-query.dto';
 import { AdminProviderAssignmentResponseDto } from './dto/admin-provider-assignment-response.dto';
 import { ResourceIdParamsDto } from './dto/provider-params.dto';
@@ -22,10 +22,10 @@ export class AdminProviderMatchingController {
   list(@Query() query: AdminProviderAssignmentQueryDto) { return this.assignments.list(query); }
   @Get('provider-assignments/:id') @ApiOperation({ summary: 'Get a provider assignment with operational context (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: AdminProviderAssignmentResponseDto })
   get(@Param() { id }: ResourceIdParamsDto) { return this.assignments.get(id); }
-  @Post('bookings/:reference/matching/start') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Start or retry sequential provider matching (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: MatchingResultResponseDto })
-  start(@Param() { reference }: BookingReferenceParamsDto, @Req() request: { user: User }) { return this.matching.startMatching(reference, request.user.id); }
+  @Post('bookings/:reference/matching/start') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Start or retry sequential provider matching (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: AdminStartMatchingResponseDto })
+  async start(@Param() { reference }: BookingReferenceParamsDto, @Req() request: { user: User }) { return AdminStartMatchingResponseDto.fromDomain(reference, await this.matching.startMatching(reference, request.user.id)); }
   @Post('provider-assignments/:id/confirm') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Confirm an accepted provider assignment (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: AdminProviderAssignmentResponseDto })
   async confirm(@Param() { id }: ResourceIdParamsDto, @Req() request: { user: User }) { await this.matching.confirmAssignment(id, request.user.id); return this.assignments.get(id); }
-  @Post('provider-assignments/expire-stale') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Expire stale offers and continue sequential matching (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: ExpireStaleOffersResponseDto })
-  expire(@Req() request: { user: User }) { return this.matching.expireStaleOffers(request.user.id); }
+  @Post('provider-assignments/expire-stale') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Expire stale offers and continue sequential matching (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: AdminExpireStaleOffersResponseDto })
+  async expire(@Req() request: { user: User }) { return AdminExpireStaleOffersResponseDto.fromDomain(await this.matching.expireStaleOffers(request.user.id)); }
 }
