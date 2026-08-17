@@ -23,11 +23,12 @@ import { ProviderMatchingService } from './provider-matching.service';
 import { CurrentProviderService } from './current-provider.service';
 import { ProviderOffersController } from './provider-offers.controller';
 import { ProviderOffersService } from './provider-offers.service';
+import { AdminProviderAssignmentsService } from './admin-provider-assignments.service';
 
 @Module({
   imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, HealthCheckPackage, FulfilmentMode, Booking, BookingStatusHistory])],
   controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderMatchingController, ProviderOffersController],
-  providers: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderMatchingService, CurrentProviderService, ProviderOffersService],
+  providers: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderMatchingService, CurrentProviderService, ProviderOffersService, AdminProviderAssignmentsService],
   exports: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderMatchingService, CurrentProviderService],
 })
 export class ProvidersModule {}

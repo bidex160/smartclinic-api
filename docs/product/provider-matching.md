@@ -40,6 +40,8 @@ Provider accept/decline operations are exposed under `/api/v1/provider/offers` o
 
 Administrative start, confirmation, and stale-expiry commands remain protected under `/api/v1/admin`. Operations initiates and confirms matching; providers may list, accept, or decline only their own offers. Offer expiry rules remain unchanged and expired offers cannot be revived through provider routes.
 
+Operations assignment management also exposes protected list and detail reads at `/api/v1/admin/provider-assignments`. Staff may filter by booking reference, provider, or assignment status and receive a dedicated operational projection containing assignment timestamps, booking/package/schedule state, minimal participant name, and provider display identity. It excludes funding, payments, contacts, credentials, and raw histories. Confirmation reuses the existing transactional command; an accepted provider response remains distinct from operations confirmation, and only confirmation advances the booking to `PROVIDER_ASSIGNED`.
+
 Future matching may consider:
 
 - Whether the provider offers the requested service or package.

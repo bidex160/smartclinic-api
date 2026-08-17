@@ -11,6 +11,7 @@ import { AdminProviderAvailabilityController } from '../src/providers/admin-prov
 import { ProviderAvailabilityService } from '../src/providers/provider-availability.service';
 import { AdminProviderMatchingController } from '../src/providers/admin-provider-matching.controller';
 import { ProviderMatchingService } from '../src/providers/provider-matching.service';
+import { AdminProviderAssignmentsService } from '../src/providers/admin-provider-assignments.service';
 import { UserRole } from '../src/users/enums/user-role.enum';
 
 describe('Admin provider capabilities (e2e)', () => {
@@ -20,7 +21,8 @@ describe('Admin provider capabilities (e2e)', () => {
     const service = { listServices: jest.fn().mockResolvedValue([]), listLocations: jest.fn().mockResolvedValue([]), getService: jest.fn(), createService: jest.fn(), activateService: jest.fn(), deactivateService: jest.fn(), linkLocation: jest.fn(), unlinkLocation: jest.fn(), getLocation: jest.fn(), createLocation: jest.fn(), updateLocation: jest.fn(), activateLocation: jest.fn(), deactivateLocation: jest.fn() };
     const availability = { list: jest.fn().mockResolvedValue([]), get: jest.fn(), create: jest.fn(), update: jest.fn(), activate: jest.fn(), deactivate: jest.fn() };
     const matching = { startMatching: jest.fn().mockResolvedValue({ bookingStatus: 'PENDING_PROVIDER_MATCH', assignment: null }), confirmAssignment: jest.fn(), expireStaleOffers: jest.fn().mockResolvedValue({ expiredCount: 0, nextOffers: [] }) };
-    const module = await Test.createTestingModule({ controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderMatchingController], providers: [RolesGuard, Reflector, { provide: ProviderCapabilitiesService, useValue: service }, { provide: ProviderAvailabilityService, useValue: availability }, { provide: ProviderMatchingService, useValue: matching }] }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); const token = req.headers.authorization; if (!token) throw new UnauthorizedException(); req.user = { id: '10000000-0000-4000-8000-000000000099', roles: token === 'Bearer admin' ? [UserRole.ADMIN] : token === 'Bearer operations' ? [UserRole.OPERATIONS] : [UserRole.USER] }; return true; } }).compile();
+    const assignments = { list: jest.fn().mockResolvedValue([]), get: jest.fn().mockResolvedValue({ assignmentId: '10000000-0000-4000-8000-000000000001' }) };
+    const module = await Test.createTestingModule({ controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderMatchingController], providers: [RolesGuard, Reflector, { provide: ProviderCapabilitiesService, useValue: service }, { provide: ProviderAvailabilityService, useValue: availability }, { provide: ProviderMatchingService, useValue: matching }, { provide: AdminProviderAssignmentsService, useValue: assignments }] }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); const token = req.headers.authorization; if (!token) throw new UnauthorizedException(); req.user = { id: '10000000-0000-4000-8000-000000000099', roles: token === 'Bearer admin' ? [UserRole.ADMIN] : token === 'Bearer operations' ? [UserRole.OPERATIONS] : [UserRole.USER] }; return true; } }).compile();
     app = module.createNestApplication(); app.setGlobalPrefix('api/v1'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true })); await app.init();
   });
   afterAll(async () => app.close());
@@ -39,4 +41,9 @@ describe('Admin provider capabilities (e2e)', () => {
   it('returns 403 for USER matching commands', () => request(app.getHttpServer()).post(matchingPath).set('Authorization', 'Bearer user').expect(403));
   it('allows ADMIN matching commands', () => request(app.getHttpServer()).post(matchingPath).set('Authorization', 'Bearer admin').expect(200));
   it('allows OPERATIONS matching commands', () => request(app.getHttpServer()).post(matchingPath).set('Authorization', 'Bearer operations').expect(200));
+  const assignmentsPath = '/api/v1/admin/provider-assignments';
+  it('returns 401 for unauthenticated assignment lists', () => request(app.getHttpServer()).get(assignmentsPath).expect(401));
+  it('returns 403 for USER assignment lists', () => request(app.getHttpServer()).get(assignmentsPath).set('Authorization', 'Bearer user').expect(403));
+  it('allows ADMIN assignment lists', () => request(app.getHttpServer()).get(assignmentsPath).set('Authorization', 'Bearer admin').expect(200).expect([]));
+  it('allows OPERATIONS assignment lists', () => request(app.getHttpServer()).get(assignmentsPath).set('Authorization', 'Bearer operations').expect(200).expect([]));
 });
