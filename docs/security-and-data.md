@@ -20,6 +20,12 @@ Booking on behalf of another person also requires future authority and consent r
 
 Package-price creation, scheduling, listing, and deactivation are operations/admin functions. Their HTTP endpoints must not be exposed until authentication and explicit administrator/operations authorisation are implemented.
 
+## Authentication foundation
+
+Email/password accounts use a normalized-email unique lookup and a separate credential record containing only a bcrypt password hash. Authentication returns a short-lived JWT access token configured with `JWT_SECRET` and `JWT_EXPIRES_IN`; no secret is hardcoded for runtime environments. Protected routes verify both the token and that the current user remains `ACTIVE` and not deleted.
+
+Initial roles are `USER`, `ADMIN`, and `OPERATIONS`. The reusable `@Roles()` decorator and roles guard support future administrative APIs; price-management routes remain unregistered until their controller can require `ADMIN` or `OPERATIONS` explicitly.
+
 ## Data handling
 
 - Keep database entities distinct from API DTOs.

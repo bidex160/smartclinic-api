@@ -1,5 +1,5 @@
 import { plainToInstance, Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, validateSync } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, MinLength, validateSync } from 'class-validator';
 
 class EnvironmentVariables {
   @IsIn(['development', 'test', 'production'])
@@ -36,6 +36,13 @@ class EnvironmentVariables {
   @IsOptional()
   @IsIn(['true', 'false'])
   DATABASE_ENABLED?: string;
+
+  @IsString()
+  @MinLength(32)
+  JWT_SECRET = process.env.NODE_ENV === 'test' ? 'test-only-jwt-secret-must-not-be-used-in-production' : undefined as never;
+
+  @IsString()
+  JWT_EXPIRES_IN = '15m';
 }
 
 export function validateEnvironment(config: Record<string, unknown>): EnvironmentVariables {

@@ -38,10 +38,11 @@ Use `uuid` internal primary keys for all tables. Store timestamps as `timestampt
 | `email` | `varchar`, nullable | Sensitive contact identifier. It may be absent until authentication/onboarding is implemented. |
 | `email_normalized` | `varchar`, nullable | Lower-cased/canonical form for a unique lookup; avoid database-specific case comparisons in application code. |
 | `display_name` | `varchar`, nullable | Minimal identity display value, not a patient clinical record. |
-| `status` | enum or constrained `varchar`, non-null | Suggested values: `ACTIVE`, `INVITED`, `SUSPENDED`, `DEACTIVATED`. |
+| `status` | enum or constrained `varchar`, non-null | `ACTIVE` is required for authentication; `SUSPENDED`, `DEACTIVATED`, and deleted users are denied. |
+| `roles` | `user_role_enum[]`, non-null | Initial values: `USER`, `ADMIN`, `OPERATIONS`; extensible by enum migration. |
 | `created_at`, `updated_at`, `deleted_at` | `timestamptz`; first two non-null, latter nullable | Soft deletion/deactivation requires a later retention policy. |
 
-Authentication credentials, tokens, roles, and login-audit records are not part of this initial design.
+`user_credentials` holds a one-to-one bcrypt `password_hash` separate from user profile data. JWT access tokens are not persisted in v1; future refresh-token and login-audit requirements need separate security records.
 
 #### `patients`
 

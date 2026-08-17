@@ -7,6 +7,8 @@ import { Patient } from '../../patients/entities/patient.entity';
 import { Provider } from '../../providers/entities/provider.entity';
 import { ProviderAssignmentHistory } from '../../providers/entities/provider-assignment-history.entity';
 import { UserStatus } from '../enums/user-status.enum';
+import { UserRole } from '../enums/user-role.enum';
+import { UserCredential } from './user-credential.entity';
 
 @Entity('users')
 @Index('UQ_users_email_normalized', ['emailNormalized'], {
@@ -29,6 +31,9 @@ export class User {
   @Column({ type: 'enum', enum: UserStatus, enumName: 'user_status_enum', default: UserStatus.ACTIVE })
   status!: UserStatus;
 
+  @Column({ type: 'enum', enum: UserRole, enumName: 'user_role_enum', array: true, default: () => "ARRAY['USER']::user_role_enum[]" })
+  roles!: UserRole[];
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
@@ -43,6 +48,9 @@ export class User {
 
   @OneToOne(() => Provider, (provider) => provider.user)
   provider!: Provider | null;
+
+  @OneToOne(() => UserCredential, (credential) => credential.user)
+  credential!: UserCredential | null;
 
   @OneToMany(() => Booking, (booking) => booking.booker)
   bookingsAsBooker!: Booking[];

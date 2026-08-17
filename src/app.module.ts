@@ -13,6 +13,7 @@ import { PatientsModule } from './patients/patients.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ProvidersModule } from './providers/providers.module';
 import { UsersModule } from './users/users.module';
+import { AuthModule } from './auth/auth.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -24,6 +25,7 @@ const persistenceDomainModules = configuration.database.enabled
       BookingsModule,
       PaymentsModule,
       ProvidersModule,
+      AuthModule,
     ]
   : [];
 

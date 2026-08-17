@@ -4,6 +4,7 @@ export interface AppConfiguration {
   environment: EnvironmentName;
   port: number;
   frontendUrl: string;
+  auth: { jwtSecret: string; jwtExpiresIn: string };
   database: {
     enabled: boolean;
     host: string;
@@ -30,6 +31,10 @@ export function createAppConfiguration(
     environment: environmentName,
     port: getNumber(environment.PORT, 3000),
     frontendUrl: environment.FRONTEND_URL ?? 'http://localhost:4200',
+    auth: {
+      jwtSecret: environment.JWT_SECRET ?? (environmentName === 'test' ? 'test-only-jwt-secret-must-not-be-used-in-production' : ''),
+      jwtExpiresIn: environment.JWT_EXPIRES_IN ?? '15m',
+    },
     database: {
       enabled: environment.DATABASE_ENABLED !== 'false',
       host: environment.DATABASE_HOST ?? 'localhost',

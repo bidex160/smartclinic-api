@@ -16,7 +16,7 @@ The SmartClinic API is a standalone backend service. It exposes a REST API to th
 
 ## Implemented technical foundation
 
-The API is initialised as a NestJS 11 application. It currently provides only a platform-level health endpoint: `GET /api/v1/health`. No Health Check, Booking, Payment, authentication, or provider-matching business entities are implemented yet.
+The API includes a local email/password authentication foundation: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, and authenticated `GET /api/v1/auth/me`. Credentials are separate from user profiles, access tokens are short-lived JWTs, and reusable authentication/roles guards are available for future protected modules.
 
 All API endpoints are prefixed with `/api/v1`. Swagger/OpenAPI documentation is available at `/api/docs` and already declares bearer authentication for the future authentication module.
 
