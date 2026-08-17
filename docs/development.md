@@ -81,6 +81,19 @@ npm run migration:revert
 
 These commands require the configured PostgreSQL database to be available.
 
+## Catalogue seed data
+
+After applying migrations, seed the initial catalogue independently from application startup:
+
+```bash
+npm run seed
+```
+
+The seed inserts the `ESSENTIAL` and `COMPLETE` Health Check packages and the
+`PROVIDER_LOCATION` and `HOME_VISIT` fulfilment modes. It uses each table's
+unique machine-readable `code` and is safe to run repeatedly; it does not add
+or change package pricing.
+
 ## Tests
 
 ```bash
