@@ -57,6 +57,8 @@ Funding rejection or payment failure is likewise not a booking state. It updates
 
 The implemented self-funded v1 flow initialises exactly one quote-backed `SELF` obligation while moving `DRAFT → AWAITING_FUNDING`. A provider-verified successful collection atomically settles that obligation and moves `AWAITING_FUNDING → PENDING_PROVIDER_MATCH`; a failed attempt leaves both funding and booking awaiting payment. Repeated initialisation and confirmation do not duplicate lifecycle transitions.
 
+The operational matching queue is a read-only projection over booking, settled funding, scheduling context, and the latest assignment. Its readiness labels are not persisted lifecycle states. The default queue is oldest-funded `PENDING_PROVIDER_MATCH` first; operations must still invoke the matching-start command explicitly.
+
 ## Configurable operating policies
 
 Cancellation, rescheduling, no-show, expiry, and refund outcomes are policy concerns, not additional hardcoded lifecycle rules. When the relevant modules are implemented, policies can define permitted actors, cut-off times, fees, refund eligibility, rescheduling limits, no-show handling, and required operational approval. A policy decision may cause a documented state transition, but it must not be inferred solely from the state name.

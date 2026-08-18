@@ -18,6 +18,7 @@ import { PublicBookingSession } from './public-booking-session.entity';
 @Index('IDX_bookings_participant_created_at', ['participantPatientId', 'createdAt'])
 @Index('IDX_bookings_booker_created_at', ['bookerUserId', 'createdAt'])
 @Index('IDX_bookings_status_preferred_date', ['status', 'preferredDate'])
+@Index('IDX_bookings_status_created_reference', ['status', 'createdAt', 'bookingReference'])
 @Check(
   'CHK_bookings_quoted_amount_non_negative',
   '"quoted_amount" IS NULL OR "quoted_amount" >= 0',

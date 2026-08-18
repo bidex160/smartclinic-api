@@ -12,12 +12,17 @@ import { AdminProviderAssignmentResponseDto } from './dto/admin-provider-assignm
 import { ResourceIdParamsDto } from './dto/provider-params.dto';
 import { ProviderMatchingService } from './provider-matching.service';
 import { AdminProviderAssignmentsService } from './admin-provider-assignments.service';
+import { AdminMatchingQueueService } from './admin-matching-queue.service';
+import { AdminMatchingQueueQueryDto } from './dto/admin-matching-queue-query.dto';
+import { AdminMatchingQueueResponseDto } from './dto/admin-matching-queue-response.dto';
 
 @ApiTags('Admin provider matching') @ApiBearerAuth() @UseGuards(JwtAuthGuard, RolesGuard) @Roles(UserRole.ADMIN, UserRole.OPERATIONS)
 @ApiUnauthorizedResponse() @ApiForbiddenResponse() @ApiBadRequestResponse() @ApiNotFoundResponse() @ApiConflictResponse()
 @Controller('admin')
 export class AdminProviderMatchingController {
-  constructor(private readonly matching: ProviderMatchingService, private readonly assignments: AdminProviderAssignmentsService) {}
+  constructor(private readonly matching: ProviderMatchingService, private readonly assignments: AdminProviderAssignmentsService, private readonly queue: AdminMatchingQueueService) {}
+  @Get('bookings/matching-queue') @ApiOperation({ summary: 'List the read-only operational provider-matching queue (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: AdminMatchingQueueResponseDto })
+  matchingQueue(@Query() query: AdminMatchingQueueQueryDto) { return this.queue.list(query); }
   @Get('provider-assignments') @ApiOperation({ summary: 'List provider assignments with operational context (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: AdminProviderAssignmentResponseDto, isArray: true })
   list(@Query() query: AdminProviderAssignmentQueryDto) { return this.assignments.list(query); }
   @Get('provider-assignments/:id') @ApiOperation({ summary: 'Get a provider assignment with operational context (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: AdminProviderAssignmentResponseDto })

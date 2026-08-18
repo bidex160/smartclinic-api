@@ -54,6 +54,8 @@ Public booking creation also creates an expiring booking-scoped session transact
 
 Paystack implements the Payments adapter boundary, not the Booking domain. It owns HTTP authentication, subunit conversion, response/status normalization, signature validation, and server-side verification. The payment service remains responsible for immutable attempt/funding expectations and transactional idempotent settlement.
 
+The admin matching queue is an operational read model composed in the Providers/matching boundary from Booking, SELF funding, catalogue, participant-name, and latest-assignment data. It exposes explicit DTOs and performs no lifecycle mutations. Pagination and deterministic oldest-first ordering keep command selection predictable while matching remains manually initiated.
+
 Provider offer controllers use the `PROVIDER` role plus an active-provider resolver. The role alone is insufficient without a live provider link, and administrative roles do not inherit provider access. Provider-facing read models intentionally expose only minimal operational booking data.
 
 Administrative assignment reads use a separate operational DTO from both persistence entities and provider-facing offers. ADMIN/OPERATIONS users can filter assignments by booking reference, provider, or status, inspect the safe booking/provider context, and invoke the same transactional confirmation service used by matching commands.

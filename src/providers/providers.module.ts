@@ -28,11 +28,13 @@ import { ProviderAvailabilityException } from './entities/provider-availability-
 import { ProviderAvailabilityExceptionsService } from './provider-availability-exceptions.service';
 import { AdminProviderAvailabilityExceptionsController } from './admin-provider-availability-exceptions.controller';
 import { ProviderBookingReservation } from './entities/provider-booking-reservation.entity';
+import { BookingFunding } from '../bookings/entities/booking-funding.entity';
+import { AdminMatchingQueueService } from './admin-matching-queue.service';
 
 @Module({
-  imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, ProviderAvailabilityException, ProviderBookingReservation, HealthCheckPackage, FulfilmentMode, Booking, BookingStatusHistory])],
+  imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, ProviderAvailabilityException, ProviderBookingReservation, HealthCheckPackage, FulfilmentMode, Booking, BookingFunding, BookingStatusHistory])],
   controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderAvailabilityExceptionsController, AdminProviderMatchingController, ProviderOffersController],
-  providers: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderAvailabilityExceptionsService, ProviderMatchingService, CurrentProviderService, ProviderOffersService, AdminProviderAssignmentsService],
+  providers: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderAvailabilityExceptionsService, ProviderMatchingService, CurrentProviderService, ProviderOffersService, AdminProviderAssignmentsService, AdminMatchingQueueService],
   exports: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderMatchingService, CurrentProviderService],
 })
 export class ProvidersModule {}

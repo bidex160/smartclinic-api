@@ -294,6 +294,8 @@ Payment attempts additionally have a unique non-null `(provider_code, provider_r
 
 `PENDING_MATCH` and `UNMATCHED` are matching-cycle outcomes, not a provider's offer status. With this initial table set, the booking's `PENDING_PROVIDER_MATCH`/`UNFULFILLABLE` status records that outcome. A future `provider_matching_cycles` table can capture algorithm/manual search runs and eligibility snapshots without changing assignment history.
 
+The operational queue uses `IDX_bookings_status_created_reference` for status-scoped, deterministic oldest-first pagination. Existing status/preferred-date and assignment booking/status indexes support its date and current-assignment filtering. No queue or readiness table is persisted.
+
 The v1 matching application uses these rows as sequential offers. It locks the booking and checks for an existing `OFFERED`, `ACCEPTED`, or `CONFIRMED` row before creating the next offer. The existing partial unique index remains the final database guarantee that a booking has at most one `CONFIRMED` assignment. Offer TTL comes from `PROVIDER_OFFER_TTL_MINUTES`; no additional assignment columns or migration are required.
 
 #### `provider_assignment_history`
