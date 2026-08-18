@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req, Res } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiConflictResponse, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse, ApiUnprocessableEntityResponse } from '@nestjs/swagger';
+import { ApiBadRequestResponse, ApiConflictResponse, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags, ApiTooManyRequestsResponse, ApiUnauthorizedResponse, ApiUnprocessableEntityResponse } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 
 import { BookingResponseDto } from './dto/booking-response.dto';
@@ -9,6 +9,7 @@ import { BookingReferenceParamsDto } from './dto/booking-reference-params.dto';
 import { PUBLIC_BOOKING_SESSION_COOKIE, PublicBookingSessionService } from './public-booking-session.service';
 import { PaymentFlowService } from '../payments/payment-flow.service';
 import { PublicPaymentInitiationResponseDto } from '../payments/dto/public-payment-initiation-response.dto';
+import { PublicPaymentStatusResponseDto } from '../payments/dto/public-payment-status-response.dto';
 
 @ApiTags('Public bookings')
 @Controller('public/bookings')
@@ -31,5 +32,9 @@ export class PublicBookingsController {
   async initializeFunding(@Param() p: BookingReferenceParamsDto, @Req() request: Request) { await this.sessions.resolveBooking(this.readCookie(request), p.reference); return this.payments.initializeFunding(p.reference, null); }
   @Post(':reference/payment/initiate') @HttpCode(HttpStatus.OK) @ApiCookieAuth(PUBLIC_BOOKING_SESSION_COOKIE) @ApiOperation({ summary: 'Initialize a provider-neutral public checkout' }) @ApiOkResponse({ type: PublicPaymentInitiationResponseDto }) @ApiUnauthorizedResponse()
   async initiatePayment(@Param() p:BookingReferenceParamsDto,@Req() request:Request){await this.sessions.resolveBooking(this.readCookie(request),p.reference);await this.payments.initializeFunding(p.reference,null);return PublicPaymentInitiationResponseDto.fromOperation(await this.payments.initiatePublicPayment(p.reference));}
+  @Get(':reference/payment-status') @ApiCookieAuth(PUBLIC_BOOKING_SESSION_COOKIE) @ApiOperation({ summary: 'Read authoritative SmartClinic payment status' }) @ApiOkResponse({ type: PublicPaymentStatusResponseDto }) @ApiUnauthorizedResponse()
+  async paymentStatus(@Param() p: BookingReferenceParamsDto, @Req() request: Request): Promise<PublicPaymentStatusResponseDto> { await this.sessions.resolveBooking(this.readCookie(request), p.reference); return this.payments.getPublicPaymentStatus(p.reference); }
+  @Post(':reference/payment-status/refresh') @HttpCode(HttpStatus.OK) @ApiCookieAuth(PUBLIC_BOOKING_SESSION_COOKIE) @ApiOperation({ summary: 'Reconcile the latest booking payment with the configured provider' }) @ApiOkResponse({ type: PublicPaymentStatusResponseDto }) @ApiConflictResponse() @ApiTooManyRequestsResponse() @ApiUnauthorizedResponse()
+  async refreshPaymentStatus(@Param() p: BookingReferenceParamsDto, @Req() request: Request): Promise<PublicPaymentStatusResponseDto> { await this.sessions.resolveBooking(this.readCookie(request), p.reference); return this.payments.verifyLatestBookingPayment(p.reference); }
   private readCookie(request: Request): string | null { const prefix = `${PUBLIC_BOOKING_SESSION_COOKIE}=`; const entry = request.headers.cookie?.split(';').map((value) => value.trim()).find((value) => value.startsWith(prefix)); if (!entry) return null; try { return decodeURIComponent(entry.slice(prefix.length)); } catch { return null; } }
 }

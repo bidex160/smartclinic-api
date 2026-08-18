@@ -6,4 +6,8 @@ The backend initializes `/transaction/initialize` with payer email, the server-a
 
 The webhook endpoint is `/api/v1/payments/paystack/webhook`. It requires `x-paystack-signature`, calculated as HMAC-SHA512 over the exact raw body using the secret key. A signed `charge.success` is independently checked through `/transaction/verify/:reference`; only verified `success` with matching reference, amount, and currency settles funding. Retries are idempotent through attempt/transaction uniqueness and transactional status checks.
 
-Callback redirects, refunds, subscriptions, transfers, raw event retention, and reconciliation jobs are not implemented. A callback must never be treated as proof of payment.
+The signed webhook is the preferred confirmation path. A guest may read SmartClinic's authoritative state with `GET /api/v1/public/bookings/:reference/payment-status` and deliberately request server-side recovery verification with `POST /api/v1/public/bookings/:reference/payment-status/refresh`; both require the session bound to that booking. Refresh never accepts a reference, amount, or currency from the browser and is throttled durably by `payment_attempts.last_verified_at` and `PAYMENT_VERIFICATION_MIN_INTERVAL_SECONDS`.
+
+Status mapping is conservative: `success` maps to `SUCCEEDED`; `failed` maps to `FAILED`; `abandoned` and `reversed` map to `CANCELLED`; `pending`, `processing`, `ongoing`, `queued`, and unknown statuses map to `PENDING_CONFIRMATION`. Only `SUCCEEDED` settles funding.
+
+Callback redirects, refunds, subscriptions, transfers, raw event retention, and scheduled reconciliation jobs are not implemented. A callback or its query parameters must never be treated as proof of payment.

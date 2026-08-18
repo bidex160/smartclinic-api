@@ -40,6 +40,9 @@ export class PaymentAttempt {
   providerReference!: string | null;
   @Column({ name: 'checkout_url', type: 'text', nullable: true }) checkoutUrl!: string | null;
 
+  @Column({ name: 'last_verified_at', type: 'timestamptz', nullable: true })
+  lastVerifiedAt!: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

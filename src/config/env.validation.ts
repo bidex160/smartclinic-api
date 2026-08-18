@@ -61,6 +61,7 @@ class EnvironmentVariables {
   @IsOptional() @IsString()
   PUBLIC_BOOKING_COOKIE_DOMAIN?: string;
   @IsIn(['none', 'test', 'paystack']) PAYMENT_PROVIDER = process.env.NODE_ENV === 'test' ? 'test' : 'none';
+  @Type(() => Number) @IsInt() @Min(1) PAYMENT_VERIFICATION_MIN_INTERVAL_SECONDS = 30;
   @IsOptional() @IsString() PAYSTACK_SECRET_KEY?: string;
   @IsOptional() @IsString() PAYSTACK_PUBLIC_KEY?: string;
   @IsOptional() @IsString() PAYSTACK_CALLBACK_URL?: string;

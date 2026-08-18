@@ -87,7 +87,7 @@ Provider callbacks and reconciliation inputs should also be retained as protecte
 
 Provider-specific SDK identifiers, statuses, raw webhook payloads, and implementation details stay within Payments and its adapter boundary. They must never be stored or interpreted by the Booking domain.
 
-ADMIN/OPERATIONS test-management endpoints remain available outside production. Public guests may initialise the server-quoted obligation only with a booking-bound session cookie. Real payment initiation remains absent; production fintech callbacks, payer verification, and recovery remain unresolved. No webhook endpoint or raw webhook storage is implemented.
+ADMIN/OPERATIONS test-management endpoints remain available outside production. Public guests may initialize funding, begin Paystack checkout, read status, and request reconciliation only with a booking-bound session cookie. A signed Paystack webhook is the primary production confirmation path. No raw webhook storage is implemented.
 
 Public checkout initiation is now available at `POST /api/v1/public/bookings/:reference/payment/initiate` after session authorization. It initializes/reuses quote-backed funding, resolves payer email from the responsible User or guest BookingContact, generates a retry-specific `SC-PAY-...` reference, and returns only the normalized reference/status/amount/currency/checkout URL. Missing email is a business error; no address is fabricated. A registered-owner initiation route remains deferred because registered booking ownership authorization is not yet sufficiently defined.
 
@@ -96,6 +96,10 @@ Paystack receives amounts in currency subunits. The adapter converts decimal str
 `POST /api/v1/payments/paystack/webhook` authenticates the exact raw request bytes with HMAC-SHA512 and the server-only secret. `charge.success` triggers an independent `/transaction/verify/:reference` call, followed by reference, expected amount, and currency checks before the existing idempotent settlement transaction. Unsupported signed events are acknowledged without mutation; invalid signatures are rejected. Raw webhook payloads are not retained.
 
 No callback endpoint is implemented. A browser redirect is not proof of payment; future callback/recovery UI must invoke server-side verification or rely on the signed webhook.
+
+Guest payment status is available only to the booking-bound public session at `GET /api/v1/public/bookings/:reference/payment-status`. It reports the application booking, SELF-funding, and latest-attempt state plus the successful transaction time, without internal IDs or raw provider data. A missing attempt is represented explicitly by a null payment status.
+
+`POST /api/v1/public/bookings/:reference/payment-status/refresh` is the deliberate recovery path after checkout. The server selects the latest attempt and its stored reference, calls the configured adapter, validates reference/amount/currency, and reuses the same transactional settlement path as the webhook. Verification is limited to once per attempt per configured minimum interval. The webhook remains the primary asynchronous confirmation mechanism; refresh is not a browser assertion of success.
 
 ## Sponsorship and organisation funding
 

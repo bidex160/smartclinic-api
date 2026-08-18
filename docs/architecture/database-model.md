@@ -250,6 +250,7 @@ Each row stores a booking FK, unique SHA-256 token hash, expiry, optional revoca
 | `provider_code` | `varchar`, nullable | Selected Payments-domain adapter/integration, not a Booking field. |
 | `provider_reference` | `varchar`, nullable | Opaque provider reference permitted only inside Payments. |
 | `checkout_url` | `text`, nullable | Safe provider-hosted checkout destination returned by the adapter. |
+| `last_verified_at` | `timestamptz`, nullable | Durable per-attempt throttle marker for explicit provider reconciliation. |
 | `created_at`, `updated_at` | `timestamptz`, non-null | Attempt audit fields. |
 
 `provider_code` and `provider_reference` are intentionally Payments-domain fields. Named provider IDs, SDK objects, raw webhook payloads, and provider-specific statuses never appear in `bookings`. Protected provider-event/raw-payload storage should be a future Payments-only table with restricted access and retention rules.
