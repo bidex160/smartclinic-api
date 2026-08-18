@@ -101,6 +101,8 @@ A reservation links exactly one provider assignment to its provider and booking,
 
 `HELD` and `CONFIRMED` rows participate in a GiST exclusion constraint keyed by provider and scheduled date over a half-open local-time range. Consequently adjacent reservations are valid and overlaps are rejected safely under concurrent acceptance. Released/cancelled rows remain as lifecycle records but do not consume capacity. The assignment FK is unique so one acceptance cannot create multiple reservations.
 
+Booking cancellation changes active reservation rows to `CANCELLED`; operational rescheduling changes them to `RELEASED`. In both cases the related actionable assignment becomes `CANCELLED`, with assignment and booking history appended in the same transaction. Reservation rows are retained rather than deleted. No schema migration is required for these operations because the existing status enums and reason/history fields cover the lifecycle.
+
 #### `organisations`
 
 | Field | Proposed type / nullability | Notes |

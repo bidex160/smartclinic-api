@@ -75,6 +75,12 @@ This complete scheduling context can be transformed into provider-availability d
 
 Provider acceptance uses the same complete context to create a `HELD` provider-capacity reservation. Operations confirmation promotes that reservation to `CONFIRMED` while advancing the booking to `PROVIDER_ASSIGNED`. A future cancellation/rescheduling workflow must release or cancel the reservation before making the provider capacity available again; cancellation policy itself remains deferred.
 
+Operational cancellation is available only to authenticated `ADMIN` and `OPERATIONS` users. It rejects `COMPLETED`, already `CANCELLED`, and `EXPIRED` bookings; expiry is treated as a distinct terminal outcome rather than relabelled as cancellation. Cancellation atomically moves the booking to `CANCELLED`, closes any `OFFERED`, `ACCEPTED`, or `CONFIRMED` assignment, appends both histories, and marks active reservations `CANCELLED`. Payment reversal and refund policy remain separate and deferred.
+
+Operational rescheduling requires a complete new local date/time window and IANA timezone. `DRAFT` and `AWAITING_FUNDING` remain in their funding lifecycle state. Other eligible states return to `PENDING_PROVIDER_MATCH`; current offers or assignments are cancelled and held/confirmed reservations become `RELEASED`. The existing provider is not assumed available at the new time and matching is not restarted automatically. `IN_PROGRESS` and terminal bookings cannot be rescheduled.
+
+`booking_status_history` supports a same-status row with the `BOOKING_RESCHEDULED` reason code when schedule context changes without a status transition. This is the current audit representation; a richer general booking-event log may replace it later.
+
 Location semantics remain separate: `PROVIDER_LOCATION` may later require a selected provider location or geographic preference, while `HOME_VISIT` requires a structured visit address and service-area policy. `preferred_location_note` is free text and must not be treated as a verified or routable address.
 
 ## Decisions required before entities

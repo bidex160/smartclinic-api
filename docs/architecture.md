@@ -46,6 +46,8 @@ The Providers module owns provider service capabilities, physical locations, rec
 
 The first matching workflow is hybrid and sequential: eligibility discovery supplies candidates, operations initiates offers and confirms accepted assignments, and authenticated providers list/respond only to assignments resolved through their `User → Provider` link. Assignment and booking transitions are transactional and append their respective history records. Automated ranking, assignment, notifications, and scheduled expiry execution remain outside this foundation.
 
+Operational booking cancellation and rescheduling are coordinated by the Bookings module. Each command locks the booking and atomically closes actionable provider assignments, releases or cancels active capacity reservations, records histories, and updates booking state/scheduling context. Rescheduling never moves an existing reservation to a client-supplied slot or automatically initiates matching.
+
 Provider offer controllers use the `PROVIDER` role plus an active-provider resolver. The role alone is insufficient without a live provider link, and administrative roles do not inherit provider access. Provider-facing read models intentionally expose only minimal operational booking data.
 
 Administrative assignment reads use a separate operational DTO from both persistence entities and provider-facing offers. ADMIN/OPERATIONS users can filter assignments by booking reference, provider, or status, inspect the safe booking/provider context, and invoke the same transactional confirmation service used by matching commands.

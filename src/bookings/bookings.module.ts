@@ -15,10 +15,17 @@ import { BookingContact } from './entities/booking-contact.entity';
 import { BookingFunding } from './entities/booking-funding.entity';
 import { BookingStatusHistory } from './entities/booking-status-history.entity';
 import { Booking } from './entities/booking.entity';
+import { AuthModule } from '../auth/auth.module';
+import { ProviderAssignment } from '../providers/entities/provider-assignment.entity';
+import { ProviderAssignmentHistory } from '../providers/entities/provider-assignment-history.entity';
+import { ProviderBookingReservation } from '../providers/entities/provider-booking-reservation.entity';
+import { BookingLifecycleService } from './booking-lifecycle.service';
+import { AdminBookingLifecycleController } from './admin-booking-lifecycle.controller';
 
 @Module({
   imports: [
     HealthChecksModule,
+    AuthModule,
     TypeOrmModule.forFeature([
       Booking,
       BookingContact,
@@ -29,9 +36,12 @@ import { Booking } from './entities/booking.entity';
       Organisation,
       HealthCheckPackage,
       FulfilmentMode,
+      ProviderAssignment,
+      ProviderAssignmentHistory,
+      ProviderBookingReservation,
     ]),
   ],
-  controllers: [BookingsController, PublicBookingsController],
-  providers: [BookingsService, PublicBookingsService],
+  controllers: [BookingsController, PublicBookingsController, AdminBookingLifecycleController],
+  providers: [BookingsService, PublicBookingsService, BookingLifecycleService],
 })
 export class BookingsModule {}
