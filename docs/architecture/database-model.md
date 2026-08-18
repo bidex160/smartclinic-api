@@ -30,6 +30,7 @@ Use `uuid` internal primary keys for all tables. Store timestamps as `timestampt
 | Provider capability | `provider_service_locations` | Availability of a location-based capability at a physical location. |
 | Provider availability | `provider_availability` | Recurring weekly provider availability, optionally scoped to service/location. |
 | Provider availability | `provider_availability_exceptions` | One-off full-day or partial-day additions/removals, optionally scoped to service/location. |
+| Provider capacity | `provider_booking_reservations` | Booking-derived provider capacity held or confirmed through assignment workflow. |
 
 ## 2. Entity-by-entity fields
 
@@ -93,6 +94,12 @@ Active overlaps are prohibited for the same provider/day/service-scope/location-
 #### `provider_availability_exceptions`
 
 Each row belongs to a provider and date, has an IANA timezone, an `AVAILABLE` or `UNAVAILABLE` type, optional service/location scope, optional reason, active flag and timestamps. Null start/end together mean the whole local date; otherwise both are required and start must precede end. Composite foreign keys ensure scoped services and locations belong to the same provider. Matching uses recurring coverage or a covering `AVAILABLE` exception as its baseline, then excludes any overlapping `UNAVAILABLE` exception. A GiST exclusion constraint prevents overlapping active rows in an identical scope and timezone, while permitting adjacent half-open ranges.
+
+#### `provider_booking_reservations`
+
+A reservation links exactly one provider assignment to its provider and booking, with an optional owned provider location. Its scheduled date, start/end times, and timezone are copied from complete booking scheduling context at provider acceptance. Status is `HELD`, `CONFIRMED`, `RELEASED`, or `CANCELLED`; release time is retained separately. Pricing, patient, and clinical data are not duplicated.
+
+`HELD` and `CONFIRMED` rows participate in a GiST exclusion constraint keyed by provider and scheduled date over a half-open local-time range. Consequently adjacent reservations are valid and overlaps are rejected safely under concurrent acceptance. Released/cancelled rows remain as lifecycle records but do not consume capacity. The assignment FK is unique so one acceptance cannot create multiple reservations.
 
 #### `organisations`
 

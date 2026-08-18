@@ -3,6 +3,7 @@ import { FulfilmentMode } from '../../health-checks/entities/fulfilment-mode.ent
 import { Organisation } from '../../organisations/entities/organisation.entity';
 import { Patient } from '../../patients/entities/patient.entity';
 import { ProviderAssignment } from '../../providers/entities/provider-assignment.entity';
+import { ProviderBookingReservation } from '../../providers/entities/provider-booking-reservation.entity';
 import { User } from '../../users/entities/user.entity';
 import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
@@ -124,6 +125,9 @@ export class Booking {
 
   @OneToMany(() => ProviderAssignment, (assignment) => assignment.booking)
   providerAssignments!: ProviderAssignment[];
+
+  @OneToMany(() => ProviderBookingReservation, (reservation) => reservation.booking)
+  providerReservations!: ProviderBookingReservation[];
 
   @OneToOne(() => BookingContact, (contact) => contact.booking)
   contact!: BookingContact | null;

@@ -73,6 +73,8 @@ A booking may omit scheduling preference entirely. If a preferred date or either
 
 This complete scheduling context can be transformed into provider-availability discovery input. Existing development rows may retain a null timezone, but an incomplete scheduling context produces an explicit “not ready for availability matching” result rather than an assumed zone.
 
+Provider acceptance uses the same complete context to create a `HELD` provider-capacity reservation. Operations confirmation promotes that reservation to `CONFIRMED` while advancing the booking to `PROVIDER_ASSIGNED`. A future cancellation/rescheduling workflow must release or cancel the reservation before making the provider capacity available again; cancellation policy itself remains deferred.
+
 Location semantics remain separate: `PROVIDER_LOCATION` may later require a selected provider location or geographic preference, while `HOME_VISIT` requires a structured visit address and service-area policy. `preferred_location_note` is free text and must not be treated as a verified or routable address.
 
 ## Decisions required before entities

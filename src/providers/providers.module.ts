@@ -27,9 +27,10 @@ import { AdminProviderAssignmentsService } from './admin-provider-assignments.se
 import { ProviderAvailabilityException } from './entities/provider-availability-exception.entity';
 import { ProviderAvailabilityExceptionsService } from './provider-availability-exceptions.service';
 import { AdminProviderAvailabilityExceptionsController } from './admin-provider-availability-exceptions.controller';
+import { ProviderBookingReservation } from './entities/provider-booking-reservation.entity';
 
 @Module({
-  imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, ProviderAvailabilityException, HealthCheckPackage, FulfilmentMode, Booking, BookingStatusHistory])],
+  imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, ProviderAvailabilityException, ProviderBookingReservation, HealthCheckPackage, FulfilmentMode, Booking, BookingStatusHistory])],
   controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderAvailabilityExceptionsController, AdminProviderMatchingController, ProviderOffersController],
   providers: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderAvailabilityExceptionsService, ProviderMatchingService, CurrentProviderService, ProviderOffersService, AdminProviderAssignmentsService],
   exports: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderMatchingService, CurrentProviderService],

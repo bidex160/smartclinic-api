@@ -1,13 +1,15 @@
 import { Booking } from '../../bookings/entities/booking.entity';
-import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm';
 
 import { ProviderAssignmentStatus } from '../enums/provider-assignment-status.enum';
 import { ProviderAssignmentHistory } from './provider-assignment-history.entity';
 import { Provider } from './provider.entity';
+import { ProviderBookingReservation } from './provider-booking-reservation.entity';
 
 @Entity('provider_assignments')
 @Index('IDX_provider_assignments_booking_status', ['bookingId', 'status'])
 @Index('IDX_provider_assignments_provider_id', ['providerId'])
+@Unique('UQ_provider_assignments_id_provider_booking', ['id', 'providerId', 'bookingId'])
 @Index('UQ_provider_assignments_confirmed_booking', ['bookingId'], {
   unique: true,
   where: '"status" = \'CONFIRMED\'',
@@ -70,4 +72,7 @@ export class ProviderAssignment {
 
   @OneToMany(() => ProviderAssignmentHistory, (history) => history.providerAssignment)
   history!: ProviderAssignmentHistory[];
+
+  @OneToOne(() => ProviderBookingReservation, (reservation) => reservation.providerAssignment)
+  reservation!: ProviderBookingReservation | null;
 }

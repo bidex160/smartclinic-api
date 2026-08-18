@@ -7,6 +7,7 @@ import { ProviderLocation } from './provider-location.entity';
 import { ProviderService } from './provider-service.entity';
 import { ProviderAvailability } from './provider-availability.entity';
 import { ProviderAvailabilityException } from './provider-availability-exception.entity';
+import { ProviderBookingReservation } from './provider-booking-reservation.entity';
 
 @Entity('providers')
 @Index('UQ_providers_user_id', ['userId'], { unique: true, where: '"user_id" IS NOT NULL' })
@@ -52,4 +53,6 @@ export class Provider {
   availability!: ProviderAvailability[];
   @OneToMany(() => ProviderAvailabilityException, (exception) => exception.provider)
   availabilityExceptions!: ProviderAvailabilityException[];
+  @OneToMany(() => ProviderBookingReservation, (reservation) => reservation.provider)
+  bookingReservations!: ProviderBookingReservation[];
 }

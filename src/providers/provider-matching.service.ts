@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, LessThanOrEqual, Repository } from 'typeorm';
+import { In, LessThanOrEqual, QueryFailedError, Repository } from 'typeorm';
 import { appConfig } from '../config/app.config';
 import { BookingStatusHistory } from '../bookings/entities/booking-status-history.entity';
 import { Booking } from '../bookings/entities/booking.entity';
@@ -12,6 +12,8 @@ import { ProviderAssignmentHistory } from './entities/provider-assignment-histor
 import { ProviderAssignment } from './entities/provider-assignment.entity';
 import { ProviderAssignmentStatus } from './enums/provider-assignment-status.enum';
 import { ProviderCapabilitiesService } from './provider-capabilities.service';
+import { ProviderBookingReservation } from './entities/provider-booking-reservation.entity';
+import { ProviderBookingReservationStatus } from './enums/provider-booking-reservation-status.enum';
 
 const ACTIVE_ASSIGNMENT_STATUSES = [ProviderAssignmentStatus.OFFERED, ProviderAssignmentStatus.ACCEPTED, ProviderAssignmentStatus.CONFIRMED];
 
@@ -31,21 +33,36 @@ export class ProviderMatchingService {
   }
 
   async acceptOffer(assignmentId: string, providerId: string, now = new Date()): Promise<ProviderAssignmentResponseDto> {
-    const result = await this.assignments.manager.transaction(async (manager) => {
+    const offered = await this.assignments.findOne({ where: { id: assignmentId }, relations: { booking: true } });
+    if (!offered) throw new NotFoundException('Provider assignment not found');
+    this.assertProviderOwnsOffer(offered, providerId);
+    this.assertOfferCanReceiveResponse(offered, now);
+    this.assertBookingAwaitingMatch(offered.booking);
+    const context = bookingToAvailabilityWindow(offered.booking);
+    if (!context.ready) throw new BadRequestException({ message: 'Booking scheduling context is incomplete', missingFields: context.missingFields });
+    const eligible = await this.capabilities.findEligibleProviders(offered.booking.healthCheckPackageId, offered.booking.fulfilmentModeId, context.window);
+    if (!eligible.some((service) => service.providerId === providerId)) throw new ConflictException('Provider is no longer eligible or has conflicting reserved capacity');
+    try {
+      const result = await this.assignments.manager.transaction(async (manager) => {
       const assignmentRepository = manager.getRepository(ProviderAssignment);
       const assignment = await assignmentRepository.findOne({ where: { id: assignmentId }, relations: { booking: true }, lock: { mode: 'pessimistic_write' } });
       if (!assignment) throw new NotFoundException('Provider assignment not found');
       this.assertProviderOwnsOffer(assignment, providerId);
       this.assertOfferCanReceiveResponse(assignment, now);
       this.assertBookingAwaitingMatch(assignment.booking);
+      const lockedContext = bookingToAvailabilityWindow(assignment.booking);
+      if (!lockedContext.ready) throw new BadRequestException({ message: 'Booking scheduling context is incomplete', missingFields: lockedContext.missingFields });
+      const reservationRepository = manager.getRepository(ProviderBookingReservation);
+      await reservationRepository.save(reservationRepository.create({ providerId, bookingId: assignment.bookingId, providerAssignmentId: assignment.id, providerLocationId: null, scheduledDate: lockedContext.window.requestedDate, startTime: lockedContext.window.requestedStartTime, endTime: lockedContext.window.requestedEndTime, timezone: lockedContext.window.requestedTimezone, status: ProviderBookingReservationStatus.HELD, releasedAt: null }));
       assignment.status = ProviderAssignmentStatus.ACCEPTED;
       assignment.respondedAt = now;
       assignment.acceptedAt = now;
       await assignmentRepository.save(assignment);
       await this.appendAssignmentHistory(manager.getRepository(ProviderAssignmentHistory), assignment.id, ProviderAssignmentStatus.OFFERED, ProviderAssignmentStatus.ACCEPTED, null, 'PROVIDER_ACCEPTED', null);
       return assignment;
-    });
-    return ProviderAssignmentResponseDto.fromEntity(result);
+      });
+      return ProviderAssignmentResponseDto.fromEntity(result);
+    } catch (error) { this.rethrowReservationConflict(error); }
   }
 
   async declineOffer(assignmentId: string, providerId: string, reason?: string, now = new Date()): Promise<{ declined: ProviderAssignmentResponseDto; next: MatchingResultResponseDto }> {
@@ -77,6 +94,11 @@ export class ProviderMatchingService {
       if (assignment.status !== ProviderAssignmentStatus.ACCEPTED) throw new ConflictException('Only an accepted assignment can be confirmed');
       this.assertBookingAwaitingMatch(assignment.booking);
       if (await assignmentRepository.exists({ where: { bookingId: assignment.bookingId, status: ProviderAssignmentStatus.CONFIRMED } })) throw new ConflictException('Booking already has a confirmed provider assignment');
+      const reservationRepository = manager.getRepository(ProviderBookingReservation);
+      const reservation = await reservationRepository.findOne({ where: { providerAssignmentId: assignment.id }, lock: { mode: 'pessimistic_write' } });
+      if (!reservation || reservation.status !== ProviderBookingReservationStatus.HELD) throw new ConflictException('Accepted assignment does not have an active held reservation');
+      reservation.status = ProviderBookingReservationStatus.CONFIRMED;
+      await reservationRepository.save(reservation);
       assignment.status = ProviderAssignmentStatus.CONFIRMED;
       assignment.confirmedAt = now;
       await assignmentRepository.save(assignment);
@@ -85,6 +107,17 @@ export class ProviderMatchingService {
       return assignment;
     });
     return ProviderAssignmentResponseDto.fromEntity(confirmed);
+  }
+
+  async releaseReservationForAssignment(assignmentId: string, cancelled = false, now = new Date()): Promise<void> {
+    await this.assignments.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(ProviderBookingReservation);
+      const reservation = await repository.findOne({ where: { providerAssignmentId: assignmentId }, lock: { mode: 'pessimistic_write' } });
+      if (!reservation || ![ProviderBookingReservationStatus.HELD, ProviderBookingReservationStatus.CONFIRMED].includes(reservation.status)) return;
+      reservation.status = cancelled ? ProviderBookingReservationStatus.CANCELLED : ProviderBookingReservationStatus.RELEASED;
+      reservation.releasedAt = now;
+      await repository.save(reservation);
+    });
   }
 
   async expireStaleOffers(actorUserId: string, now = new Date()): Promise<{ expiredCount: number; nextOffers: MatchingResultResponseDto[] }> {
@@ -148,4 +181,5 @@ export class ProviderMatchingService {
   private async requireBookingById(id: string): Promise<Booking> { const booking = await this.bookings.findOne({ where: { id }, relations: { healthCheckPackage: true, fulfilmentMode: true } }); if (!booking) throw new NotFoundException('Booking not found'); return booking; }
   private async appendAssignmentHistory(repository: Repository<ProviderAssignmentHistory>, assignmentId: string, fromStatus: ProviderAssignmentStatus | null, toStatus: ProviderAssignmentStatus, actorUserId: string | null, reasonCode: string, reasonNote: string | null): Promise<void> { await repository.save(repository.create({ providerAssignmentId: assignmentId, fromStatus, toStatus, actorUserId, reasonCode, reasonNote })); }
   private async transitionBooking(bookingRepository: Repository<Booking>, historyRepository: Repository<BookingStatusHistory>, booking: Booking, toStatus: BookingStatus, actorUserId: string | null, reasonCode: string): Promise<void> { const fromStatus = booking.status; booking.status = toStatus; await bookingRepository.save(booking); await historyRepository.save(historyRepository.create({ bookingId: booking.id, fromStatus, toStatus, actorUserId, reasonCode, reasonNote: null })); }
+  private rethrowReservationConflict(error: unknown): never { if (error instanceof QueryFailedError && ['EX_provider_booking_reservations_active_overlap', 'UQ_provider_booking_reservations_assignment'].includes((error.driverError as { constraint?: string }).constraint ?? '')) throw new ConflictException('Provider capacity is already reserved for an overlapping booking'); throw error; }
 }
