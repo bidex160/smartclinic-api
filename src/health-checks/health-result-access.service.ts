@@ -78,6 +78,19 @@ export class HealthResultAccessService {
     return result;
   }
 
+  async resolveGuestOwnershipProof(token: string): Promise<string> {
+    const patientId = await this.grants.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(HealthResultAccessGrant); const grant = await repository.findOne({ where: { accessTokenHash: this.hash(token) }, lock: { mode: 'pessimistic_write' } });
+      if (!grant || grant.status !== HealthResultAccessGrantStatus.ACTIVE || grant.revokedAt) return null;
+      if (grant.expiresAt && grant.expiresAt <= new Date()) { grant.status = HealthResultAccessGrantStatus.EXPIRED; await repository.save(grant); return null; }
+      const encounter = await this.completedResultQuery(manager, grant.patientId).andWhere('encounter.id = :encounterId', { encounterId: grant.encounterId }).getOne();
+      if (!encounter) return null;
+      grant.lastUsedAt = new Date(); await repository.save(grant); return grant.patientId;
+    });
+    if (!patientId) this.denyGuest();
+    return patientId;
+  }
+
   private completedResultQuery(manager: EntityManager, patientId: string) {
     return manager.getRepository(HealthCheckEncounter).createQueryBuilder('encounter').innerJoinAndSelect('encounter.booking', 'booking').innerJoinAndSelect('booking.healthCheckPackage', 'package').innerJoinAndSelect('encounter.provider', 'provider').leftJoinAndSelect('encounter.measurements', 'measurement').where('booking.participant_patient_id = :patientId', { patientId }).andWhere('encounter.status = :completed', { completed: HealthCheckEncounterStatus.COMPLETED }).orderBy('measurement.code', 'ASC');
   }

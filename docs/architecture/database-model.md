@@ -96,6 +96,8 @@ The nullable unique `providers.user_id` is now managed through explicit ADMIN/OP
 
 `health_result_access_grants` provides explicit guest clinical authority. It stores Patient, encounter, optional User-or-token authority, status, expiry/revocation/use timestamps, and issuing admin User. An XOR check requires exactly one of `user_id` or `access_token_hash`; v1 guest issuance uses only the token path while registered patients authorize directly through their Patient link. Token hashes are unique, and a partial unique index permits at most one ACTIVE grant per encounter. Service validation confirms the grant Patient is the encounter booking participant and that the encounter is completed.
 
+Guest-to-account claiming requires no new table. A valid booking-session or result-grant proof resolves a target Patient, after which one transaction pessimistically locks the active User and Patient, sets the existing nullable `patients.user_id`, and revokes ACTIVE result grants for that Patient. `UQ_patients_user_id` supplies the concurrency-safe one-Patient-per-User backstop. Bookings, encounters, measurements, contacts, and public booking sessions are not rewritten, copied, or deleted.
+
 #### `provider_availability`
 
 Each row contains provider, optional provider-service and provider-location scopes, a named `day_of_week_enum`, local start/end `time`, IANA timezone, active flag, and timestamps. Composite foreign keys prevent cross-provider service or location references. A check requires start before end, so v1 blocks cannot cross midnight.

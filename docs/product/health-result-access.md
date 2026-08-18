@@ -18,6 +18,12 @@ Issuance is `POST /api/v1/admin/health-check-encounters/:id/result-access`; revo
 
 The result response contains the booking reference, completion time, package, provider display name, and current completed measurements. It excludes histories, assignment/provider IDs, contacts, payments, funding, booker data, interpretation, reference ranges, and reports.
 
-If a guest Patient is linked to a User later, existing guest grants are neither migrated nor automatically revoked in this foundation. A future verified linking/consent policy must decide that behavior explicitly; email matching is never sufficient.
+## Guest Patient account linking
+
+An authenticated active User may explicitly claim an existing guest Patient through either `POST /api/v1/public/bookings/:reference/link-patient-account`, using the still-valid booking-bound HttpOnly session cookie, or `POST /api/v1/me/patient/link-from-result`, with an active result-access token in the request body. The booking command remains under the public-booking path so the deliberately narrow cookie path can be preserved; it still requires JWT authentication. The server derives the Patient from the proved booking or encounter; neither endpoint accepts a Patient ID or User ID, and email/phone similarity is never ownership proof.
+
+The link command locks the User and Patient, enforces the v1 one-to-one relationship, and updates the existing Patient rather than copying any booking, encounter, measurement, or result. Retrying with the same independently valid proof is idempotent; a User or Patient linked elsewhere produces a conflict without disclosing the other account.
+
+After a successful link, all ACTIVE guest result grants for that Patient are marked `REVOKED` and retained as records. Authenticated `/me/health-checks` and detailed result access then work through the unchanged Patient and its historical records. Public booking sessions are not revoked or promoted: they retain only their original booking/funding authority. Linking does not grant authenticated control over historical public bookings or payments. Profile reconciliation, dependent/family linking, and formal identity-verification/consent workflows remain deferred.
 
 Family, guardian, and dependent access remain deferred. A User can list only the Patient linked directly to that User.

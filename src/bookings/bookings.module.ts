@@ -24,6 +24,9 @@ import { AdminBookingLifecycleController } from './admin-booking-lifecycle.contr
 import { PublicBookingSession } from './entities/public-booking-session.entity';
 import { PublicBookingSessionService } from './public-booking-session.service';
 import { PaymentsModule } from '../payments/payments.module';
+import { HealthResultAccessGrant } from '../health-checks/entities/health-result-access-grant.entity';
+import { MePatientLinkingController } from './me-patient-linking.controller';
+import { PatientAccountLinkingService } from './patient-account-linking.service';
 
 @Module({
   imports: [
@@ -44,9 +47,10 @@ import { PaymentsModule } from '../payments/payments.module';
       ProviderAssignmentHistory,
       ProviderBookingReservation,
       PublicBookingSession,
+      HealthResultAccessGrant,
     ]),
   ],
-  controllers: [BookingsController, PublicBookingsController, AdminBookingLifecycleController],
-  providers: [BookingsService, PublicBookingsService, BookingLifecycleService, PublicBookingSessionService],
+  controllers: [BookingsController, PublicBookingsController, AdminBookingLifecycleController, MePatientLinkingController],
+  providers: [BookingsService, PublicBookingsService, BookingLifecycleService, PublicBookingSessionService, PatientAccountLinkingService],
 })
 export class BookingsModule {}

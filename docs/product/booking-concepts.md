@@ -43,6 +43,8 @@ The model supports self-funded, family-funded, diaspora-sponsored, organisation-
 
 Booking for another person requires authority and consent rules that will be designed later for adults, minors, and dependents. Patient health information, booking information, payment information, provider information, and organisation information use distinct access controls. Booker or funder status, booking reference knowledge, and a guest booking-session cookie do not grant health-data access. Completed results require either an authenticated User/Patient ownership link or a separately issued encounter-scoped guest result token.
 
+A guest Patient may later be linked explicitly to an authenticated User by proving control of one of that Patient's bookings with the booking-bound session, or by proving control of a completed encounter with its guest result token. The link reuses the existing Patient and therefore preserves every booking and clinical record. It does not convert the booking session into authenticated booking/payment ownership, and no contact-field match can trigger it automatically.
+
 ## Public booking intake
 
 A public visitor may create a booking without a `User` record. The platform creates a separate `Patient`, a `BookingContact` snapshot, and a booking-bound session in one transaction; it does not auto-create a User. Only the session hash is stored and the raw token is delivered in an HttpOnly cookie.

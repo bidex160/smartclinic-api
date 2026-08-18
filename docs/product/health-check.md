@@ -71,6 +71,8 @@ Patient responses contain package, provider display name, completion time, and c
 
 The authenticated `/me/health-checks` history endpoint lists the linked Patient's booking and encounter summaries without measurement values. It supports booking/encounter status filters and bounded pagination, orders newest first, and derives result availability only from a completed encounter. Detailed current measurements remain isolated at `/me/health-checks/:bookingReference/results`.
 
+An authenticated User may explicitly link an existing guest Patient after proving ownership through one of that Patient's public booking sessions or completed-result grants. Linking retains the same Patient and all clinical history, revokes its active guest result tokens, and makes existing completed results available naturally through the registered `/me` boundary. It never uses email/phone matching and does not confer historical booking/payment control.
+
 ## State and history guidance
 
 The Smart Health Check encounter has its own lifecycle and audit trail because clinical capture is now implemented. Booking remains the fulfilment lifecycle and does not embed measurements:

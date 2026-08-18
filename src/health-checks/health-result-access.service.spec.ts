@@ -50,6 +50,11 @@ describe('HealthResultAccessService', () => {
     patient.userId = null; const issued = await subject.issueGuestResultAccess(encounter.id, actorId); const result: any = await subject.getGuestResult(issued.resultAccessToken);
     expect(grantRows[0].lastUsedAt).toEqual(expect.any(Date)); expect(result).toMatchObject({ bookingReference: booking.bookingReference, healthCheckPackage: { code: 'ESSENTIAL' } }); expect(result).not.toHaveProperty('funding'); expect(result).not.toHaveProperty('providerId'); expect(result).not.toHaveProperty('history'); expect(result.measurements[0]).not.toHaveProperty('history');
   });
+  it('resolves a valid completed-result token to Patient ownership without exposing other grant data', async () => {
+    patient.userId = null; const issued = await subject.issueGuestResultAccess(encounter.id, actorId);
+    await expect(subject.resolveGuestOwnershipProof(issued.resultAccessToken)).resolves.toBe(patient.id);
+    expect(grantRows[0].lastUsedAt).toEqual(expect.any(Date));
+  });
   it('denies invalid, expired, and revoked guest tokens generically', async () => {
     await expect(subject.getGuestResult('x'.repeat(43))).rejects.toBeInstanceOf(NotFoundException);
     patient.userId = null; const expired = await subject.issueGuestResultAccess(encounter.id, actorId); grantRows[0].expiresAt = new Date(Date.now() - 1); await expect(subject.getGuestResult(expired.resultAccessToken)).rejects.toBeInstanceOf(NotFoundException); expect(grantRows[0].status).toBe(HealthResultAccessGrantStatus.EXPIRED);

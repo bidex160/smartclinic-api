@@ -34,6 +34,6 @@ import { PatientHealthCheckHistoryService } from './patient-health-check-history
   imports: [AuthModule, ProvidersModule, TypeOrmModule.forFeature([HealthCheckPackage, FulfilmentMode, PackagePrice, Booking, BookingStatusHistory, ProviderAssignment, HealthCheckEncounter, HealthCheckMeasurement, HealthCheckMeasurementHistory, HealthCheckEncounterHistory, HealthResultAccessGrant, Patient])],
   controllers: [HealthCheckPackagesController, FulfilmentModesController, AdminPackagePricesController, ProviderHealthCheckEncountersController, MeHealthResultsController, AdminHealthResultAccessController, PublicHealthResultsController],
   providers: [HealthCheckPackagesService, FulfilmentModesService, PackagePricingService, PackagePricesService, ProviderHealthCheckEncountersService, HealthResultAccessService, PatientHealthCheckHistoryService],
-  exports: [PackagePricingService],
+  exports: [PackagePricingService, HealthResultAccessService],
 })
 export class HealthChecksModule {}
