@@ -7,7 +7,7 @@ export interface AppConfiguration {
   auth: { jwtSecret: string; jwtExpiresIn: string; refreshTokenTtl: number; cookieSecure: boolean; cookieSameSite: 'lax'|'strict'|'none'; cookieDomain?: string };
   providerMatching: { offerTtlMinutes: number };
   providerInvitations: { ttlSeconds: number; frontendUrl: string };
-  email: { provider: 'none'|'test'; fromAddress: string; fromName: string };
+  email: { provider: 'none'|'test'|'resend'; fromAddress: string; fromName?: string; resendApiKey?: string; sendTimeoutMs: number };
   publicBookingSession: { ttlSeconds: number; cookieSecure: boolean; cookieSameSite: 'lax'|'strict'|'none'; cookieDomain?: string };
   payments: { provider: 'none'|'test'|'paystack'; verificationMinIntervalSeconds: number; paystack: { secretKey?: string; publicKey?: string; callbackUrl?: string; webhookEnabled: boolean } };
   database: {
@@ -52,9 +52,11 @@ export function createAppConfiguration(
       frontendUrl: environment.PROVIDER_INVITATION_FRONTEND_URL ?? `${(environment.FRONTEND_URL ?? 'http://localhost:4200').replace(/\/$/, '')}/provider/setup`,
     },
     email: {
-      provider: (environment.EMAIL_PROVIDER as 'none'|'test' | undefined) ?? (environmentName === 'test' ? 'test' : 'none'),
+      provider: (environment.EMAIL_PROVIDER as 'none'|'test'|'resend' | undefined) ?? (environmentName === 'test' ? 'test' : 'none'),
       fromAddress: environment.EMAIL_FROM_ADDRESS ?? 'no-reply@smartclinic.invalid',
-      fromName: environment.EMAIL_FROM_NAME ?? 'SmartClinic',
+      fromName: environment.EMAIL_FROM_NAME,
+      resendApiKey: environment.RESEND_API_KEY,
+      sendTimeoutMs: getNumber(environment.EMAIL_SEND_TIMEOUT_MS, 10_000),
     },
     publicBookingSession: {
       ttlSeconds: getNumber(environment.PUBLIC_BOOKING_SESSION_TTL, 60 * 60 * 24 * 7),

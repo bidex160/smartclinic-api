@@ -53,9 +53,11 @@ class EnvironmentVariables {
   PROVIDER_INVITATION_TTL = 604800;
 
   @IsOptional() @IsUrl({ require_tld: false }) PROVIDER_INVITATION_FRONTEND_URL?: string;
-  @IsIn(['none', 'test']) EMAIL_PROVIDER = process.env.NODE_ENV === 'test' ? 'test' : 'none';
+  @IsIn(['none', 'test', 'resend']) EMAIL_PROVIDER = process.env.NODE_ENV === 'test' ? 'test' : 'none';
   @IsOptional() @IsString() EMAIL_FROM_ADDRESS: string | undefined = process.env.NODE_ENV === 'test' ? 'no-reply@smartclinic.invalid' : undefined;
   @IsOptional() @IsString() EMAIL_FROM_NAME: string | undefined = process.env.NODE_ENV === 'test' ? 'SmartClinic' : undefined;
+  @IsOptional() @IsString() RESEND_API_KEY?: string;
+  @Type(() => Number) @IsInt() @Min(1000) EMAIL_SEND_TIMEOUT_MS = 10000;
 
   @Type(() => Number) @IsInt() @Min(60)
   PUBLIC_BOOKING_SESSION_TTL = 604800;
@@ -90,7 +92,8 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
   if (validatedConfig.NODE_ENV === 'production' && config.PROVIDER_INVITATION_TTL === undefined) throw new Error('Invalid environment configuration: PROVIDER_INVITATION_TTL is required in production');
   if (validatedConfig.NODE_ENV === 'production' && !validatedConfig.PROVIDER_INVITATION_FRONTEND_URL) throw new Error('Invalid environment configuration: PROVIDER_INVITATION_FRONTEND_URL is required in production');
   if (validatedConfig.NODE_ENV === 'production' && validatedConfig.EMAIL_PROVIDER === 'test') throw new Error('Invalid environment configuration: EMAIL_PROVIDER=test is not allowed in production');
-  if (validatedConfig.EMAIL_PROVIDER !== 'none' && (!validatedConfig.EMAIL_FROM_ADDRESS || !validatedConfig.EMAIL_FROM_NAME)) throw new Error('Invalid environment configuration: EMAIL_FROM_ADDRESS and EMAIL_FROM_NAME are required when email delivery is configured');
+  if (validatedConfig.EMAIL_PROVIDER !== 'none' && !validatedConfig.EMAIL_FROM_ADDRESS) throw new Error('Invalid environment configuration: EMAIL_FROM_ADDRESS is required when email delivery is configured');
+  if (validatedConfig.EMAIL_PROVIDER === 'resend' && !validatedConfig.RESEND_API_KEY) throw new Error('Invalid environment configuration: RESEND_API_KEY is required when EMAIL_PROVIDER=resend');
 
   return validatedConfig;
 }

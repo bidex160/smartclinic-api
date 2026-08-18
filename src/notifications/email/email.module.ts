@@ -1,15 +1,22 @@
 import { Module } from '@nestjs/common';
-import { ConfigType } from '@nestjs/config';
+import { ConfigModule, ConfigType } from '@nestjs/config';
 import { appConfig } from '../../config/app.config';
 import { EMAIL_PROVIDER } from './email-provider';
 import { TestEmailProvider } from './test-email.provider';
 import { UnavailableEmailProvider } from './unavailable-email.provider';
+import { Resend } from 'resend';
+import { RESEND_CLIENT, ResendEmailProvider } from './resend-email.provider';
 
 @Module({
-  providers: [TestEmailProvider, UnavailableEmailProvider, {
+  imports: [ConfigModule.forFeature(appConfig)],
+  providers: [TestEmailProvider, UnavailableEmailProvider, ResendEmailProvider, {
+    provide: RESEND_CLIENT,
+    inject: [appConfig.KEY],
+    useFactory: (config: ConfigType<typeof appConfig>) => config.email.provider === 'resend' && config.email.resendApiKey ? new Resend(config.email.resendApiKey) : null,
+  }, {
     provide: EMAIL_PROVIDER,
-    inject: [appConfig.KEY, TestEmailProvider, UnavailableEmailProvider],
-    useFactory: (config: ConfigType<typeof appConfig>, test: TestEmailProvider, unavailable: UnavailableEmailProvider) => config.email.provider === 'test' ? test : unavailable,
+    inject: [appConfig.KEY, TestEmailProvider, UnavailableEmailProvider, ResendEmailProvider],
+    useFactory: (config: ConfigType<typeof appConfig>, test: TestEmailProvider, unavailable: UnavailableEmailProvider, resend: ResendEmailProvider) => config.email.provider === 'test' ? test : config.email.provider === 'resend' ? resend : unavailable,
   }],
   exports: [EMAIL_PROVIDER],
 })

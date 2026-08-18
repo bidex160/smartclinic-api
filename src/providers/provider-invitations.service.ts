@@ -87,7 +87,7 @@ export class ProviderInvitationsService {
     const expiresAt = invitation.expiresAt.toISOString();
     const text = `SmartClinic provider invitation\n\nYou have been invited to set up the provider account for ${providerName} using ${invitation.email}.\n\nComplete setup: ${link}\n\nThis link expires at ${expiresAt} and can be used only once. If you did not expect this invitation, ignore this email or contact SmartClinic.`;
     const html = `<h1>SmartClinic provider invitation</h1><p>You have been invited to set up the provider account for <strong>${this.escapeHtml(providerName)}</strong> using ${this.escapeHtml(invitation.email)}.</p><p><a href="${this.escapeHtml(link)}">Set up provider account</a></p><p>This single-use link expires at ${this.escapeHtml(expiresAt)}.</p><p>If you did not expect this invitation, ignore this email or contact SmartClinic.</p>`;
-    return { to: invitation.email, fromAddress: this.config.email.fromAddress, fromName: this.config.email.fromName, subject: `Set up your SmartClinic provider account`, html, text };
+    return { to: invitation.email, fromAddress: this.config.email.fromAddress, fromName: this.config.email.fromName, subject: `Set up your SmartClinic provider account`, html, text, idempotencyKey: `provider-invitation:${invitation.id}:initial` };
   }
   private escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!); }
   private mask(email: string): string { const [local, domain] = email.split('@'); return `${local.slice(0, 1)}${'*'.repeat(Math.max(2, Math.min(6, local.length - 1)))}@${domain}`; }
