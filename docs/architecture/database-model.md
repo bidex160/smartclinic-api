@@ -88,6 +88,8 @@ Services and physical locations are separate provider-domain tables and matching
 
 The nullable unique `providers.user_id` is now managed through explicit ADMIN/OPERATIONS link and unlink commands. Linking locks both records, requires an active non-deleted existing User, and grants `PROVIDER`; unlinking clears the relationship and removes only that role. Provider capabilities, locations, availability, and exceptions remain keyed to Provider and survive account changes. No schema migration was required.
 
+`provider_invitations` records a Provider, normalized invited email, unique SHA-256 token hash, `PENDING`/`ACCEPTED`/`REVOKED`/`EXPIRED` status, expiry/consumption/revocation times, and creating admin User. A partial unique index prevents duplicate pending invitations for the same provider/email. Raw tokens and passwords never enter this table.
+
 #### `provider_availability`
 
 Each row contains provider, optional provider-service and provider-location scopes, a named `day_of_week_enum`, local start/end `time`, IANA timezone, active flag, and timestamps. Composite foreign keys prevent cross-provider service or location references. A check requires start before end, so v1 blocks cannot cross midnight.

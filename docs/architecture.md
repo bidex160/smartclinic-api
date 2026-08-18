@@ -64,6 +64,8 @@ Provider records exist independently of login accounts. ADMIN/OPERATIONS onboard
 
 Provider linking is supported by a separate read-only Users-domain search endpoint. It queries only normalized email and display name, returns a minimized identity plus nullable Provider link, and performs no role or relationship mutation. The provider link command remains the sole authority for eligibility checks and changes.
 
+Provider invitations are a Providers-domain onboarding mechanism, not a generic User invitation system. A Provider-owned invitation stores normalized email, expiry/lifecycle state, creator, and a SHA-256 lookup hash of a one-time opaque token. Acceptance transactionally creates an ACTIVE provider-only User and bcrypt credential, links the Provider, and consumes the invitation; no session is issued.
+
 Administrative assignment reads use a separate operational DTO from both persistence entities and provider-facing offers. ADMIN/OPERATIONS users can filter assignments by booking reference, provider, or status, inspect the safe booking/provider context, and invoke the same transactional confirmation service used by matching commands.
 
 ## Layer responsibilities

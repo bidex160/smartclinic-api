@@ -49,6 +49,9 @@ class EnvironmentVariables {
   @Min(1)
   PROVIDER_OFFER_TTL_MINUTES = 30;
 
+  @Type(() => Number) @IsInt() @Min(300)
+  PROVIDER_INVITATION_TTL = 604800;
+
   @Type(() => Number) @IsInt() @Min(60)
   PUBLIC_BOOKING_SESSION_TTL = 604800;
 
@@ -79,6 +82,7 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
   }
   if (validatedConfig.NODE_ENV === 'production' && validatedConfig.PAYMENT_PROVIDER === 'paystack' && !validatedConfig.PAYSTACK_SECRET_KEY) throw new Error('Invalid environment configuration: PAYSTACK_SECRET_KEY is required when PAYMENT_PROVIDER=paystack');
   if (validatedConfig.NODE_ENV === 'production' && validatedConfig.PAYMENT_PROVIDER === 'test') throw new Error('Invalid environment configuration: PAYMENT_PROVIDER=test is not allowed in production');
+  if (validatedConfig.NODE_ENV === 'production' && config.PROVIDER_INVITATION_TTL === undefined) throw new Error('Invalid environment configuration: PROVIDER_INVITATION_TTL is required in production');
 
   return validatedConfig;
 }

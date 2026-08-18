@@ -6,6 +6,7 @@ export interface AppConfiguration {
   frontendUrl: string;
   auth: { jwtSecret: string; jwtExpiresIn: string; refreshTokenTtl: number; cookieSecure: boolean; cookieSameSite: 'lax'|'strict'|'none'; cookieDomain?: string };
   providerMatching: { offerTtlMinutes: number };
+  providerInvitations: { ttlSeconds: number };
   publicBookingSession: { ttlSeconds: number; cookieSecure: boolean; cookieSameSite: 'lax'|'strict'|'none'; cookieDomain?: string };
   payments: { provider: 'none'|'test'|'paystack'; verificationMinIntervalSeconds: number; paystack: { secretKey?: string; publicKey?: string; callbackUrl?: string; webhookEnabled: boolean } };
   database: {
@@ -45,6 +46,7 @@ export function createAppConfiguration(
     providerMatching: {
       offerTtlMinutes: getNumber(environment.PROVIDER_OFFER_TTL_MINUTES, 30),
     },
+    providerInvitations: { ttlSeconds: getNumber(environment.PROVIDER_INVITATION_TTL, 60 * 60 * 24 * 7) },
     publicBookingSession: {
       ttlSeconds: getNumber(environment.PUBLIC_BOOKING_SESSION_TTL, 60 * 60 * 24 * 7),
       cookieSecure: environment.PUBLIC_BOOKING_COOKIE_SECURE === 'true' || environmentName === 'production',

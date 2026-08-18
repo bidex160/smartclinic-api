@@ -52,6 +52,8 @@ Provider onboarding endpoints under `/api/v1/admin/providers` require ADMIN or O
 
 `GET /api/v1/admin/users/search` uses the same ADMIN/OPERATIONS boundary to support account selection. Queries must contain 2–100 trimmed characters and are limited to normalized email/display-name matching with bounded pagination. Soft-deleted users are excluded; inactive users remain visible with their status, and an existing Provider link is shown to explain linking conflicts. Results never include credentials, sessions, tokens, patient data, bookings, or login metadata. Search grants no role and creates no link.
 
+Provider invitations use 256-bit random base64url tokens and store only SHA-256 hashes. The raw token is returned once to ADMIN/OPERATIONS at creation solely for manual delivery until email infrastructure exists; lists and revocation responses never contain token material. Public inspection reveals only Provider display name, masked email, and expiry. Acceptance uses the invitation email as authority, applies the existing 12–128 character password policy and bcrypt cost 12, issues no session, and requires normal login afterward. Existing User emails are rejected to prevent public-token account takeover and must use explicit existing-user linking. `PROVIDER_INVITATION_TTL` is expressed in seconds, defaults to seven days outside production, and must be explicitly configured in production.
+
 Provider offer responses are deliberately minimized: they omit account IDs, provider IDs, booking database IDs, funding/payment data, patient records, contacts, date of birth, and the unstructured location note. Non-owned and unknown offer IDs both return the same safe 404.
 
 ## Authentication foundation
