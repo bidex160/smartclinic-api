@@ -22,6 +22,10 @@ export class AdminProviderInvitationSummaryDto {
   @ApiProperty() createdAt!: Date;
   @ApiPropertyOptional({ type: ProviderInvitationCreatorSummaryDto, nullable: true }) createdBy!: ProviderInvitationCreatorSummaryDto | null;
 }
-export class CreatedProviderInvitationResponseDto extends AdminProviderInvitationSummaryDto { @ApiProperty({ description: 'Returned once for manual delivery; never stored or returned again.' }) invitationToken!: string; }
+export enum ProviderInvitationDeliveryStatus { SENT = 'SENT', MANUAL_REQUIRED = 'MANUAL_REQUIRED', FAILED = 'FAILED' }
+export class CreatedProviderInvitationResponseDto extends AdminProviderInvitationSummaryDto {
+  @ApiProperty({ enum: ProviderInvitationDeliveryStatus }) deliveryStatus!: ProviderInvitationDeliveryStatus;
+  @ApiPropertyOptional({ description: 'Returned once only when manual delivery is required.', nullable: true }) manualInvitationLink?: string;
+}
 export class PublicProviderInvitationResponseDto { @ApiProperty() providerDisplayName!: string; @ApiProperty() invitedEmail!: string; @ApiProperty() expiresAt!: Date; }
 export class AcceptedProviderInvitationResponseDto { @ApiProperty() providerDisplayName!: string; @ApiProperty() email!: string; @ApiProperty({ enum: ProviderInvitationStatus }) status!: ProviderInvitationStatus.ACCEPTED; @ApiProperty({ default: true }) loginRequired!: true; }

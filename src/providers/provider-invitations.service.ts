@@ -1,22 +1,24 @@
-import { ConflictException, HttpException, HttpStatus, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, HttpException, HttpStatus, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'node:crypto';
 import { QueryFailedError, Repository } from 'typeorm';
 import { appConfig } from '../config/app.config';
+import { EMAIL_PROVIDER, EmailProvider, EmailSendOutcome } from '../notifications/email/email-provider';
 import { UserCredential } from '../users/entities/user-credential.entity';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../users/enums/user-role.enum';
 import { UserStatus } from '../users/enums/user-status.enum';
-import { AcceptProviderInvitationDto, AcceptedProviderInvitationResponseDto, AdminProviderInvitationSummaryDto, CreatedProviderInvitationResponseDto, PublicProviderInvitationResponseDto } from './dto/provider-invitation.dto';
+import { AcceptProviderInvitationDto, AcceptedProviderInvitationResponseDto, AdminProviderInvitationSummaryDto, CreatedProviderInvitationResponseDto, ProviderInvitationDeliveryStatus, PublicProviderInvitationResponseDto } from './dto/provider-invitation.dto';
 import { ProviderInvitation } from './entities/provider-invitation.entity';
 import { Provider } from './entities/provider.entity';
 import { ProviderInvitationStatus } from './enums/provider-invitation-status.enum';
 
 @Injectable()
 export class ProviderInvitationsService {
-  constructor(@InjectRepository(ProviderInvitation) private readonly invitations: Repository<ProviderInvitation>, @InjectRepository(Provider) private readonly providers: Repository<Provider>, @InjectRepository(User) private readonly users: Repository<User>, @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>) {}
+  private readonly logger = new Logger(ProviderInvitationsService.name);
+  constructor(@InjectRepository(ProviderInvitation) private readonly invitations: Repository<ProviderInvitation>, @InjectRepository(Provider) private readonly providers: Repository<Provider>, @InjectRepository(User) private readonly users: Repository<User>, @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>, @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider) {}
 
   async create(providerId: string, email: string, creatorId: string): Promise<CreatedProviderInvitationResponseDto> {
     const normalized = email.trim().toLowerCase(); const rawToken = randomBytes(32).toString('base64url'); const now = new Date();
@@ -32,7 +34,16 @@ export class ProviderInvitationsService {
       return invitationRepository.save(invitationRepository.create({ providerId, email: normalized, emailNormalized: normalized, tokenHash: this.hash(rawToken), status: ProviderInvitationStatus.PENDING, expiresAt: new Date(now.getTime() + this.config.providerInvitations.ttlSeconds * 1000), acceptedAt: null, revokedAt: null, createdByUserId: creatorId }));
     });
     const hydrated = await this.requireAdminInvitation(invitation.id);
-    return { ...this.adminSummary(hydrated), invitationToken: rawToken };
+    const invitationLink = this.invitationLink(rawToken);
+    const message = this.invitationEmail(hydrated, invitationLink);
+    try {
+      const delivery = await this.emailProvider.sendTransactionalEmail(message);
+      if (delivery.outcome === EmailSendOutcome.SENT) return { ...this.adminSummary(hydrated), deliveryStatus: ProviderInvitationDeliveryStatus.SENT };
+      return { ...this.adminSummary(hydrated), deliveryStatus: ProviderInvitationDeliveryStatus.MANUAL_REQUIRED, manualInvitationLink: invitationLink };
+    } catch {
+      this.logger.warn(`Provider invitation email delivery failed for invitation ${hydrated.id}`);
+      return { ...this.adminSummary(hydrated), deliveryStatus: ProviderInvitationDeliveryStatus.FAILED, manualInvitationLink: invitationLink };
+    }
   }
 
   async list(providerId: string): Promise<AdminProviderInvitationSummaryDto[]> { await this.requireProvider(providerId); const rows = await this.invitations.find({ where: { providerId }, relations: { provider: true, createdBy: true }, order: { createdAt: 'DESC', id: 'DESC' } }); return rows.map((row) => this.adminSummary(row)); }
@@ -70,6 +81,15 @@ export class ProviderInvitationsService {
   private async requireAdminInvitation(id: string): Promise<ProviderInvitation> { const invitation = await this.invitations.findOne({ where: { id }, relations: { provider: true, createdBy: true } }); if (!invitation) throw new NotFoundException('Provider invitation not found'); return invitation; }
   private adminSummary(invitation: ProviderInvitation): AdminProviderInvitationSummaryDto { const effectiveStatus = invitation.status === ProviderInvitationStatus.PENDING && invitation.expiresAt <= new Date() ? ProviderInvitationStatus.EXPIRED : invitation.status; return { id: invitation.id, provider: { displayName: invitation.provider.displayName }, email: invitation.email, status: effectiveStatus, expiresAt: invitation.expiresAt, acceptedAt: invitation.acceptedAt, revokedAt: invitation.revokedAt, createdAt: invitation.createdAt, createdBy: invitation.createdBy ? { id: invitation.createdBy.id, email: invitation.createdBy.email, displayName: invitation.createdBy.displayName } : null }; }
   private hash(token: string): string { return createHash('sha256').update(token).digest('hex'); }
+  private invitationLink(token: string): string { return `${this.config.providerInvitations.frontendUrl.replace(/\/+$/, '')}/${encodeURIComponent(token)}`; }
+  private invitationEmail(invitation: ProviderInvitation, link: string) {
+    const providerName = invitation.provider.displayName;
+    const expiresAt = invitation.expiresAt.toISOString();
+    const text = `SmartClinic provider invitation\n\nYou have been invited to set up the provider account for ${providerName} using ${invitation.email}.\n\nComplete setup: ${link}\n\nThis link expires at ${expiresAt} and can be used only once. If you did not expect this invitation, ignore this email or contact SmartClinic.`;
+    const html = `<h1>SmartClinic provider invitation</h1><p>You have been invited to set up the provider account for <strong>${this.escapeHtml(providerName)}</strong> using ${this.escapeHtml(invitation.email)}.</p><p><a href="${this.escapeHtml(link)}">Set up provider account</a></p><p>This single-use link expires at ${this.escapeHtml(expiresAt)}.</p><p>If you did not expect this invitation, ignore this email or contact SmartClinic.</p>`;
+    return { to: invitation.email, fromAddress: this.config.email.fromAddress, fromName: this.config.email.fromName, subject: `Set up your SmartClinic provider account`, html, text };
+  }
+  private escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!); }
   private mask(email: string): string { const [local, domain] = email.split('@'); return `${local.slice(0, 1)}${'*'.repeat(Math.max(2, Math.min(6, local.length - 1)))}@${domain}`; }
   private invalid(): never { throw new NotFoundException('Provider invitation is invalid or unavailable'); }
   private expired(): never { throw new HttpException('Provider invitation is invalid or expired', HttpStatus.GONE); }

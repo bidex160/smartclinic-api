@@ -14,7 +14,7 @@ import { ProviderInvitationsService } from './provider-invitations.service';
 @Controller('admin')
 export class AdminProviderInvitationsController {
   constructor(private readonly invitations: ProviderInvitationsService) {}
-  @Post('providers/:providerId/invitations') @ApiOperation({ summary: 'Create a one-time provider invitation for manual delivery' }) @ApiCreatedResponse({ type: CreatedProviderInvitationResponseDto }) create(@Param() { providerId }: ProviderIdParamsDto, @Body() dto: CreateProviderInvitationDto, @Req() request: { user: User }) { return this.invitations.create(providerId, dto.email, request.user.id); }
+  @Post('providers/:providerId/invitations') @ApiOperation({ summary: 'Create and deliver a one-time provider invitation' }) @ApiCreatedResponse({ type: CreatedProviderInvitationResponseDto }) create(@Param() { providerId }: ProviderIdParamsDto, @Body() dto: CreateProviderInvitationDto, @Req() request: { user: User }) { return this.invitations.create(providerId, dto.email, request.user.id); }
   @Get('providers/:providerId/invitations') @ApiOperation({ summary: 'List safe provider invitation summaries' }) @ApiOkResponse({ type: AdminProviderInvitationSummaryDto, isArray: true }) list(@Param() { providerId }: ProviderIdParamsDto) { return this.invitations.list(providerId); }
   @Post('provider-invitations/:id/revoke') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Revoke a pending provider invitation' }) @ApiOkResponse({ type: AdminProviderInvitationSummaryDto }) revoke(@Param() { id }: ResourceIdParamsDto) { return this.invitations.revoke(id); }
 }

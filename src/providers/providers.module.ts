@@ -41,9 +41,10 @@ import { UserCredential } from '../users/entities/user-credential.entity';
 import { ProviderInvitationsService } from './provider-invitations.service';
 import { AdminProviderInvitationsController } from './admin-provider-invitations.controller';
 import { PublicProviderInvitationsController } from './public-provider-invitations.controller';
+import { EmailModule } from '../notifications/email/email.module';
 
 @Module({
-  imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, ProviderAvailabilityException, ProviderBookingReservation, ProviderInvitation, HealthCheckPackage, FulfilmentMode, Booking, BookingFunding, BookingStatusHistory, PaymentAttempt, PaymentTransaction, User, UserCredential])],
+  imports: [AuthModule, EmailModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, ProviderAvailabilityException, ProviderBookingReservation, ProviderInvitation, HealthCheckPackage, FulfilmentMode, Booking, BookingFunding, BookingStatusHistory, PaymentAttempt, PaymentTransaction, User, UserCredential])],
   controllers: [AdminProvidersController, AdminProviderInvitationsController, PublicProviderInvitationsController, AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderAvailabilityExceptionsController, AdminProviderMatchingController, ProviderOffersController],
   providers: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderAvailabilityExceptionsService, ProviderMatchingService, CurrentProviderService, ProviderOffersService, AdminProviderAssignmentsService, AdminMatchingQueueService, AdminBookingDetailService, AdminProvidersService, ProviderInvitationsService],
   exports: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderMatchingService, CurrentProviderService],

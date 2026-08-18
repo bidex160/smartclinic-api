@@ -8,6 +8,7 @@ These documents define the initial product direction and backend architecture fo
 - [Domain map](domain-map.md)
 - [Security and data principles](security-and-data.md)
 - [Development guide](development.md)
+- [Transactional email boundary](integrations/email.md)
 
 ## Product specifications
 

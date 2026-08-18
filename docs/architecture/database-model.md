@@ -88,7 +88,7 @@ Services and physical locations are separate provider-domain tables and matching
 
 The nullable unique `providers.user_id` is now managed through explicit ADMIN/OPERATIONS link and unlink commands. Linking locks both records, requires an active non-deleted existing User, and grants `PROVIDER`; unlinking clears the relationship and removes only that role. Provider capabilities, locations, availability, and exceptions remain keyed to Provider and survive account changes. No schema migration was required.
 
-`provider_invitations` records a Provider, normalized invited email, unique SHA-256 token hash, `PENDING`/`ACCEPTED`/`REVOKED`/`EXPIRED` status, expiry/consumption/revocation times, and creating admin User. A partial unique index prevents duplicate pending invitations for the same provider/email. Raw tokens and passwords never enter this table.
+`provider_invitations` records a Provider, normalized invited email, unique SHA-256 token hash, `PENDING`/`ACCEPTED`/`REVOKED`/`EXPIRED` status, expiry/consumption/revocation times, and creating admin User. A partial unique index prevents duplicate pending invitations for the same provider/email. Raw tokens, full invitation links, email vendor data, and passwords never enter this table. Invitation delivery currently returns a transient operational result, so no delivery columns or email-event table are required.
 
 #### `provider_availability`
 

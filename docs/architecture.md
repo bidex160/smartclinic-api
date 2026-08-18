@@ -66,6 +66,8 @@ Provider linking is supported by a separate read-only Users-domain search endpoi
 
 Provider invitations are a Providers-domain onboarding mechanism, not a generic User invitation system. A Provider-owned invitation stores normalized email, expiry/lifecycle state, creator, and a SHA-256 lookup hash of a one-time opaque token. Acceptance transactionally creates an ACTIVE provider-only User and bcrypt credential, links the Provider, and consumes the invitation; no session is issued.
 
+Transactional email is a narrow Notifications-domain port. Provider invitation logic composes provider-neutral text/HTML and calls the selected adapter only after persistence commits. The current unavailable and capture-only adapters perform no production internet delivery; vendor adapters can be added without changing onboarding logic. Delivery results are transient, so no email-delivery schema or vendor identifier is introduced.
+
 Administrative assignment reads use a separate operational DTO from both persistence entities and provider-facing offers. ADMIN/OPERATIONS users can filter assignments by booking reference, provider, or status, inspect the safe booking/provider context, and invoke the same transactional confirmation service used by matching commands.
 
 ## Layer responsibilities
