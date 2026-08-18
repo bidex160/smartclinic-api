@@ -86,6 +86,8 @@ Services and physical locations are separate provider-domain tables and matching
 
 `provider_service_locations` contains the service, location, provider-owner key, and creation time. Its composite foreign keys require both referenced rows to have the same provider, while the application service also validates ownership and the `PROVIDER_LOCATION` mode for clearer errors. The service/location pair is unique. Removing a link deletes this join row only; normal provider service and location lifecycle uses activation/deactivation.
 
+The nullable unique `providers.user_id` is now managed through explicit ADMIN/OPERATIONS link and unlink commands. Linking locks both records, requires an active non-deleted existing User, and grants `PROVIDER`; unlinking clears the relationship and removes only that role. Provider capabilities, locations, availability, and exceptions remain keyed to Provider and survive account changes. No schema migration was required.
+
 #### `provider_availability`
 
 Each row contains provider, optional provider-service and provider-location scopes, a named `day_of_week_enum`, local start/end `time`, IANA timezone, active flag, and timestamps. Composite foreign keys prevent cross-provider service or location references. A check requires start before end, so v1 blocks cannot cross midnight.

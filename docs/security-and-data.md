@@ -48,6 +48,8 @@ Start-matching and stale-expiry command responses use minimized operational summ
 
 Provider self-service routes under `/api/v1/provider/offers` require the explicit `PROVIDER` role and resolve the authenticated user through the unique `Provider.user_id` link. The linked provider must remain `ACTIVE` and not deleted. `USER`, `ADMIN`, or `OPERATIONS` alone grants no provider access; a multi-role user must also explicitly hold `PROVIDER`. Role assignment and provider linking are controlled onboarding/admin responsibilities, never automatic registration behavior.
 
+Provider onboarding endpoints under `/api/v1/admin/providers` require ADMIN or OPERATIONS. They expose safe user identity/status/role summaries but never credentials or sessions. Linking accepts only an existing active, non-deleted User, preserves every existing role, and adds `PROVIDER` once. Unlinking preserves other roles and is rejected while OFFERED/ACCEPTED/CONFIRMED work or HELD/CONFIRMED capacity exists. Generic role management, password creation, invitations, and provider self-registration are not part of this boundary.
+
 Provider offer responses are deliberately minimized: they omit account IDs, provider IDs, booking database IDs, funding/payment data, patient records, contacts, date of birth, and the unstructured location note. Non-owned and unknown offer IDs both return the same safe 404.
 
 ## Authentication foundation
