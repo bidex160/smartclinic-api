@@ -50,6 +50,8 @@ Provider self-service routes under `/api/v1/provider/offers` require the explici
 
 Provider onboarding endpoints under `/api/v1/admin/providers` require ADMIN or OPERATIONS. They expose safe user identity/status/role summaries but never credentials or sessions. Linking accepts only an existing active, non-deleted User, preserves every existing role, and adds `PROVIDER` once. Unlinking preserves other roles and is rejected while OFFERED/ACCEPTED/CONFIRMED work or HELD/CONFIRMED capacity exists. Generic role management, password creation, invitations, and provider self-registration are not part of this boundary.
 
+`GET /api/v1/admin/users/search` uses the same ADMIN/OPERATIONS boundary to support account selection. Queries must contain 2–100 trimmed characters and are limited to normalized email/display-name matching with bounded pagination. Soft-deleted users are excluded; inactive users remain visible with their status, and an existing Provider link is shown to explain linking conflicts. Results never include credentials, sessions, tokens, patient data, bookings, or login metadata. Search grants no role and creates no link.
+
 Provider offer responses are deliberately minimized: they omit account IDs, provider IDs, booking database IDs, funding/payment data, patient records, contacts, date of birth, and the unstructured location note. Non-owned and unknown offer IDs both return the same safe 404.
 
 ## Authentication foundation

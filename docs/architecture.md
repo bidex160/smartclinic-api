@@ -62,6 +62,8 @@ Provider offer controllers use the `PROVIDER` role plus an active-provider resol
 
 Provider records exist independently of login accounts. ADMIN/OPERATIONS onboarding creates a `PENDING`, unlinked Provider and may later transactionally link an existing active User, adding `PROVIDER` without removing other roles. Provider activation/suspension is an operational lifecycle separate from User status. Unlinking removes only `PROVIDER` and is blocked while active assignments or capacity reservations exist.
 
+Provider linking is supported by a separate read-only Users-domain search endpoint. It queries only normalized email and display name, returns a minimized identity plus nullable Provider link, and performs no role or relationship mutation. The provider link command remains the sole authority for eligibility checks and changes.
+
 Administrative assignment reads use a separate operational DTO from both persistence entities and provider-facing offers. ADMIN/OPERATIONS users can filter assignments by booking reference, provider, or status, inspect the safe booking/provider context, and invoke the same transactional confirmation service used by matching commands.
 
 ## Layer responsibilities
