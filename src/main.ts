@@ -9,6 +9,7 @@ import { createAppConfiguration } from './config/environment';
 async function bootstrap(): Promise<void> {
   const configuration = createAppConfiguration();
   const app = await NestFactory.create(AppModule, {
+    rawBody: true,
     logger:
       configuration.environment === 'production'
         ? ['log', 'warn', 'error']

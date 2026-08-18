@@ -1,6 +1,8 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { randomBytes } from 'node:crypto';
+import { isEmail } from 'class-validator';
 import { BookingContact } from '../bookings/entities/booking-contact.entity';
 import { BookingFunding } from '../bookings/entities/booking-funding.entity'; import { BookingStatusHistory } from '../bookings/entities/booking-status-history.entity'; import { Booking } from '../bookings/entities/booking.entity'; import { BookingFundingSourceType } from '../bookings/enums/booking-funding-source-type.enum'; import { BookingFundingStatus } from '../bookings/enums/booking-funding-status.enum'; import { BookingStatus } from '../bookings/enums/booking-status.enum';
 import { PaymentAttempt } from './entities/payment-attempt.entity'; import { PaymentTransaction } from './entities/payment-transaction.entity'; import { PaymentAttemptStatus } from './enums/payment-attempt-status.enum'; import { PaymentTransactionStatus } from './enums/payment-transaction-status.enum'; import { PaymentTransactionType } from './enums/payment-transaction-type.enum'; import { PAYMENT_PROVIDER_ADAPTER, PaymentProviderAdapter, VerifyPaymentResult } from './payment-provider.adapter'; import { PaymentOperationResponseDto } from './dto/payment-operation-response.dto';
@@ -30,15 +32,19 @@ export class PaymentFlowService {
     const existing = await this.attempts.findOne({ where: { idempotencyKey }, relations: { bookingFunding: { booking: true } } });
     if (existing) { if (existing.bookingFunding.booking.bookingReference !== reference) throw new ConflictException('Idempotency key belongs to a different booking'); return this.response(existing.bookingFunding.booking, existing.bookingFunding, existing); }
     const funding = await this.requireFunding(reference);
-    const initialized = await this.provider.initializePayment({ amount: funding.amount!, currency: funding.currency, idempotencyKey, bookingReference: reference });
+    const customerEmail = funding.responsibleUser?.email ?? funding.payerContact?.email;
+    if (!customerEmail || !isEmail(customerEmail)) throw new BadRequestException('A valid payer email is required to initialize payment');
+    const paymentReference = `SC-PAY-${randomBytes(12).toString('hex')}`;
+    const initialized = await this.provider.initializePayment({ amount: funding.amount!, currency: funding.currency, idempotencyKey, bookingReference: reference, customerEmail, paymentReference });
     return this.bookings.manager.transaction(async (manager) => {
       const attemptRepository = manager.getRepository(PaymentAttempt);
       const raced = await attemptRepository.findOne({ where: { idempotencyKey } });
       if (raced) return this.response(funding.booking, funding, raced);
-      const attempt = await attemptRepository.save(attemptRepository.create({ bookingFundingId: funding.id, amount: funding.amount!, currency: funding.currency, status: initialized.status, idempotencyKey, providerCode: initialized.providerCode, providerReference: initialized.providerReference }));
+      const attempt = await attemptRepository.save(attemptRepository.create({ bookingFundingId: funding.id, amount: funding.amount!, currency: funding.currency, status: initialized.status, idempotencyKey, providerCode: initialized.providerCode, providerReference: initialized.providerReference, checkoutUrl: initialized.checkoutUrl }));
       return this.response(funding.booking, funding, attempt);
     });
   }
+  async initiatePublicPayment(reference:string):Promise<PaymentOperationResponseDto>{return this.initiatePayment(reference,`PUBLIC-${randomBytes(16).toString('hex')}`);}
 
   async confirmPayment(attemptId: string, actorUserId: string): Promise<PaymentOperationResponseDto> {
     const current = await this.attempts.findOne({ where: { id: attemptId }, relations: { bookingFunding: { booking: true } } });
@@ -49,7 +55,10 @@ export class PaymentFlowService {
     return this.applyVerification(attemptId, actorUserId, verified);
   }
 
-  private async applyVerification(attemptId: string, actorUserId: string, verified: VerifyPaymentResult): Promise<PaymentOperationResponseDto> {
+  async confirmProviderReference(providerCode: string, providerReference: string): Promise<PaymentOperationResponseDto> { const attempt = await this.attempts.findOne({ where: { providerCode, providerReference } }); if (!attempt) throw new NotFoundException('Payment attempt not found'); const verified = await this.provider.verifyPayment(providerReference); return this.applyVerification(attempt.id, null, verified); }
+  async applyProviderVerification(providerCode: string, providerReference: string, verified: VerifyPaymentResult): Promise<PaymentOperationResponseDto> { const attempt = await this.attempts.findOne({ where: { providerCode, providerReference } }); if (!attempt) throw new NotFoundException('Payment attempt not found'); return this.applyVerification(attempt.id, null, verified); }
+
+  private async applyVerification(attemptId: string, actorUserId: string | null, verified: VerifyPaymentResult): Promise<PaymentOperationResponseDto> {
     return this.bookings.manager.transaction(async (manager) => {
       const attemptRepository = manager.getRepository(PaymentAttempt); const fundingRepository = manager.getRepository(BookingFunding); const bookingRepository = manager.getRepository(Booking);
       const attempt = await attemptRepository.findOne({ where: { id: attemptId }, relations: { bookingFunding: { booking: true } }, lock: { mode: 'pessimistic_write' } });
@@ -67,6 +76,6 @@ export class PaymentFlowService {
       return this.response(booking, funding, attempt);
     });
   }
-  private async requireFunding(reference: string): Promise<BookingFunding> { const funding = await this.bookings.manager.getRepository(BookingFunding).findOne({ where: { booking: { bookingReference: reference }, sourceType: BookingFundingSourceType.SELF }, relations: { booking: true } }); if (!funding) throw new NotFoundException('Self-funding obligation not found'); if (funding.booking.status !== BookingStatus.AWAITING_FUNDING) throw new ConflictException('Booking is not awaiting funding'); if (!funding.amount) throw new ConflictException('Funding obligation has no fixed amount'); return funding; }
-  private response(booking: Booking, funding: BookingFunding, attempt: PaymentAttempt | null): PaymentOperationResponseDto { return { bookingReference: booking.bookingReference, fundingStatus: funding.status, attemptId: attempt?.id ?? null, attemptStatus: attempt?.status ?? null, amount: funding.amount!, currency: funding.currency, paymentReference: attempt?.providerReference ?? null }; }
+  private async requireFunding(reference: string): Promise<BookingFunding> { const funding = await this.bookings.manager.getRepository(BookingFunding).findOne({ where: { booking: { bookingReference: reference }, sourceType: BookingFundingSourceType.SELF }, relations: { booking: true, responsibleUser: true, payerContact: true } }); if (!funding) throw new NotFoundException('Self-funding obligation not found'); if (funding.booking.status !== BookingStatus.AWAITING_FUNDING) throw new ConflictException('Booking is not awaiting funding'); if (!funding.amount) throw new ConflictException('Funding obligation has no fixed amount'); return funding; }
+  private response(booking: Booking, funding: BookingFunding, attempt: PaymentAttempt | null): PaymentOperationResponseDto { return { bookingReference: booking.bookingReference, fundingStatus: funding.status, attemptId: attempt?.id ?? null, attemptStatus: attempt?.status ?? null, amount: funding.amount!, currency: funding.currency, paymentReference: attempt?.providerReference ?? null, checkoutUrl: attempt?.checkoutUrl ?? null }; }
 }

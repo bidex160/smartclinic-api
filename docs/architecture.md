@@ -52,6 +52,8 @@ The Payments module owns quote-backed self-funding initialisation, provider-neut
 
 Public booking creation also creates an expiring booking-scoped session transactionally. Its raw token is delivered only through an HttpOnly cookie while a hash is persisted. Public reads and guest funding resolve the cookie to the exact booking; guest funding identifies its payer through the booking contact snapshot rather than a fabricated account.
 
+Paystack implements the Payments adapter boundary, not the Booking domain. It owns HTTP authentication, subunit conversion, response/status normalization, signature validation, and server-side verification. The payment service remains responsible for immutable attempt/funding expectations and transactional idempotent settlement.
+
 Provider offer controllers use the `PROVIDER` role plus an active-provider resolver. The role alone is insufficient without a live provider link, and administrative roles do not inherit provider access. Provider-facing read models intentionally expose only minimal operational booking data.
 
 Administrative assignment reads use a separate operational DTO from both persistence entities and provider-facing offers. ADMIN/OPERATIONS users can filter assignments by booking reference, provider, or status, inspect the safe booking/provider context, and invoke the same transactional confirmation service used by matching commands.

@@ -36,6 +36,8 @@ Administrative funding and test-adapter commands remain restricted to JWT-authen
 
 Public responses never contain raw tokens, token hashes, funding IDs, or internal booking UUIDs. Real production payment initiation remains deferred.
 
+Paystack secrets are backend-only configuration and never appear in responses, logs, bookings, or browser metadata. Public checkout requires the booking session and returns only a safe hosted checkout URL and normalized attempt reference. The unauthenticated Paystack webhook is authenticated instead with HMAC-SHA512 over the exact raw body, then independently verified against Paystack before settlement. Unsigned, malformed, or mismatched reference/amount/currency inputs cannot fund a booking. Raw webhook bodies are not persisted.
+
 Start-matching and stale-expiry command responses use minimized operational summaries rather than returning matching-service internals. They expose no provider candidate IDs, internal booking UUIDs, reason codes/notes, raw transitions, or per-assignment expiry detail beyond the intentionally returned new `assignmentId` and offer deadline.
 
 Provider self-service routes under `/api/v1/provider/offers` require the explicit `PROVIDER` role and resolve the authenticated user through the unique `Provider.user_id` link. The linked provider must remain `ACTIVE` and not deleted. `USER`, `ADMIN`, or `OPERATIONS` alone grants no provider access; a multi-role user must also explicitly hold `PROVIDER`. Role assignment and provider linking are controlled onboarding/admin responsibilities, never automatic registration behavior.

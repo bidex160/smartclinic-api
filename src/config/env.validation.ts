@@ -60,6 +60,11 @@ class EnvironmentVariables {
 
   @IsOptional() @IsString()
   PUBLIC_BOOKING_COOKIE_DOMAIN?: string;
+  @IsIn(['none', 'test', 'paystack']) PAYMENT_PROVIDER = process.env.NODE_ENV === 'test' ? 'test' : 'none';
+  @IsOptional() @IsString() PAYSTACK_SECRET_KEY?: string;
+  @IsOptional() @IsString() PAYSTACK_PUBLIC_KEY?: string;
+  @IsOptional() @IsString() PAYSTACK_CALLBACK_URL?: string;
+  @IsOptional() @IsIn(['true', 'false']) PAYSTACK_WEBHOOK_ENABLED?: string;
 }
 
 export function validateEnvironment(config: Record<string, unknown>): EnvironmentVariables {
@@ -71,6 +76,8 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
   if (errors.length > 0) {
     throw new Error(`Invalid environment configuration: ${errors.toString()}`);
   }
+  if (validatedConfig.NODE_ENV === 'production' && validatedConfig.PAYMENT_PROVIDER === 'paystack' && !validatedConfig.PAYSTACK_SECRET_KEY) throw new Error('Invalid environment configuration: PAYSTACK_SECRET_KEY is required when PAYMENT_PROVIDER=paystack');
+  if (validatedConfig.NODE_ENV === 'production' && validatedConfig.PAYMENT_PROVIDER === 'test') throw new Error('Invalid environment configuration: PAYMENT_PROVIDER=test is not allowed in production');
 
   return validatedConfig;
 }

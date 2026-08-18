@@ -3,4 +3,6 @@ import { InitializePaymentInput, InitializePaymentResult, PaymentProviderAdapter
 export class UnavailablePaymentProviderAdapter implements PaymentProviderAdapter {
   async initializePayment(_input: InitializePaymentInput): Promise<InitializePaymentResult> { throw new ServiceUnavailableException('No production payment provider is configured'); }
   async verifyPayment(_providerReference: string): Promise<VerifyPaymentResult> { throw new ServiceUnavailableException('No production payment provider is configured'); }
+  verifyWebhookSignature(): boolean { return false; }
+  parseWebhook(): { type: string; reference: string | null } { throw new ServiceUnavailableException('No production payment provider is configured'); }
 }

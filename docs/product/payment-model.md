@@ -10,7 +10,7 @@ Bookings → provider-neutral Payments interface → selected provider adapter �
 
 Potential adapters may be added later without changing booking business logic.
 
-The v1 implementation formalises this boundary as `PaymentProviderAdapter`, with provider-neutral initialize and verify operations. Development/test environments use the explicitly named in-memory `TestPaymentProviderAdapter`; production uses a fail-closed unavailable adapter until a real provider is deliberately configured. No fintech vendor is selected or embedded in booking logic.
+The implementation formalises this boundary as `PaymentProviderAdapter`, with provider-neutral initialize, verify, and webhook-authentication operations. Paystack is the first production-capable adapter, selected explicitly with `PAYMENT_PROVIDER=paystack`; the test adapter remains non-production-only and `none` fails closed. Booking and funding logic contain no Paystack fields, so another adapter can be added without changing those domains.
 
 ## Funding model
 
@@ -88,6 +88,14 @@ Provider callbacks and reconciliation inputs should also be retained as protecte
 Provider-specific SDK identifiers, statuses, raw webhook payloads, and implementation details stay within Payments and its adapter boundary. They must never be stored or interpreted by the Booking domain.
 
 ADMIN/OPERATIONS test-management endpoints remain available outside production. Public guests may initialise the server-quoted obligation only with a booking-bound session cookie. Real payment initiation remains absent; production fintech callbacks, payer verification, and recovery remain unresolved. No webhook endpoint or raw webhook storage is implemented.
+
+Public checkout initiation is now available at `POST /api/v1/public/bookings/:reference/payment/initiate` after session authorization. It initializes/reuses quote-backed funding, resolves payer email from the responsible User or guest BookingContact, generates a retry-specific `SC-PAY-...` reference, and returns only the normalized reference/status/amount/currency/checkout URL. Missing email is a business error; no address is fabricated. A registered-owner initiation route remains deferred because registered booking ownership authorization is not yet sufficiently defined.
+
+Paystack receives amounts in currency subunits. The adapter converts decimal strings using integer arithmetic (`NGN 12500.00 → 1250000`) and never floating point. Paystack status `success` is the only success mapping; `failed`, `abandoned`, `ongoing`, `pending`, `processing`, `queued`, `reversed`, and unknown states remain non-successful until a later verified success.
+
+`POST /api/v1/payments/paystack/webhook` authenticates the exact raw request bytes with HMAC-SHA512 and the server-only secret. `charge.success` triggers an independent `/transaction/verify/:reference` call, followed by reference, expected amount, and currency checks before the existing idempotent settlement transaction. Unsupported signed events are acknowledged without mutation; invalid signatures are rejected. Raw webhook payloads are not retained.
+
+No callback endpoint is implemented. A browser redirect is not proof of payment; future callback/recovery UI must invoke server-side verification or rely on the signed webhook.
 
 ## Sponsorship and organisation funding
 

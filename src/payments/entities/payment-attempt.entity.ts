@@ -38,6 +38,7 @@ export class PaymentAttempt {
 
   @Column({ name: 'provider_reference', type: 'varchar', nullable: true })
   providerReference!: string | null;
+  @Column({ name: 'checkout_url', type: 'text', nullable: true }) checkoutUrl!: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

@@ -249,9 +249,12 @@ Each row stores a booking FK, unique SHA-256 token hash, expiry, optional revoca
 | `idempotency_key` | `varchar`, non-null, unique | Prevents duplicate attempt creation. |
 | `provider_code` | `varchar`, nullable | Selected Payments-domain adapter/integration, not a Booking field. |
 | `provider_reference` | `varchar`, nullable | Opaque provider reference permitted only inside Payments. |
+| `checkout_url` | `text`, nullable | Safe provider-hosted checkout destination returned by the adapter. |
 | `created_at`, `updated_at` | `timestamptz`, non-null | Attempt audit fields. |
 
 `provider_code` and `provider_reference` are intentionally Payments-domain fields. Named provider IDs, SDK objects, raw webhook payloads, and provider-specific statuses never appear in `bookings`. Protected provider-event/raw-payload storage should be a future Payments-only table with restricted access and retention rules.
+
+Paystack transaction IDs are not persisted in v1; idempotency uses the SmartClinic-controlled provider reference. If a Paystack numeric transaction ID is stored later it must use `bigint`/string handling rather than a JavaScript `number`.
 
 #### `payment_transactions`
 

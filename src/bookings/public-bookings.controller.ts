@@ -8,6 +8,7 @@ import { PublicBookingsService } from './public-bookings.service';
 import { BookingReferenceParamsDto } from './dto/booking-reference-params.dto';
 import { PUBLIC_BOOKING_SESSION_COOKIE, PublicBookingSessionService } from './public-booking-session.service';
 import { PaymentFlowService } from '../payments/payment-flow.service';
+import { PublicPaymentInitiationResponseDto } from '../payments/dto/public-payment-initiation-response.dto';
 
 @ApiTags('Public bookings')
 @Controller('public/bookings')
@@ -28,5 +29,7 @@ export class PublicBookingsController {
   get(@Param() p: BookingReferenceParamsDto, @Req() request: Request) { return this.sessions.resolveBooking(this.readCookie(request), p.reference); }
   @Post(':reference/funding/initialize') @HttpCode(HttpStatus.OK) @ApiCookieAuth(PUBLIC_BOOKING_SESSION_COOKIE) @ApiOperation({ summary: 'Initialize quote-backed guest self-funding' }) @ApiUnauthorizedResponse()
   async initializeFunding(@Param() p: BookingReferenceParamsDto, @Req() request: Request) { await this.sessions.resolveBooking(this.readCookie(request), p.reference); return this.payments.initializeFunding(p.reference, null); }
+  @Post(':reference/payment/initiate') @HttpCode(HttpStatus.OK) @ApiCookieAuth(PUBLIC_BOOKING_SESSION_COOKIE) @ApiOperation({ summary: 'Initialize a provider-neutral public checkout' }) @ApiOkResponse({ type: PublicPaymentInitiationResponseDto }) @ApiUnauthorizedResponse()
+  async initiatePayment(@Param() p:BookingReferenceParamsDto,@Req() request:Request){await this.sessions.resolveBooking(this.readCookie(request),p.reference);await this.payments.initializeFunding(p.reference,null);return PublicPaymentInitiationResponseDto.fromOperation(await this.payments.initiatePublicPayment(p.reference));}
   private readCookie(request: Request): string | null { const prefix = `${PUBLIC_BOOKING_SESSION_COOKIE}=`; const entry = request.headers.cookie?.split(';').map((value) => value.trim()).find((value) => value.startsWith(prefix)); if (!entry) return null; try { return decodeURIComponent(entry.slice(prefix.length)); } catch { return null; } }
 }

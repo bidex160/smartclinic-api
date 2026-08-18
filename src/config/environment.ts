@@ -7,6 +7,7 @@ export interface AppConfiguration {
   auth: { jwtSecret: string; jwtExpiresIn: string; refreshTokenTtl: number; cookieSecure: boolean; cookieSameSite: 'lax'|'strict'|'none'; cookieDomain?: string };
   providerMatching: { offerTtlMinutes: number };
   publicBookingSession: { ttlSeconds: number; cookieSecure: boolean; cookieSameSite: 'lax'|'strict'|'none'; cookieDomain?: string };
+  payments: { provider: 'none'|'test'|'paystack'; paystack: { secretKey?: string; publicKey?: string; callbackUrl?: string; webhookEnabled: boolean } };
   database: {
     enabled: boolean;
     host: string;
@@ -50,6 +51,7 @@ export function createAppConfiguration(
       cookieSameSite: (environment.PUBLIC_BOOKING_COOKIE_SAME_SITE as 'lax'|'strict'|'none' | undefined) ?? 'lax',
       cookieDomain: environment.PUBLIC_BOOKING_COOKIE_DOMAIN,
     },
+    payments: { provider: (environment.PAYMENT_PROVIDER as 'none'|'test'|'paystack' | undefined) ?? (environmentName === 'test' ? 'test' : 'none'), paystack: { secretKey: environment.PAYSTACK_SECRET_KEY, publicKey: environment.PAYSTACK_PUBLIC_KEY, callbackUrl: environment.PAYSTACK_CALLBACK_URL, webhookEnabled: environment.PAYSTACK_WEBHOOK_ENABLED !== 'false' } },
     database: {
       enabled: environment.DATABASE_ENABLED !== 'false',
       host: environment.DATABASE_HOST ?? 'localhost',
