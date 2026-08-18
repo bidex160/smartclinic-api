@@ -94,6 +94,8 @@ The nullable unique `providers.user_id` is now managed through explicit ADMIN/OP
 
 `health_check_measurements` stores one current row per encounter and explicit code. Blood pressure uses primary systolic plus required secondary diastolic; all other initial codes prohibit a secondary value. Units are server-owned strings under the documented v1 code policy. `health_check_measurement_history` appends immutable previous/new JSON value snapshots, action, actor, and timestamp on every create/update. `health_check_encounter_history` separately appends encounter status transitions. These histories are not provider response fields.
 
+`health_result_access_grants` provides explicit guest clinical authority. It stores Patient, encounter, optional User-or-token authority, status, expiry/revocation/use timestamps, and issuing admin User. An XOR check requires exactly one of `user_id` or `access_token_hash`; v1 guest issuance uses only the token path while registered patients authorize directly through their Patient link. Token hashes are unique, and a partial unique index permits at most one ACTIVE grant per encounter. Service validation confirms the grant Patient is the encounter booking participant and that the encounter is completed.
+
 #### `provider_availability`
 
 Each row contains provider, optional provider-service and provider-location scopes, a named `day_of_week_enum`, local start/end `time`, IANA timezone, active flag, and timestamps. Composite foreign keys prevent cross-provider service or location references. A check requires start before end, so v1 blocks cannot cross midnight.

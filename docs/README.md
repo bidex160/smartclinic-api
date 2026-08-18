@@ -14,6 +14,7 @@ These documents define the initial product direction and backend architecture fo
 
 - [Booking concepts](product/booking-concepts.md)
 - [Smart Health Check](product/health-check.md)
+- [Health result access](product/health-result-access.md)
 - [Booking lifecycle](product/booking-lifecycle.md)
 - [Payment model](product/payment-model.md)
 - [Provider matching](product/provider-matching.md)

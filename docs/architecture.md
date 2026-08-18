@@ -70,6 +70,8 @@ Transactional email is a narrow Notifications-domain port. Provider invitation l
 
 Clinical capture is a Health Checks-domain boundary. A booking owns at most one encounter, which is scoped by a composite foreign key to its confirmed assignment/provider/booking tuple. Current structured measurements remain separate from Booking; append-only encounter and measurement histories retain lifecycle and value-change audit context. Provider controllers map explicit DTOs and never return persistence entities or audit rows.
 
+Patient result reads remain in the Health Checks boundary but use different authorization paths from provider writes. Registered reads derive ownership from User → Patient → Booking participant. Guest reads resolve a dedicated hashed access grant to one completed encounter/Patient. Public booking sessions are deliberately absent from this dependency path, so booking and funding authority cannot become clinical authority accidentally.
+
 Administrative assignment reads use a separate operational DTO from both persistence entities and provider-facing offers. ADMIN/OPERATIONS users can filter assignments by booking reference, provider, or status, inspect the safe booking/provider context, and invoke the same transactional confirmation service used by matching commands.
 
 ## Layer responsibilities

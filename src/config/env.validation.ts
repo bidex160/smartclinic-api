@@ -52,6 +52,9 @@ class EnvironmentVariables {
   @Type(() => Number) @IsInt() @Min(300)
   PROVIDER_INVITATION_TTL = 604800;
 
+  @Type(() => Number) @IsInt() @Min(300)
+  HEALTH_RESULT_ACCESS_TTL = 604800;
+
   @IsOptional() @IsUrl({ require_tld: false }) PROVIDER_INVITATION_FRONTEND_URL?: string;
   @IsIn(['none', 'test', 'resend']) EMAIL_PROVIDER = process.env.NODE_ENV === 'test' ? 'test' : 'none';
   @IsOptional() @IsString() EMAIL_FROM_ADDRESS: string | undefined = process.env.NODE_ENV === 'test' ? 'no-reply@smartclinic.invalid' : undefined;

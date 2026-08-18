@@ -63,6 +63,12 @@ One mutable current row is retained per encounter/code. Each creation or update 
 
 Starting an encounter moves a confirmed `PROVIDER_ASSIGNED` or `SCHEDULED` booking to `IN_PROGRESS` with BookingStatusHistory. Completion requires all six current measurements and atomically moves encounter and booking to `COMPLETED`, appending both histories. `PROVIDER_ASSIGNED` is temporarily accepted because no distinct operational scheduling command currently exists.
 
+## Patient result access
+
+Only completed current measurements may cross the patient result boundary. Registered access resolves the authenticated User through `Patient.userId` and verifies that Patient is the booking participant. Guest access requires a separately issued, encounter-scoped opaque grant; booking references and public booking-session cookies grant no clinical authority. ADMIN/OPERATIONS may issue or revoke guest grants after an external/manual identity-verification step, but they do not gain patient-result access merely by holding those roles.
+
+Patient responses contain package, provider display name, completion time, and current measurements only. They exclude clinical/audit histories, interpretation, ranges, contacts, funding, payment, assignment internals, and reporting. Guest token delivery, identity verification, consent for minors/dependants, account-link transitions, corrections, and reports remain future work.
+
 ## State and history guidance
 
 The Smart Health Check encounter has its own lifecycle and audit trail because clinical capture is now implemented. Booking remains the fulfilment lifecycle and does not embed measurements:

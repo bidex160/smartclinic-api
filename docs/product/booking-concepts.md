@@ -41,7 +41,7 @@ The model supports self-funded, family-funded, diaspora-sponsored, organisation-
 
 ## Consent and access boundary
 
-Booking for another person requires authority and consent rules that will be designed later for adults, minors, and dependents. Patient health information, booking information, payment information, provider information, and organisation information require distinct future access controls. Booker or funder status alone does not grant health-data access.
+Booking for another person requires authority and consent rules that will be designed later for adults, minors, and dependents. Patient health information, booking information, payment information, provider information, and organisation information use distinct access controls. Booker or funder status, booking reference knowledge, and a guest booking-session cookie do not grant health-data access. Completed results require either an authenticated User/Patient ownership link or a separately issued encounter-scoped guest result token.
 
 ## Public booking intake
 
