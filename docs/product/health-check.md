@@ -69,6 +69,8 @@ Only completed current measurements may cross the patient result boundary. Regis
 
 Patient responses contain package, provider display name, completion time, and current measurements only. They exclude clinical/audit histories, interpretation, ranges, contacts, funding, payment, assignment internals, and reporting. Guest token delivery, identity verification, consent for minors/dependants, account-link transitions, corrections, and reports remain future work.
 
+The authenticated `/me/health-checks` history endpoint lists the linked Patient's booking and encounter summaries without measurement values. It supports booking/encounter status filters and bounded pagination, orders newest first, and derives result availability only from a completed encounter. Detailed current measurements remain isolated at `/me/health-checks/:bookingReference/results`.
+
 ## State and history guidance
 
 The Smart Health Check encounter has its own lifecycle and audit trail because clinical capture is now implemented. Booking remains the fulfilment lifecycle and does not embed measurements:

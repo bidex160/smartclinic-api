@@ -72,6 +72,8 @@ Clinical capture is a Health Checks-domain boundary. A booking owns at most one 
 
 Patient result reads remain in the Health Checks boundary but use different authorization paths from provider writes. Registered reads derive ownership from User → Patient → Booking participant. Guest reads resolve a dedicated hashed access grant to one completed encounter/Patient. Public booking sessions are deliberately absent from this dependency path, so booking and funding authority cannot become clinical authority accidentally.
 
+The patient Health Check history is a separate read projection over Patient-owned bookings, their single encounter, and confirmed assignment provider display name. It applies patient ownership in the database query before pagination, selects no clinical measurements or financial/contact data, and computes result availability from encounter state rather than booking state.
+
 Administrative assignment reads use a separate operational DTO from both persistence entities and provider-facing offers. ADMIN/OPERATIONS users can filter assignments by booking reference, provider, or status, inspect the safe booking/provider context, and invoke the same transactional confirmation service used by matching commands.
 
 ## Layer responsibilities

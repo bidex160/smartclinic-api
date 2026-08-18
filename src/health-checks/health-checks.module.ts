@@ -28,11 +28,12 @@ import { HealthResultAccessService } from './health-result-access.service';
 import { MeHealthResultsController } from './me-health-results.controller';
 import { AdminHealthResultAccessController } from './admin-health-result-access.controller';
 import { PublicHealthResultsController } from './public-health-results.controller';
+import { PatientHealthCheckHistoryService } from './patient-health-check-history.service';
 
 @Module({
   imports: [AuthModule, ProvidersModule, TypeOrmModule.forFeature([HealthCheckPackage, FulfilmentMode, PackagePrice, Booking, BookingStatusHistory, ProviderAssignment, HealthCheckEncounter, HealthCheckMeasurement, HealthCheckMeasurementHistory, HealthCheckEncounterHistory, HealthResultAccessGrant, Patient])],
   controllers: [HealthCheckPackagesController, FulfilmentModesController, AdminPackagePricesController, ProviderHealthCheckEncountersController, MeHealthResultsController, AdminHealthResultAccessController, PublicHealthResultsController],
-  providers: [HealthCheckPackagesService, FulfilmentModesService, PackagePricingService, PackagePricesService, ProviderHealthCheckEncountersService, HealthResultAccessService],
+  providers: [HealthCheckPackagesService, FulfilmentModesService, PackagePricingService, PackagePricesService, ProviderHealthCheckEncountersService, HealthResultAccessService, PatientHealthCheckHistoryService],
   exports: [PackagePricingService],
 })
 export class HealthChecksModule {}
