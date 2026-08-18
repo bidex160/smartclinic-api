@@ -42,6 +42,8 @@ Public payment-status reads and refreshes require the same booking-bound session
 
 The admin matching queue requires JWT authentication plus ADMIN or OPERATIONS role. USER and PROVIDER-only identities are denied. Its response is limited to scheduling, catalogue, minimal participant name, funding status, and latest assignment/provider display context; it excludes contacts, date of birth, payment-provider data, raw histories, and candidate sets.
 
+`GET /api/v1/admin/bookings/:reference` uses the same role boundary and may additionally return the minimum booker contact needed by operations. Guest contact snapshots provide structured name, email, and phone. Registered User records currently provide only display name and email, so unavailable structured name/phone fields remain null rather than being inferred from participant data. The public booking response remains contact-minimized and structurally separate.
+
 Start-matching and stale-expiry command responses use minimized operational summaries rather than returning matching-service internals. They expose no provider candidate IDs, internal booking UUIDs, reason codes/notes, raw transitions, or per-assignment expiry detail beyond the intentionally returned new `assignmentId` and offer deadline.
 
 Provider self-service routes under `/api/v1/provider/offers` require the explicit `PROVIDER` role and resolve the authenticated user through the unique `Provider.user_id` link. The linked provider must remain `ACTIVE` and not deleted. `USER`, `ADMIN`, or `OPERATIONS` alone grants no provider access; a multi-role user must also explicitly hold `PROVIDER`. Role assignment and provider linking are controlled onboarding/admin responsibilities, never automatic registration behavior.

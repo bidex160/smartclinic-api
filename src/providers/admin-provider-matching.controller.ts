@@ -15,14 +15,18 @@ import { AdminProviderAssignmentsService } from './admin-provider-assignments.se
 import { AdminMatchingQueueService } from './admin-matching-queue.service';
 import { AdminMatchingQueueQueryDto } from './dto/admin-matching-queue-query.dto';
 import { AdminMatchingQueueResponseDto } from './dto/admin-matching-queue-response.dto';
+import { AdminBookingDetailService } from './admin-booking-detail.service';
+import { AdminBookingDetailResponseDto } from './dto/admin-booking-detail-response.dto';
 
 @ApiTags('Admin provider matching') @ApiBearerAuth() @UseGuards(JwtAuthGuard, RolesGuard) @Roles(UserRole.ADMIN, UserRole.OPERATIONS)
 @ApiUnauthorizedResponse() @ApiForbiddenResponse() @ApiBadRequestResponse() @ApiNotFoundResponse() @ApiConflictResponse()
 @Controller('admin')
 export class AdminProviderMatchingController {
-  constructor(private readonly matching: ProviderMatchingService, private readonly assignments: AdminProviderAssignmentsService, private readonly queue: AdminMatchingQueueService) {}
+  constructor(private readonly matching: ProviderMatchingService, private readonly assignments: AdminProviderAssignmentsService, private readonly queue: AdminMatchingQueueService, private readonly bookingDetail: AdminBookingDetailService) {}
   @Get('bookings/matching-queue') @ApiOperation({ summary: 'List the read-only operational provider-matching queue (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: AdminMatchingQueueResponseDto })
   matchingQueue(@Query() query: AdminMatchingQueueQueryDto) { return this.queue.list(query); }
+  @Get('bookings/:reference') @ApiOperation({ summary: 'Get a minimized operational booking detail (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: AdminBookingDetailResponseDto })
+  booking(@Param() { reference }: BookingReferenceParamsDto) { return this.bookingDetail.get(reference); }
   @Get('provider-assignments') @ApiOperation({ summary: 'List provider assignments with operational context (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: AdminProviderAssignmentResponseDto, isArray: true })
   list(@Query() query: AdminProviderAssignmentQueryDto) { return this.assignments.list(query); }
   @Get('provider-assignments/:id') @ApiOperation({ summary: 'Get a provider assignment with operational context (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: AdminProviderAssignmentResponseDto })

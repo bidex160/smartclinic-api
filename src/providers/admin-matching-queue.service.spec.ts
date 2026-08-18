@@ -3,6 +3,7 @@ import { BookingStatus } from '../bookings/enums/booking-status.enum';
 import { AdminMatchingQueueService } from './admin-matching-queue.service';
 import { MatchingQueueReadiness } from './enums/matching-queue-readiness.enum';
 import { ProviderAssignmentStatus } from './enums/provider-assignment-status.enum';
+import { deriveMatchingReadiness } from './matching-readiness';
 
 const booking = (changes: Record<string, unknown> = {}) => ({ id: 'booking-1', bookingReference: 'SC-2026-000000000001', status: BookingStatus.PENDING_PROVIDER_MATCH, healthCheckPackageId: '10000000-0000-4000-8000-000000000001', fulfilmentModeId: '20000000-0000-4000-8000-000000000001', healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential' }, fulfilmentMode: { code: 'HOME_VISIT', name: 'Home visit' }, participant: { givenName: 'Ada', familyName: 'Okafor', phone: 'private', dateOfBirth: '1990-01-01' }, preferredDate: '2026-09-01', preferredTimeWindowStart: '09:00', preferredTimeWindowEnd: '10:00', preferredTimezone: 'Africa/Lagos', quotedAmount: '12500.00', currency: 'NGN', createdAt: new Date('2026-08-01T00:00:00Z'), updatedAt: new Date('2026-08-02T00:00:00Z'), ...changes });
 const funding = (changes = {}) => ({ id: 'funding', bookingId: 'booking-1', status: BookingFundingStatus.SETTLED, ...changes });
@@ -41,7 +42,7 @@ describe('AdminMatchingQueueService', () => {
     [{ status: BookingStatus.PROVIDER_ASSIGNED }, funding(), assignment({ status: ProviderAssignmentStatus.CONFIRMED }), MatchingQueueReadiness.ALREADY_ASSIGNED],
     [{ status: BookingStatus.UNFULFILLABLE }, funding(), null, MatchingQueueReadiness.UNFULFILLABLE],
   ])('derives readiness without persisting it', (bookingChanges, fundingRow, assignmentRow, expected) => {
-    expect((subject as any).readiness(booking(bookingChanges as any), fundingRow, assignmentRow)).toBe(expected);
+    expect(deriveMatchingReadiness(booking(bookingChanges as any) as any, fundingRow as any, assignmentRow as any)).toBe(expected);
   });
 
   it('applies useful filters and paginates deterministically', async () => {

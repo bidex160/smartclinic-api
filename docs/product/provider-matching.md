@@ -40,6 +40,8 @@ Queue readiness is derived operational metadata, not a booking status. It distin
 
 The current assignment is the most recently created assignment for the booking, tie-broken by assignment ID. This is sufficient for the current sequential workflow. A future matching-cycle entity would be required to distinguish separate rematching cycles or derive a reliable cycle-level `matchingStartedAt`, so that field is intentionally omitted.
 
+ADMIN and OPERATIONS can inspect a single minimized operational record at `GET /api/v1/admin/bookings/:reference`. It uses the same latest-assignment ordering and shared readiness derivation as the queue, but adds the booker contact, quote, summarized SELF funding, latest payment attempt, and successful payment time needed to operate the booking. It does not expose histories, candidates, health data, provider credentials, or payment-provider internals.
+
 V1 offers are sequential. Eligibility query order provides a deterministic candidate order without a ranking score. One `OFFERED`, `ACCEPTED`, or `CONFIRMED` assignment may be active in the service workflow at a time; offer creation locks the booking and rechecks active assignments. Providers previously offered the booking are excluded when selecting the next candidate.
 
 The offer expiry is `offered_at + PROVIDER_OFFER_TTL_MINUTES`, configured through the environment. Expiry is processed by an explicit operations command for now; scheduled execution is deferred. Expiry or decline appends assignment history, leaves the booking pending, and attempts the next eligible provider. If none remains, the booking moves to `UNFULFILLABLE` with booking history; it is never automatically cancelled.

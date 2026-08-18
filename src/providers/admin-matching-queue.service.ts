@@ -9,8 +9,7 @@ import { BookingStatus } from '../bookings/enums/booking-status.enum';
 import { AdminMatchingQueueQueryDto } from './dto/admin-matching-queue-query.dto';
 import { AdminMatchingQueueItemDto, AdminMatchingQueueResponseDto } from './dto/admin-matching-queue-response.dto';
 import { ProviderAssignment } from './entities/provider-assignment.entity';
-import { MatchingQueueReadiness } from './enums/matching-queue-readiness.enum';
-import { ProviderAssignmentStatus } from './enums/provider-assignment-status.enum';
+import { deriveMatchingReadiness } from './matching-readiness';
 
 @Injectable()
 export class AdminMatchingQueueService {
@@ -40,16 +39,6 @@ export class AdminMatchingQueueService {
   }
 
   private map(booking: Booking, funding: BookingFunding | null, assignment: ProviderAssignment | null): AdminMatchingQueueItemDto {
-    return { bookingReference: booking.bookingReference, bookingStatus: booking.status, package: { code: booking.healthCheckPackage.code, name: booking.healthCheckPackage.name }, fulfilmentMode: { code: booking.fulfilmentMode.code, name: booking.fulfilmentMode.name }, participant: { givenName: booking.participant.givenName, familyName: booking.participant.familyName }, preferredDate: booking.preferredDate, preferredTimeFrom: booking.preferredTimeWindowStart, preferredTimeTo: booking.preferredTimeWindowEnd, preferredTimezone: booking.preferredTimezone, fundingStatus: funding?.status ?? null, quotedAmount: booking.quotedAmount, quotedCurrency: booking.currency, createdAt: booking.createdAt, updatedAt: booking.updatedAt, currentAssignmentStatus: assignment?.status ?? null, currentProviderName: assignment?.provider.displayName ?? null, readiness: this.readiness(booking, funding, assignment) };
-  }
-
-  private readiness(booking: Booking, funding: BookingFunding | null, assignment: ProviderAssignment | null): MatchingQueueReadiness {
-    if (booking.status === BookingStatus.PROVIDER_ASSIGNED || assignment?.status === ProviderAssignmentStatus.CONFIRMED) return MatchingQueueReadiness.ALREADY_ASSIGNED;
-    if (booking.status === BookingStatus.UNFULFILLABLE) return MatchingQueueReadiness.UNFULFILLABLE;
-    if (assignment?.status === ProviderAssignmentStatus.ACCEPTED) return MatchingQueueReadiness.ACCEPTED_AWAITING_CONFIRMATION;
-    if (assignment?.status === ProviderAssignmentStatus.OFFERED) return MatchingQueueReadiness.ACTIVE_OFFER;
-    if (funding?.status !== BookingFundingStatus.SETTLED) return MatchingQueueReadiness.FUNDING_INCOMPLETE;
-    if (!booking.preferredDate || !booking.preferredTimeWindowStart || !booking.preferredTimeWindowEnd || !booking.preferredTimezone) return MatchingQueueReadiness.INCOMPLETE_SCHEDULING;
-    return MatchingQueueReadiness.READY;
+    return { bookingReference: booking.bookingReference, bookingStatus: booking.status, package: { code: booking.healthCheckPackage.code, name: booking.healthCheckPackage.name }, fulfilmentMode: { code: booking.fulfilmentMode.code, name: booking.fulfilmentMode.name }, participant: { givenName: booking.participant.givenName, familyName: booking.participant.familyName }, preferredDate: booking.preferredDate, preferredTimeFrom: booking.preferredTimeWindowStart, preferredTimeTo: booking.preferredTimeWindowEnd, preferredTimezone: booking.preferredTimezone, fundingStatus: funding?.status ?? null, quotedAmount: booking.quotedAmount, quotedCurrency: booking.currency, createdAt: booking.createdAt, updatedAt: booking.updatedAt, currentAssignmentStatus: assignment?.status ?? null, currentProviderName: assignment?.provider.displayName ?? null, readiness: deriveMatchingReadiness(booking, funding, assignment) };
   }
 }

@@ -56,6 +56,8 @@ Paystack implements the Payments adapter boundary, not the Booking domain. It ow
 
 The admin matching queue is an operational read model composed in the Providers/matching boundary from Booking, SELF funding, catalogue, participant-name, and latest-assignment data. It exposes explicit DTOs and performs no lifecycle mutations. Pagination and deterministic oldest-first ordering keep command selection predictable while matching remains manually initiated.
 
+The admin booking-detail read model extends that projection for one booking with authorized operational contact and summarized payment context. Public booking DTOs remain deliberately narrower and never gain contact or internal workflow fields through this endpoint.
+
 Provider offer controllers use the `PROVIDER` role plus an active-provider resolver. The role alone is insufficient without a live provider link, and administrative roles do not inherit provider access. Provider-facing read models intentionally expose only minimal operational booking data.
 
 Administrative assignment reads use a separate operational DTO from both persistence entities and provider-facing offers. ADMIN/OPERATIONS users can filter assignments by booking reference, provider, or status, inspect the safe booking/provider context, and invoke the same transactional confirmation service used by matching commands.

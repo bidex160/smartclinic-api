@@ -30,11 +30,14 @@ import { AdminProviderAvailabilityExceptionsController } from './admin-provider-
 import { ProviderBookingReservation } from './entities/provider-booking-reservation.entity';
 import { BookingFunding } from '../bookings/entities/booking-funding.entity';
 import { AdminMatchingQueueService } from './admin-matching-queue.service';
+import { PaymentAttempt } from '../payments/entities/payment-attempt.entity';
+import { PaymentTransaction } from '../payments/entities/payment-transaction.entity';
+import { AdminBookingDetailService } from './admin-booking-detail.service';
 
 @Module({
-  imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, ProviderAvailabilityException, ProviderBookingReservation, HealthCheckPackage, FulfilmentMode, Booking, BookingFunding, BookingStatusHistory])],
+  imports: [AuthModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, ProviderAvailabilityException, ProviderBookingReservation, HealthCheckPackage, FulfilmentMode, Booking, BookingFunding, BookingStatusHistory, PaymentAttempt, PaymentTransaction])],
   controllers: [AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderAvailabilityExceptionsController, AdminProviderMatchingController, ProviderOffersController],
-  providers: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderAvailabilityExceptionsService, ProviderMatchingService, CurrentProviderService, ProviderOffersService, AdminProviderAssignmentsService, AdminMatchingQueueService],
+  providers: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderAvailabilityExceptionsService, ProviderMatchingService, CurrentProviderService, ProviderOffersService, AdminProviderAssignmentsService, AdminMatchingQueueService, AdminBookingDetailService],
   exports: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderMatchingService, CurrentProviderService],
 })
 export class ProvidersModule {}
