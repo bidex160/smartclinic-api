@@ -1,9 +1,11 @@
-import { Column, CreateDateColumn, Entity, Index, JoinColumn, OneToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, OneToMany, OneToOne, PrimaryGeneratedColumn, Unique } from 'typeorm';
 
 import { Booking } from './booking.entity';
+import { BookingFunding } from './booking-funding.entity';
 
 @Entity('booking_contacts')
 @Index('UQ_booking_contacts_booking_id', ['bookingId'], { unique: true })
+@Unique('UQ_booking_contacts_id_booking', ['id', 'bookingId'])
 export class BookingContact {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -29,4 +31,7 @@ export class BookingContact {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
+
+  @OneToMany(() => BookingFunding, (funding) => funding.payerContact)
+  fundingResponsibilities!: BookingFunding[];
 }

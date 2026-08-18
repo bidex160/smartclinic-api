@@ -92,11 +92,13 @@ describe('PublicBookingsService', () => {
         ? jest.fn().mockRejectedValue(options.priceError)
         : jest.fn().mockResolvedValue({ amount: '12500.00', currency: 'NGN' }),
     };
+    const sessions = { create: jest.fn().mockResolvedValue('raw-session-token') };
     const service = new PublicBookingsService(
       bookingRepository as never,
       healthCheckPackageRepository as never,
       fulfilmentModeRepository as never,
       packagePricingService as never,
+      sessions as never,
     );
 
     return {
@@ -114,11 +116,11 @@ describe('PublicBookingsService', () => {
     const { service, patientRepository, bookingTransactionRepository, contactRepository, historyRepository } = createService();
 
     await expect(service.create(createPublicBookingDto)).resolves.toEqual(
-      expect.objectContaining({
+      expect.objectContaining({ sessionToken: 'raw-session-token', booking: expect.objectContaining({
         bookingReference: 'SC-2026-7F23B0C9D1E4',
         participant: { givenName: 'Ada', familyName: 'Okafor' },
         locationNote: 'Reception desk',
-      }),
+      }) }),
     );
     expect(patientRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ userId: null, givenName: 'Ada', familyName: 'Okafor' }),

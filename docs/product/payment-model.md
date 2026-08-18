@@ -10,6 +10,8 @@ Bookings → provider-neutral Payments interface → selected provider adapter �
 
 Potential adapters may be added later without changing booking business logic.
 
+The v1 implementation formalises this boundary as `PaymentProviderAdapter`, with provider-neutral initialize and verify operations. Development/test environments use the explicitly named in-memory `TestPaymentProviderAdapter`; production uses a fail-closed unavailable adapter until a real provider is deliberately configured. No fintech vendor is selected or embedded in booking logic.
+
 ## Funding model
 
 The person receiving care may differ from the person who books or funds it. A parent may pay for a child, a partner may pay for a family member, a person outside Nigeria may sponsor a participant in Nigeria, and an organisation may fund an eligible programme member. These are funding relationships, not assumptions based on user identity.
@@ -24,6 +26,12 @@ Booking
 ```
 
 `BookingFunding` represents an amount, source, and responsibility to fund the booking. It supports self-funded, family-funded, diaspora-sponsored, organisation-funded, mixed-funding, and future sponsored-programme journeys. `PaymentAttempt` represents a provider-neutral attempt to collect money against a funding obligation. `PaymentTransaction` records the resulting money movement or confirmed provider/finance outcome. These are separate relational records with their own identifiers and histories.
+
+V1 implements one self-funded obligation per booking. Its amount and currency are copied exclusively from the immutable booking quote; callers cannot submit or override them. Initialisation moves `DRAFT` to `AWAITING_FUNDING` once and is safe to retry. Registered funding references a responsible user; guest funding references the same-booking `BookingContact` payer snapshot. No fake User is created.
+
+Payment initiation snapshots the funding amount/currency into an idempotent attempt and moves it to `AWAITING_CUSTOMER_ACTION`. Verified failure marks only the attempt `FAILED`; funding stays `PENDING` and the booking stays `AWAITING_FUNDING`. Verified success creates one successful collection transaction, marks funding `SETTLED`, marks the attempt `SUCCEEDED`, and atomically advances the booking to `PENDING_PROVIDER_MATCH` with history.
+
+Idempotency is enforced by the attempt idempotency key, unique provider-code/reference pairs, a unique non-null transaction provider reference, and transactional status checks. Repeating confirmation returns the existing successful outcome without another transaction or booking history entry.
 
 The exact cardinality between an attempt and transactions—such as whether an attempt can create multiple transaction records for retries, captures, or refunds—remains a payment-implementation decision. It must not collapse the three concepts into one booking field.
 
@@ -78,6 +86,8 @@ A payment transaction is a distinct, provider-neutral record of a provider-confi
 Provider callbacks and reconciliation inputs should also be retained as protected relational provider-event records with provider identifiers, deduplication keys, and processing outcome.
 
 Provider-specific SDK identifiers, statuses, raw webhook payloads, and implementation details stay within Payments and its adapter boundary. They must never be stored or interpreted by the Booking domain.
+
+ADMIN/OPERATIONS test-management endpoints remain available outside production. Public guests may initialise the server-quoted obligation only with a booking-bound session cookie. Real payment initiation remains absent; production fintech callbacks, payer verification, and recovery remain unresolved. No webhook endpoint or raw webhook storage is implemented.
 
 ## Sponsorship and organisation funding
 

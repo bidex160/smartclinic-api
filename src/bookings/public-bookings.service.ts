@@ -19,6 +19,9 @@ import { BookingStatusHistory } from './entities/booking-status-history.entity';
 import { Booking } from './entities/booking.entity';
 import { BookingStatus } from './enums/booking-status.enum';
 import { validateBookingSchedulingPreference } from './booking-scheduling';
+import { PublicBookingSessionService } from './public-booking-session.service';
+
+export interface PublicBookingCreationResult { booking: BookingResponseDto; sessionToken: string; }
 
 @Injectable()
 export class PublicBookingsService {
@@ -30,9 +33,10 @@ export class PublicBookingsService {
     @InjectRepository(FulfilmentMode)
     private readonly fulfilmentModeRepository: Repository<FulfilmentMode>,
     private readonly packagePricingService: PackagePricingService,
+    private readonly sessions: PublicBookingSessionService,
   ) {}
 
-  async create(createPublicBookingDto: CreatePublicBookingDto): Promise<BookingResponseDto> {
+  async create(createPublicBookingDto: CreatePublicBookingDto): Promise<PublicBookingCreationResult> {
     validateBookingSchedulingPreference({
       preferredDate: createPublicBookingDto.booking.preferredDate,
       preferredTimeWindowStart: createPublicBookingDto.booking.preferredTimeFrom,
@@ -43,7 +47,7 @@ export class PublicBookingsService {
 
     for (let attempt = 0; attempt < MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS; attempt += 1) {
       try {
-        const booking = await this.bookingRepository.manager.transaction(async (manager) => {
+        const created = await this.bookingRepository.manager.transaction(async (manager) => {
           const patientRepository = manager.getRepository(Patient);
           const bookingRepository = manager.getRepository(Booking);
           const contactRepository = manager.getRepository(BookingContact);
@@ -105,11 +109,10 @@ export class PublicBookingsService {
               actorUserId: null,
             }),
           );
-
-          return savedBooking;
+          const sessionToken = await this.sessions.create(manager, savedBooking.id);
+          return { savedBooking, sessionToken };
         });
-
-        return this.findResponseByReference(booking.bookingReference);
+        return { booking: await this.findResponseByReference(created.savedBooking.bookingReference), sessionToken: created.sessionToken };
       } catch (error) {
         if (!isBookingReferenceCollision(error) || attempt === MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS - 1) {
           throw error;

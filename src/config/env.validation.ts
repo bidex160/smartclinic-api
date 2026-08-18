@@ -48,6 +48,18 @@ class EnvironmentVariables {
   @IsInt()
   @Min(1)
   PROVIDER_OFFER_TTL_MINUTES = 30;
+
+  @Type(() => Number) @IsInt() @Min(60)
+  PUBLIC_BOOKING_SESSION_TTL = 604800;
+
+  @IsOptional() @IsIn(['true', 'false'])
+  PUBLIC_BOOKING_COOKIE_SECURE?: string;
+
+  @IsOptional() @IsIn(['lax', 'strict', 'none'])
+  PUBLIC_BOOKING_COOKIE_SAME_SITE?: string;
+
+  @IsOptional() @IsString()
+  PUBLIC_BOOKING_COOKIE_DOMAIN?: string;
 }
 
 export function validateEnvironment(config: Record<string, unknown>): EnvironmentVariables {

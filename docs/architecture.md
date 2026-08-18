@@ -48,6 +48,10 @@ The first matching workflow is hybrid and sequential: eligibility discovery supp
 
 Operational booking cancellation and rescheduling are coordinated by the Bookings module. Each command locks the booking and atomically closes actionable provider assignments, releases or cancels active capacity reservations, records histories, and updates booking state/scheduling context. Rescheduling never moves an existing reservation to a client-supplied slot or automatically initiates matching.
 
+The Payments module owns quote-backed self-funding initialisation, provider-neutral attempts, verified collection transactions, and the adapter boundary. Successful confirmation settles funding and advances the booking transactionally; failure does not advance it. Provider identifiers remain in payment records, and production fails closed without an explicitly configured real adapter.
+
+Public booking creation also creates an expiring booking-scoped session transactionally. Its raw token is delivered only through an HttpOnly cookie while a hash is persisted. Public reads and guest funding resolve the cookie to the exact booking; guest funding identifies its payer through the booking contact snapshot rather than a fabricated account.
+
 Provider offer controllers use the `PROVIDER` role plus an active-provider resolver. The role alone is insufficient without a live provider link, and administrative roles do not inherit provider access. Provider-facing read models intentionally expose only minimal operational booking data.
 
 Administrative assignment reads use a separate operational DTO from both persistence entities and provider-facing offers. ADMIN/OPERATIONS users can filter assignments by booking reference, provider, or status, inspect the safe booking/provider context, and invoke the same transactional confirmation service used by matching commands.

@@ -1,14 +1,18 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiConflictResponse, ApiCreatedResponse, ApiOperation, ApiTags, ApiUnprocessableEntityResponse } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req, Res } from '@nestjs/common';
+import { ApiBadRequestResponse, ApiConflictResponse, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse, ApiUnprocessableEntityResponse } from '@nestjs/swagger';
+import { Request, Response } from 'express';
 
 import { BookingResponseDto } from './dto/booking-response.dto';
 import { CreatePublicBookingDto } from './dto/create-public-booking.dto';
 import { PublicBookingsService } from './public-bookings.service';
+import { BookingReferenceParamsDto } from './dto/booking-reference-params.dto';
+import { PUBLIC_BOOKING_SESSION_COOKIE, PublicBookingSessionService } from './public-booking-session.service';
+import { PaymentFlowService } from '../payments/payment-flow.service';
 
 @ApiTags('Public bookings')
 @Controller('public/bookings')
 export class PublicBookingsController {
-  constructor(private readonly publicBookingsService: PublicBookingsService) {}
+  constructor(private readonly publicBookingsService: PublicBookingsService, private readonly sessions: PublicBookingSessionService, private readonly payments: PaymentFlowService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -17,7 +21,12 @@ export class PublicBookingsController {
   @ApiBadRequestResponse({ description: 'The input or selected catalogue items are invalid.' })
   @ApiUnprocessableEntityResponse({ description: 'No current catalogue price is available for the selected package and fulfilment mode.' })
   @ApiConflictResponse({ description: 'A booking reference could not be generated.' })
-  create(@Body() createPublicBookingDto: CreatePublicBookingDto): Promise<BookingResponseDto> {
-    return this.publicBookingsService.create(createPublicBookingDto);
+  async create(@Body() dto: CreatePublicBookingDto, @Res({ passthrough: true }) response: Response): Promise<BookingResponseDto> {
+    const created = await this.publicBookingsService.create(dto); response.cookie(PUBLIC_BOOKING_SESSION_COOKIE, created.sessionToken, this.sessions.cookieOptions()); return created.booking;
   }
+  @Get(':reference') @ApiCookieAuth(PUBLIC_BOOKING_SESSION_COOKIE) @ApiOperation({ summary: 'Retrieve the booking controlled by the guest session' }) @ApiOkResponse({ type: BookingResponseDto }) @ApiUnauthorizedResponse()
+  get(@Param() p: BookingReferenceParamsDto, @Req() request: Request) { return this.sessions.resolveBooking(this.readCookie(request), p.reference); }
+  @Post(':reference/funding/initialize') @HttpCode(HttpStatus.OK) @ApiCookieAuth(PUBLIC_BOOKING_SESSION_COOKIE) @ApiOperation({ summary: 'Initialize quote-backed guest self-funding' }) @ApiUnauthorizedResponse()
+  async initializeFunding(@Param() p: BookingReferenceParamsDto, @Req() request: Request) { await this.sessions.resolveBooking(this.readCookie(request), p.reference); return this.payments.initializeFunding(p.reference, null); }
+  private readCookie(request: Request): string | null { const prefix = `${PUBLIC_BOOKING_SESSION_COOKIE}=`; const entry = request.headers.cookie?.split(';').map((value) => value.trim()).find((value) => value.startsWith(prefix)); if (!entry) return null; try { return decodeURIComponent(entry.slice(prefix.length)); } catch { return null; } }
 }

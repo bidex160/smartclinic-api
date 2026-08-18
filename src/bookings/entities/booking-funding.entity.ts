@@ -6,16 +6,18 @@ import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, 
 import { BookingFundingSourceType } from '../enums/booking-funding-source-type.enum';
 import { BookingFundingStatus } from '../enums/booking-funding-status.enum';
 import { Booking } from './booking.entity';
+import { BookingContact } from './booking-contact.entity';
 
 @Entity('booking_funding')
 @Index('IDX_booking_funding_booking_status', ['bookingId', 'status'])
+@Index('UQ_booking_funding_self_booking', ['bookingId'], { unique: true, where: '"source_type" = \'SELF\'' })
 @Check(
   'CHK_booking_funding_responsible_party',
-  '"responsible_user_id" IS NULL OR "responsible_organisation_id" IS NULL',
+  '(CASE WHEN "responsible_user_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "responsible_organisation_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "payer_contact_id" IS NULL THEN 0 ELSE 1 END) <= 1',
 )
 @Check(
   'CHK_booking_funding_source_party_type',
-  '("source_type" = \'ORGANISATION\' AND "responsible_organisation_id" IS NOT NULL AND "responsible_user_id" IS NULL) OR ("source_type" IN (\'SELF\', \'FAMILY\', \'SPONSOR\') AND "responsible_user_id" IS NOT NULL AND "responsible_organisation_id" IS NULL) OR "source_type" = \'OTHER\'',
+  '("source_type" = \'ORGANISATION\' AND "responsible_organisation_id" IS NOT NULL) OR ("source_type" = \'SELF\' AND (("responsible_user_id" IS NOT NULL) <> ("payer_contact_id" IS NOT NULL))) OR ("source_type" IN (\'FAMILY\', \'SPONSOR\') AND "responsible_user_id" IS NOT NULL) OR "source_type" = \'OTHER\'',
 )
 @Check('CHK_booking_funding_amount_non_negative', '"amount" IS NULL OR "amount" >= 0')
 @Check('CHK_booking_funding_currency_format', '"currency" ~ \'^[A-Z]{3}$\'')
@@ -53,6 +55,10 @@ export class BookingFunding {
   })
   @JoinColumn({ name: 'responsible_organisation_id' })
   responsibleOrganisation!: Organisation | null;
+
+  @Column({ name: 'payer_contact_id', type: 'uuid', nullable: true }) payerContactId!: string | null;
+  @ManyToOne(() => BookingContact, (contact) => contact.fundingResponsibilities, { nullable: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'payer_contact_id' }) payerContact!: BookingContact | null;
 
   @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
   amount!: string | null;

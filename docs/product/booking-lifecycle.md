@@ -55,6 +55,8 @@ In the implemented sequential workflow, starting matching does not advance `DRAF
 
 Funding rejection or payment failure is likewise not a booking state. It updates the funding summary and leaves the booking in `AWAITING_FUNDING` until paid, re-funded, cancelled, or expired.
 
+The implemented self-funded v1 flow initialises exactly one quote-backed `SELF` obligation while moving `DRAFT → AWAITING_FUNDING`. A provider-verified successful collection atomically settles that obligation and moves `AWAITING_FUNDING → PENDING_PROVIDER_MATCH`; a failed attempt leaves both funding and booking awaiting payment. Repeated initialisation and confirmation do not duplicate lifecycle transitions.
+
 ## Configurable operating policies
 
 Cancellation, rescheduling, no-show, expiry, and refund outcomes are policy concerns, not additional hardcoded lifecycle rules. When the relevant modules are implemented, policies can define permitted actors, cut-off times, fees, refund eligibility, rescheduling limits, no-show handling, and required operational approval. A policy decision may cause a documented state transition, but it must not be inferred solely from the state name.

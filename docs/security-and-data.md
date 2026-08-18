@@ -32,6 +32,10 @@ Provider capacity reservations are internal scheduling records created and trans
 
 Booking cancellation and rescheduling commands are restricted to JWT-authenticated `ADMIN` or `OPERATIONS` users at `/api/v1/admin/bookings/:reference/cancel` and `/api/v1/admin/bookings/:reference/reschedule`. Responses contain only the booking reference, resulting status and scheduling context, plus assignment/reservation impact counts. They do not expose histories, funding, payment, patient, or provider internals.
 
+Administrative funding and test-adapter commands remain restricted to JWT-authenticated `ADMIN` or `OPERATIONS` users. Public funding initialisation requires the `smartclinic_public_booking_session` HttpOnly cookie bound to the exact reference; the reference alone grants nothing. Tokens are 256-bit random values, only SHA-256 hashes are stored, expiry/revocation is enforced, and wrong-reference failures are generic. Cookies are Secure in production, default to `SameSite=Lax`, are path-scoped, and credentialed CORS remains restricted to `FRONTEND_URL`.
+
+Public responses never contain raw tokens, token hashes, funding IDs, or internal booking UUIDs. Real production payment initiation remains deferred.
+
 Start-matching and stale-expiry command responses use minimized operational summaries rather than returning matching-service internals. They expose no provider candidate IDs, internal booking UUIDs, reason codes/notes, raw transitions, or per-assignment expiry detail beyond the intentionally returned new `assignmentId` and offer deadline.
 
 Provider self-service routes under `/api/v1/provider/offers` require the explicit `PROVIDER` role and resolve the authenticated user through the unique `Provider.user_id` link. The linked provider must remain `ACTIVE` and not deleted. `USER`, `ADMIN`, or `OPERATIONS` alone grants no provider access; a multi-role user must also explicitly hold `PROVIDER`. Role assignment and provider linking are controlled onboarding/admin responsibilities, never automatic registration behavior.

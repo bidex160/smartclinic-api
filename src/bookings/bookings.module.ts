@@ -21,11 +21,15 @@ import { ProviderAssignmentHistory } from '../providers/entities/provider-assign
 import { ProviderBookingReservation } from '../providers/entities/provider-booking-reservation.entity';
 import { BookingLifecycleService } from './booking-lifecycle.service';
 import { AdminBookingLifecycleController } from './admin-booking-lifecycle.controller';
+import { PublicBookingSession } from './entities/public-booking-session.entity';
+import { PublicBookingSessionService } from './public-booking-session.service';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
   imports: [
     HealthChecksModule,
     AuthModule,
+    PaymentsModule,
     TypeOrmModule.forFeature([
       Booking,
       BookingContact,
@@ -39,9 +43,10 @@ import { AdminBookingLifecycleController } from './admin-booking-lifecycle.contr
       ProviderAssignment,
       ProviderAssignmentHistory,
       ProviderBookingReservation,
+      PublicBookingSession,
     ]),
   ],
   controllers: [BookingsController, PublicBookingsController, AdminBookingLifecycleController],
-  providers: [BookingsService, PublicBookingsService, BookingLifecycleService],
+  providers: [BookingsService, PublicBookingsService, BookingLifecycleService, PublicBookingSessionService],
 })
 export class BookingsModule {}

@@ -6,6 +6,7 @@ import { PaymentTransaction } from './payment-transaction.entity';
 
 @Entity('payment_attempts')
 @Index('UQ_payment_attempts_idempotency_key', ['idempotencyKey'], { unique: true })
+@Index('UQ_payment_attempts_provider_reference', ['providerCode', 'providerReference'], { unique: true, where: '"provider_reference" IS NOT NULL' })
 @Index('IDX_payment_attempts_funding_status', ['bookingFundingId', 'status'])
 @Check('CHK_payment_attempts_amount_non_negative', '"amount" >= 0')
 @Check('CHK_payment_attempts_currency_format', '"currency" ~ \'^[A-Z]{3}$\'')

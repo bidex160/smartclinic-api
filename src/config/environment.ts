@@ -6,6 +6,7 @@ export interface AppConfiguration {
   frontendUrl: string;
   auth: { jwtSecret: string; jwtExpiresIn: string; refreshTokenTtl: number; cookieSecure: boolean; cookieSameSite: 'lax'|'strict'|'none'; cookieDomain?: string };
   providerMatching: { offerTtlMinutes: number };
+  publicBookingSession: { ttlSeconds: number; cookieSecure: boolean; cookieSameSite: 'lax'|'strict'|'none'; cookieDomain?: string };
   database: {
     enabled: boolean;
     host: string;
@@ -42,6 +43,12 @@ export function createAppConfiguration(
     },
     providerMatching: {
       offerTtlMinutes: getNumber(environment.PROVIDER_OFFER_TTL_MINUTES, 30),
+    },
+    publicBookingSession: {
+      ttlSeconds: getNumber(environment.PUBLIC_BOOKING_SESSION_TTL, 60 * 60 * 24 * 7),
+      cookieSecure: environment.PUBLIC_BOOKING_COOKIE_SECURE === 'true' || environmentName === 'production',
+      cookieSameSite: (environment.PUBLIC_BOOKING_COOKIE_SAME_SITE as 'lax'|'strict'|'none' | undefined) ?? 'lax',
+      cookieDomain: environment.PUBLIC_BOOKING_COOKIE_DOMAIN,
     },
     database: {
       enabled: environment.DATABASE_ENABLED !== 'false',

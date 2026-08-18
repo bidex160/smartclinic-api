@@ -6,6 +6,7 @@ This reference fixes the v1 vocabulary for booking and funding. It describes pro
 | --- | --- | --- |
 | **Booker** | The person or authorised organisation administrator who initiates and manages a booking. A public visitor may be a booker without a registered account. | The booker is not automatically the participant or funder. |
 | **Booking Contact** | An immutable snapshot of the public visitor's name and contact details at booking creation. | It is not a User account, does not grant access, and does not replace future account linking. |
+| **Public Booking Session** | A short-lived booking-bound proof of control represented by an opaque HttpOnly cookie and a server-side token hash. | The public booking reference is never an authority credential. |
 | **Participant** | The patient who receives one Smart Health Check and whose health data is recorded. | Every booking has exactly one participant. |
 | **Payer/Funder** | An individual, organisation, programme, or other source responsible for some or all funding. | A booking can have multiple funders; it must not rely on one `payerId`. |
 | **Booking** | One request to provide one selected Health Check package to exactly one participant at a requested time/location and fulfilment mode. | A booking is not a family basket or multi-participant appointment. |
@@ -44,4 +45,6 @@ Booking for another person requires authority and consent rules that will be des
 
 ## Public booking intake
 
-A public visitor may create a booking without a `User` record. The platform creates a separate `Patient` for the participant and a `BookingContact` snapshot for the visitor; it does not deduplicate patients, auto-create a User account, or mark a visitor as an active user. A later, explicit account-linking journey may connect a registered account where product consent and authority rules permit it.
+A public visitor may create a booking without a `User` record. The platform creates a separate `Patient`, a `BookingContact` snapshot, and a booking-bound session in one transaction; it does not auto-create a User. Only the session hash is stored and the raw token is delivered in an HttpOnly cookie.
+
+The session proves temporary control only of its bound booking. It is required for safe public retrieval and guest funding, expires server-side, may be revoked, and cannot authorize another reference. Successful use updates `last_used_at`; v1 does not rotate tokens on read.

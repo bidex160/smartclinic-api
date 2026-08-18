@@ -11,6 +11,7 @@ import { BookingStatus } from '../enums/booking-status.enum';
 import { BookingFunding } from './booking-funding.entity';
 import { BookingContact } from './booking-contact.entity';
 import { BookingStatusHistory } from './booking-status-history.entity';
+import { PublicBookingSession } from './public-booking-session.entity';
 
 @Entity('bookings')
 @Index('UQ_bookings_booking_reference', ['bookingReference'], { unique: true })
@@ -131,4 +132,7 @@ export class Booking {
 
   @OneToOne(() => BookingContact, (contact) => contact.booking)
   contact!: BookingContact | null;
+
+  @OneToMany(() => PublicBookingSession, (session) => session.booking)
+  publicSessions!: PublicBookingSession[];
 }

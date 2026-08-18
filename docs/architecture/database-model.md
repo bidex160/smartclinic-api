@@ -19,6 +19,7 @@ Use `uuid` internal primary keys for all tables. Store timestamps as `timestampt
 | Catalogue | `package_prices` | Effective-dated public catalogue prices by package and fulfilment mode. |
 | Booking | `bookings` | One request to deliver one package to exactly one participant. |
 | Booking | `booking_contacts` | Immutable public-booker contact snapshot for bookings created without an account. |
+| Booking | `public_booking_sessions` | Hashed, expiring and revocable proof of control for one public booking. |
 | Booking | `booking_status_history` | Append-only booking lifecycle transitions. |
 | Funding | `booking_funding` | One or more funding obligations/sources for a booking. |
 | Payments | `payment_attempts` | Provider-neutral attempts to collect a funding obligation. |
@@ -220,6 +221,7 @@ This table is append-only: no updates or soft deletes. The current booking statu
 | `source_type` | funding-source enum, non-null | Initial: `SELF`, `FAMILY`, `SPONSOR`, `ORGANISATION`, `OTHER`. |
 | `responsible_user_id` | `uuid`, nullable FK to `users` | Individual responsible party, when applicable. |
 | `responsible_organisation_id` | `uuid`, nullable FK to `organisations` | Organisation responsible party, when applicable. |
+| `payer_contact_id` | `uuid`, nullable composite FK with `booking_id` to `booking_contacts` | Guest payer snapshot belonging to the same booking. |
 | `amount` | `numeric(12,2)`, nullable | Required before actual collection/settlement. |
 | `percentage` | `numeric(5,2)`, nullable | Optional allocation expression; range 0–100. |
 | `currency` | `char(3)`, non-null | Currency of amount/obligation. |
@@ -227,6 +229,12 @@ This table is append-only: no updates or soft deletes. The current booking statu
 | `created_at`, `updated_at` | `timestamptz`, non-null | Current funding-obligation audit fields. |
 
 Use explicit nullable foreign keys rather than a generic polymorphic `party_type`/`party_id`. A check constraint should allow at most one of the two current responsible-party FKs and require one for `SELF`, `FAMILY`, `SPONSOR`, and `ORGANISATION` as applicable. Future sponsored programmes should add an explicit programme FK/table rather than overload `OTHER` indefinitely. A funding source may fund 100%, or multiple rows may fund fixed amounts or percentages. Before payment, percentages must resolve to exact amounts against the immutable booking quote.
+
+V1 adds a partial unique index for one `SELF` obligation per booking. Registered self-funding uses the responsible user; guest self-funding uses the same-booking payer contact. Checks require exactly one of those for `SELF` and prevent user, organisation and contact responsibilities from being combined.
+
+#### `public_booking_sessions`
+
+Each row stores a booking FK, unique SHA-256 token hash, expiry, optional revocation, timestamps, and optional last-use time. Raw tokens are never persisted. Multiple rows permit future rotation/recovery; v1 creates one at intake and updates `last_used_at` without rotating ordinary reads.
 
 ### Payments
 
@@ -260,6 +268,8 @@ Use explicit nullable foreign keys rather than a generic polymorphic `party_type
 | `created_at` | `timestamptz`, non-null | Record creation time. |
 
 Transactions are immutable financial records: do not soft-delete or rewrite a successful collection to represent a refund. Create a linked refund transaction instead. If a pending transaction needs status updates, retain provider-event/audit evidence in the future Payments event table.
+
+Payment attempts additionally have a unique non-null `(provider_code, provider_reference)` index. Payment transactions have a unique non-null provider-reference index for v1 deduplication. Together with `payment_attempts.idempotency_key`, these constraints protect initiation and verified confirmation against duplicate processing. Provider-specific references remain confined to these payment tables.
 
 ### Provider matching
 
