@@ -47,6 +47,8 @@ UNFULFILLABLE → CANCELLED
 
 The state sequence maps the earlier suggested milestones as follows: `PENDING_PAYMENT` becomes booking `AWAITING_FUNDING` plus payment/funding state; `PAYMENT_CONFIRMED` is a Payments/Sponsorships/Organisations outcome; `PENDING_PROVIDER_MATCH` remains booking state; `PROVIDER_ASSIGNED` occurs only after acceptance; and the proposed `PROVIDER_ACCEPTED` is an assignment state/event rather than a second booking state.
 
+The first clinical encounter foundation makes provider result capture the concrete service-delivery transition. The authenticated Provider owning the confirmed assignment may start from `PROVIDER_ASSIGNED` or `SCHEDULED`, moving the booking to `IN_PROGRESS` with history. Accepting `PROVIDER_ASSIGNED` is a temporary minimum because no separate scheduling command currently exists. Encounter completion requires all six structured measurements and atomically moves the booking from `IN_PROGRESS` to `COMPLETED` with history. Measurement interpretation and patient result access remain separate future workflows.
+
 ## Rejection and failure handling
 
 Provider rejection is not normally a booking rejection: it records a declined provider offer and returns the booking to `PENDING_PROVIDER_MATCH`. If matching cannot find a suitable provider, the booking moves to `UNFULFILLABLE`, not automatically to `CANCELLED`. Operations may later retry matching, change fulfilment details, or cancel it in line with policy.

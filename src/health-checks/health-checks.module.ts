@@ -12,11 +12,21 @@ import { HealthCheckPackagesService } from './health-check-packages.service';
 import { PackagePricingService } from './package-pricing.service';
 import { PackagePricesService } from './package-prices.service';
 import { AdminPackagePricesController } from './admin-package-prices.controller';
+import { ProvidersModule } from '../providers/providers.module';
+import { Booking } from '../bookings/entities/booking.entity';
+import { BookingStatusHistory } from '../bookings/entities/booking-status-history.entity';
+import { ProviderAssignment } from '../providers/entities/provider-assignment.entity';
+import { HealthCheckEncounter } from './entities/health-check-encounter.entity';
+import { HealthCheckMeasurement } from './entities/health-check-measurement.entity';
+import { HealthCheckMeasurementHistory } from './entities/health-check-measurement-history.entity';
+import { HealthCheckEncounterHistory } from './entities/health-check-encounter-history.entity';
+import { ProviderHealthCheckEncountersService } from './provider-health-check-encounters.service';
+import { ProviderHealthCheckEncountersController } from './provider-health-check-encounters.controller';
 
 @Module({
-  imports: [AuthModule, TypeOrmModule.forFeature([HealthCheckPackage, FulfilmentMode, PackagePrice])],
-  controllers: [HealthCheckPackagesController, FulfilmentModesController, AdminPackagePricesController],
-  providers: [HealthCheckPackagesService, FulfilmentModesService, PackagePricingService, PackagePricesService],
+  imports: [AuthModule, ProvidersModule, TypeOrmModule.forFeature([HealthCheckPackage, FulfilmentMode, PackagePrice, Booking, BookingStatusHistory, ProviderAssignment, HealthCheckEncounter, HealthCheckMeasurement, HealthCheckMeasurementHistory, HealthCheckEncounterHistory])],
+  controllers: [HealthCheckPackagesController, FulfilmentModesController, AdminPackagePricesController, ProviderHealthCheckEncountersController],
+  providers: [HealthCheckPackagesService, FulfilmentModesService, PackagePricingService, PackagePricesService, ProviderHealthCheckEncountersService],
   exports: [PackagePricingService],
 })
 export class HealthChecksModule {}

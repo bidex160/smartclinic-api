@@ -4,7 +4,7 @@
 
 The Smart Health Check is SmartClinic's primary service and the subject of the platform's principal action: **Book My Smart Health Check**.
 
-The initial check records blood pressure, blood glucose, BMI, temperature, oxygen saturation, and pulse. This list defines the initial product scope only; it does not define database fields, clinical workflow, reference ranges, or result interpretation.
+The initial check records blood pressure, blood glucose, BMI, temperature, oxygen saturation, and pulse. The first capture foundation stores these as explicit measurement codes on a HealthCheckEncounter; it does not define reference ranges, diagnosis, alerts, or interpretation.
 
 Initial packages are Essential and Complete. The initial fulfilment modes are `PROVIDER_LOCATION` and `HOME_VISIT`; Home Visit is not a package. Package benefits, estimated duration, eligibility, fulfilment modes, and pricing are configurable business data. The final price may depend on both package and fulfilment mode and its effective date. Additional values can be introduced later, and prices must not be hardcoded.
 
@@ -42,9 +42,30 @@ The participant's health data is sensitive. Booking and payment authority do not
 
 Patient health information, booking information, payment information, provider information, and organisation information will each have distinct access controls. The exact authorisation rules are intentionally deferred.
 
+## Encounter capture foundation
+
+`HealthCheckEncounter` is separate from Booking and is bound to the booking's confirmed ProviderAssignment and Provider. V1 permits one encounter per booking. Its lifecycle is `DRAFT → IN_PROGRESS → COMPLETED`; starting records `startedAt`, completion records `completedAt`, and completed encounters cannot be edited normally.
+
+The authenticated, active Provider owning the confirmed assignment may start, view, save, and complete through `/api/v1/provider/bookings/:reference/health-check`. ADMIN or OPERATIONS roles do not inherit clinical write access unless the user separately has `PROVIDER` and resolves to the owning active Provider. Public booking sessions and patient/public endpoints expose no encounter or measurement data.
+
+| Code | Values | Unit |
+| --- | --- | --- |
+| `BLOOD_PRESSURE` | systolic + diastolic | `mmHg` |
+| `BLOOD_GLUCOSE` | primary | `mg/dL` |
+| `BMI` | primary | `kg/m²` |
+| `TEMPERATURE` | primary | `°C` |
+| `OXYGEN_SATURATION` | primary | `%` |
+| `PULSE` | primary | `bpm` |
+
+`mg/dL` is the explicit Nigeria-facing v1 glucose capture unit and still requires clinical/product confirmation before multi-unit support. Units are assigned server-side rather than accepted from clients. Validation enforces numeric shape, paired blood-pressure values, and absence of a secondary value for other codes; it deliberately does not encode normal/abnormal ranges.
+
+One mutable current row is retained per encounter/code. Each creation or update appends an immutable measurement-history snapshot containing previous/new values, actor, and timestamp. Encounter lifecycle transitions have a separate append-only history. Detailed correction/version workflows remain future work.
+
+Starting an encounter moves a confirmed `PROVIDER_ASSIGNED` or `SCHEDULED` booking to `IN_PROGRESS` with BookingStatusHistory. Completion requires all six current measurements and atomically moves encounter and booking to `COMPLETED`, appending both histories. `PROVIDER_ASSIGNED` is temporarily accepted because no distinct operational scheduling command currently exists.
+
 ## State and history guidance
 
-The Smart Health Check itself should not initially receive a standalone lifecycle enum simply because a booking exists. Once results collection is implemented, the clinical encounter/result record may need its own status and audit trail, separate from booking completion. For now:
+The Smart Health Check encounter has its own lifecycle and audit trail because clinical capture is now implemented. Booking remains the fulfilment lifecycle and does not embed measurements:
 
 - The selected package and fulfilment mode are separate relational references to configurable catalogue data, with retained booking-time snapshots where commercially necessary.
 - Party relationships are relational records or foreign-key references with explicit role semantics, not a single overloaded `user` field.

@@ -1,0 +1,85 @@
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BookingStatus } from '../bookings/enums/booking-status.enum';
+import { ProviderAssignmentStatus } from '../providers/enums/provider-assignment-status.enum';
+import { HealthCheckEncounter } from './entities/health-check-encounter.entity';
+import { HealthCheckEncounterHistory } from './entities/health-check-encounter-history.entity';
+import { HealthCheckMeasurement } from './entities/health-check-measurement.entity';
+import { HealthCheckMeasurementHistory } from './entities/health-check-measurement-history.entity';
+import { HealthCheckEncounterStatus } from './enums/health-check-encounter-status.enum';
+import { HealthCheckMeasurementCode } from './enums/health-check-measurement-code.enum';
+import { ProviderHealthCheckEncountersService } from './provider-health-check-encounters.service';
+import { Booking } from '../bookings/entities/booking.entity';
+import { BookingStatusHistory } from '../bookings/entities/booking-status-history.entity';
+import { ProviderAssignment } from '../providers/entities/provider-assignment.entity';
+
+describe('ProviderHealthCheckEncountersService', () => {
+  const user: any = { id: 'user-1' }; const provider: any = { id: 'provider-1' };
+  let booking: any, assignment: any, encounter: any, measurements: any[], encounterHistory: any[], measurementHistory: any[], bookingHistory: any[];
+  let encounterRepository: any, bookingRepository: any, assignmentRepository: any, measurementRepository: any, manager: any, subject: ProviderHealthCheckEncountersService;
+  const dto: any = { bloodPressure: { systolic: 120, diastolic: 80 }, bloodGlucose: { value: 95 }, bmi: { value: 24.2 }, temperature: { value: 36.8 }, oxygenSaturation: { value: 98 }, pulse: { value: 72 } };
+  const response: any = { bookingReference: 'SC-2026-7F23B0C9D1E4', status: HealthCheckEncounterStatus.IN_PROGRESS, measurements: [] };
+
+  beforeEach(() => {
+    booking = { id: 'booking-1', bookingReference: response.bookingReference, status: BookingStatus.PROVIDER_ASSIGNED };
+    assignment = { id: 'assignment-1', bookingId: booking.id, providerId: provider.id, status: ProviderAssignmentStatus.CONFIRMED };
+    encounter = null; measurements = []; encounterHistory = []; measurementHistory = []; bookingHistory = [];
+    bookingRepository = { findOne: jest.fn(async () => booking), save: jest.fn(async (value) => value) };
+    assignmentRepository = { findOne: jest.fn(async () => assignment) };
+    encounterRepository = { manager: null, findOne: jest.fn(async () => encounter), create: jest.fn((value) => value), save: jest.fn(async (value) => { encounter = { id: value.id ?? 'encounter-1', createdAt: new Date(), updatedAt: new Date(), ...value }; return encounter; }), createQueryBuilder: jest.fn() };
+    measurementRepository = { find: jest.fn(async () => measurements), create: jest.fn((value) => value), save: jest.fn(async (value) => { const index = measurements.findIndex((row) => row.id === value.id); const saved = { id: value.id ?? `measurement-${measurements.length + 1}`, ...value }; if (index >= 0) measurements[index] = saved; else measurements.push(saved); return saved; }) };
+    const historyRepository = (target: any[]) => ({ create: jest.fn((value) => value), save: jest.fn(async (value) => { target.push(value); return value; }) });
+    const encounterHistoryRepository = historyRepository(encounterHistory); const measurementHistoryRepository = historyRepository(measurementHistory); const bookingHistoryRepository = historyRepository(bookingHistory);
+    manager = { getRepository: jest.fn((entity) => entity === Booking ? bookingRepository : entity === ProviderAssignment ? assignmentRepository : entity === HealthCheckEncounter ? encounterRepository : entity === HealthCheckMeasurement ? measurementRepository : entity === HealthCheckEncounterHistory ? encounterHistoryRepository : entity === HealthCheckMeasurementHistory ? measurementHistoryRepository : entity === BookingStatusHistory ? bookingHistoryRepository : {}), transaction: jest.fn(async (work) => work(manager)) };
+    encounterRepository.manager = manager;
+    subject = new ProviderHealthCheckEncountersService(encounterRepository, { resolve: jest.fn().mockResolvedValue(provider) } as any);
+    jest.spyOn(subject, 'get').mockResolvedValue(response);
+  });
+
+  it('starts a confirmed provider encounter and advances booking with both histories', async () => {
+    await subject.start(user, booking.bookingReference);
+    expect(encounter).toMatchObject({ providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS, startedAt: expect.any(Date) });
+    expect(booking.status).toBe(BookingStatus.IN_PROGRESS); expect(encounterHistory).toHaveLength(1); expect(bookingHistory[0]).toMatchObject({ fromStatus: BookingStatus.PROVIDER_ASSIGNED, toStatus: BookingStatus.IN_PROGRESS, actorUserId: user.id });
+  });
+
+  it('allows SCHEDULED start and makes an already in-progress start idempotent', async () => {
+    booking.status = BookingStatus.SCHEDULED; await subject.start(user, booking.bookingReference);
+    const historyCount = encounterHistory.length; booking.status = BookingStatus.IN_PROGRESS; encounter.status = HealthCheckEncounterStatus.IN_PROGRESS;
+    await subject.start(user, booking.bookingReference); expect(encounterHistory).toHaveLength(historyCount);
+  });
+
+  it.each([BookingStatus.CANCELLED, BookingStatus.EXPIRED, BookingStatus.COMPLETED])('rejects starting a %s booking', async (status) => { booking.status = status; await expect(subject.start(user, booking.bookingReference)).rejects.toBeInstanceOf(ConflictException); });
+  it('denies a provider without the confirmed assignment', async () => { assignmentRepository.findOne.mockResolvedValue(null); await expect(subject.start(user, booking.bookingReference)).rejects.toBeInstanceOf(NotFoundException); });
+  it('denies a conflicting provider encounter', async () => { encounter = { id: 'encounter-1', providerId: 'other', providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS }; await expect(subject.start(user, booking.bookingReference)).rejects.toBeInstanceOf(NotFoundException); });
+
+  it('saves all six structurally distinct measurements and appends creation history', async () => {
+    encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS };
+    await subject.saveMeasurements(user, booking.bookingReference, dto);
+    expect(measurements).toHaveLength(6); expect(measurements.find((row) => row.code === HealthCheckMeasurementCode.BLOOD_PRESSURE)).toMatchObject({ valueNumeric: '120.0000', valueSecondaryNumeric: '80.0000', unit: 'mmHg' });
+    expect(measurements.find((row) => row.code === HealthCheckMeasurementCode.BLOOD_GLUCOSE)).toMatchObject({ valueNumeric: '95.0000', valueSecondaryNumeric: null, unit: 'mg/dL' });
+    expect(measurementHistory).toHaveLength(6); expect(measurementHistory.every((row) => row.previousValue === null)).toBe(true);
+  });
+
+  it('updates one current row per code and records previous/new audit values', async () => {
+    encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS };
+    await subject.saveMeasurements(user, booking.bookingReference, dto); const ids = measurements.map((row) => row.id); dto.pulse.value = 75;
+    await subject.saveMeasurements(user, booking.bookingReference, dto);
+    expect(measurements).toHaveLength(6); expect(measurements.map((row) => row.id)).toEqual(ids); expect(measurementHistory).toHaveLength(12);
+    expect(measurementHistory.at(-1)).toMatchObject({ previousValue: { primary: '72.0000', secondary: null, unit: 'bpm' }, newValue: { primary: '75.0000', secondary: null, unit: 'bpm' } });
+  });
+
+  it('rejects edits after completion', async () => { encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.COMPLETED }; await expect(subject.saveMeasurements(user, booking.bookingReference, dto)).rejects.toBeInstanceOf(ConflictException); });
+
+  it('requires all six measurements before completing', async () => { encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS }; booking.status = BookingStatus.IN_PROGRESS; measurements.push({ code: HealthCheckMeasurementCode.PULSE }); await expect(subject.complete(user, booking.bookingReference)).rejects.toBeInstanceOf(ConflictException); });
+
+  it('completes the encounter and booking transactionally with histories', async () => {
+    encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS }; booking.status = BookingStatus.IN_PROGRESS;
+    measurements = Object.values(HealthCheckMeasurementCode).map((code) => ({ code })); await subject.complete(user, booking.bookingReference);
+    expect(encounter.status).toBe(HealthCheckEncounterStatus.COMPLETED); expect(encounter.completedAt).toEqual(expect.any(Date)); expect(booking.status).toBe(BookingStatus.COMPLETED); expect(encounterHistory).toHaveLength(1); expect(bookingHistory[0]).toMatchObject({ fromStatus: BookingStatus.IN_PROGRESS, toStatus: BookingStatus.COMPLETED });
+  });
+
+  it('maps only the safe provider encounter projection', () => {
+    const mapped = (subject as any).toResponse({ status: HealthCheckEncounterStatus.IN_PROGRESS, startedAt: new Date(), completedAt: null, booking: { bookingReference: booking.bookingReference, participant: { givenName: 'Ada', familyName: 'Okafor' }, healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential' }, fulfilmentMode: { code: 'HOME_VISIT', name: 'Home Visit' } }, measurements: [{ code: HealthCheckMeasurementCode.BLOOD_PRESSURE, valueNumeric: '120.0000', valueSecondaryNumeric: '80.0000', unit: 'mmHg', recordedAt: new Date() }] });
+    expect(mapped).toMatchObject({ bookingReference: booking.bookingReference, participant: { givenName: 'Ada', familyName: 'Okafor' }, measurements: [{ value: 120, secondaryValue: 80, unit: 'mmHg' }] });
+    expect(mapped).not.toHaveProperty('providerId'); expect(mapped).not.toHaveProperty('history'); expect(mapped).not.toHaveProperty('funding');
+  });
+});

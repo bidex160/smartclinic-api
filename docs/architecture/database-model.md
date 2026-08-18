@@ -90,6 +90,10 @@ The nullable unique `providers.user_id` is now managed through explicit ADMIN/OP
 
 `provider_invitations` records a Provider, normalized invited email, unique SHA-256 token hash, `PENDING`/`ACCEPTED`/`REVOKED`/`EXPIRED` status, expiry/consumption/revocation times, and creating admin User. A partial unique index prevents duplicate pending invitations for the same provider/email. Raw tokens, full invitation links, email vendor data, and passwords never enter this table. Invitation delivery currently returns a transient operational result, so no delivery columns or email-event table are required.
 
+`health_check_encounters` separates clinical delivery from Booking. It stores the booking, Provider, confirmed ProviderAssignment, `DRAFT`/`IN_PROGRESS`/`COMPLETED`/`CANCELLED` status, and start/completion timestamps. Booking uniqueness enforces one v1 encounter, while the composite assignment/provider/booking foreign key prevents cross-scope clinical records. Timestamp checks require started/completed values for the corresponding states.
+
+`health_check_measurements` stores one current row per encounter and explicit code. Blood pressure uses primary systolic plus required secondary diastolic; all other initial codes prohibit a secondary value. Units are server-owned strings under the documented v1 code policy. `health_check_measurement_history` appends immutable previous/new JSON value snapshots, action, actor, and timestamp on every create/update. `health_check_encounter_history` separately appends encounter status transitions. These histories are not provider response fields.
+
 #### `provider_availability`
 
 Each row contains provider, optional provider-service and provider-location scopes, a named `day_of_week_enum`, local start/end `time`, IANA timezone, active flag, and timestamps. Composite foreign keys prevent cross-provider service or location references. A check requires start before end, so v1 blocks cannot cross midnight.

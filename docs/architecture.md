@@ -68,6 +68,8 @@ Provider invitations are a Providers-domain onboarding mechanism, not a generic 
 
 Transactional email is a narrow Notifications-domain port. Provider invitation logic composes provider-neutral text/HTML and calls the selected adapter only after persistence commits. The unavailable, capture-only test, and production Resend adapters share the same contract; future adapters can be added without changing onboarding logic. Delivery results are transient, so no email-delivery schema or vendor identifier is introduced.
 
+Clinical capture is a Health Checks-domain boundary. A booking owns at most one encounter, which is scoped by a composite foreign key to its confirmed assignment/provider/booking tuple. Current structured measurements remain separate from Booking; append-only encounter and measurement histories retain lifecycle and value-change audit context. Provider controllers map explicit DTOs and never return persistence entities or audit rows.
+
 Administrative assignment reads use a separate operational DTO from both persistence entities and provider-facing offers. ADMIN/OPERATIONS users can filter assignments by booking reference, provider, or status, inspect the safe booking/provider context, and invoke the same transactional confirmation service used by matching commands.
 
 ## Layer responsibilities
