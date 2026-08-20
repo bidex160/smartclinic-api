@@ -1,2 +1,21 @@
-import { ServiceUnavailableException } from '@nestjs/common'; import { AdminPaymentFlowController } from './admin-payment-flow.controller';
-describe('AdminPaymentFlowController production boundary',()=>{it('disables test payment initiation in production',()=>{const previous=process.env.NODE_ENV;process.env.NODE_ENV='production';try{const controller=new AdminPaymentFlowController({initiatePayment:jest.fn()} as never);expect(()=>controller.initiate({reference:'SC-2026-ABCDEF123456'},{idempotencyKey:'PAYMENT-ONE'})).toThrow(ServiceUnavailableException);}finally{process.env.NODE_ENV=previous;}});});
+import { ServiceUnavailableException } from "@nestjs/common";
+import { AdminPaymentFlowController } from "./admin-payment-flow.controller";
+describe("AdminPaymentFlowController production boundary", () => {
+  it("disables test payment initiation in production", () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      const controller = new AdminPaymentFlowController({
+        initiatePayment: jest.fn(),
+      } as never);
+      expect(() =>
+        controller.initiate(
+          { reference: "SC-2026-ABCDEF123456" },
+          { idempotencyKey: "PAYMENT-ONE" },
+        ),
+      ).toThrow(ServiceUnavailableException);
+    } finally {
+      process.env.NODE_ENV = previous;
+    }
+  });
+});
