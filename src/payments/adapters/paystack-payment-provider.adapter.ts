@@ -64,15 +64,12 @@ export class PaystackPaymentProviderAdapter implements PaymentProviderAdapter {
       reference: input.paymentReference,
       metadata: { booking_reference: input.bookingReference },
     };
-    // if (this.config.payments.paystack.callbackUrl)
-    //   body.callback_url = this.config.payments.paystack.callbackUrl;
+    if (this.config.payments.paystack.callbackUrl)
+      body.callback_url = this.config.payments.paystack.callbackUrl;
 
     const envelope = await this.request<PaystackInitializeData>(
       "/transaction/initialize",
-      { method: "POST", body: JSON.stringify(body) , headers: {
-        'content-type': 'application/json',
-            'Authorization': `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-      }},
+      { method: "POST", body: JSON.stringify(body) },
     );
 
     if (
@@ -87,8 +84,7 @@ export class PaystackPaymentProviderAdapter implements PaymentProviderAdapter {
       providerReference: envelope.data.reference,
       status: PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION,
       accessCode: envelope.data.access_code,
-      checkoutUrl: null,
-      // checkoutUrl: envelope.data.authorization_url,
+      checkoutUrl: envelope.data.authorization_url,
     };
   }
   async verifyPayment(reference: string): Promise<VerifyPaymentResult> {
@@ -97,7 +93,6 @@ export class PaystackPaymentProviderAdapter implements PaymentProviderAdapter {
       { method: "GET" },
     );
     const data = envelope.data;
-    console.log(data)
     if (
       !envelope.status ||
       !data?.reference ||

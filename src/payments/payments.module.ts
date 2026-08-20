@@ -16,7 +16,7 @@ import { PaymentTransaction } from "./entities/payment-transaction.entity";
 import { PaymentFlowService } from "./payment-flow.service";
 import { PAYMENT_PROVIDER_ADAPTER } from "./payment-provider.adapter";
 import { PaystackWebhookController } from "./paystack-webhook.controller";
-import { User } from "src/users/entities/user.entity";
+import { User } from "../users/entities/user.entity";
 @Module({
   imports: [
     AuthModule,

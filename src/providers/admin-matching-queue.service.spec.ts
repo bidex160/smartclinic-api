@@ -22,8 +22,8 @@ describe('AdminMatchingQueueService', () => {
     const result = await subject.list({ page: 1, limit: 25 });
     expect(builder.where).toHaveBeenCalledWith('booking.status = :bookingStatus', { bookingStatus: BookingStatus.PENDING_PROVIDER_MATCH });
     expect(builder.andWhere).toHaveBeenCalledWith(expect.stringContaining('ready_funding.status'), expect.objectContaining({ settledFunding: BookingFundingStatus.SETTLED }));
-    expect(builder.orderBy).toHaveBeenCalledWith('booking.created_at', 'ASC');
-    expect(builder.addOrderBy).toHaveBeenCalledWith('booking.booking_reference', 'ASC');
+    expect(builder.orderBy).toHaveBeenCalledWith('booking.createdAt', 'ASC');
+    expect(builder.addOrderBy).toHaveBeenCalledWith('booking.bookingReference', 'ASC');
     expect(result.items[0].readiness).toBe(MatchingQueueReadiness.READY);
   });
 
@@ -48,9 +48,9 @@ describe('AdminMatchingQueueService', () => {
   it('applies useful filters and paginates deterministically', async () => {
     const query: any = { bookingStatus: BookingStatus.UNFULFILLABLE, packageId: '10000000-0000-4000-8000-000000000001', fulfilmentModeId: '20000000-0000-4000-8000-000000000001', preferredDate: '2026-09-01', providerAssignmentStatus: ProviderAssignmentStatus.EXPIRED, bookingReference: 'SC-2026-000000000001', page: 2, limit: 10 };
     const result = await subject.list(query);
-    expect(builder.andWhere).toHaveBeenCalledWith('booking.health_check_package_id = :packageId', { packageId: query.packageId });
-    expect(builder.andWhere).toHaveBeenCalledWith('booking.fulfilment_mode_id = :fulfilmentModeId', { fulfilmentModeId: query.fulfilmentModeId });
-    expect(builder.andWhere).toHaveBeenCalledWith('booking.booking_reference = :bookingReference', { bookingReference: query.bookingReference });
+    expect(builder.andWhere).toHaveBeenCalledWith('booking.healthCheckPackageId = :packageId', { packageId: query.packageId });
+    expect(builder.andWhere).toHaveBeenCalledWith('booking.fulfilmentModeId = :fulfilmentModeId', { fulfilmentModeId: query.fulfilmentModeId });
+    expect(builder.andWhere).toHaveBeenCalledWith('booking.bookingReference = :bookingReference', { bookingReference: query.bookingReference });
     expect(builder.andWhere).toHaveBeenCalledWith(expect.stringContaining('latest_assignment.status'), { assignmentStatus: ProviderAssignmentStatus.EXPIRED });
     expect(builder.skip).toHaveBeenCalledWith(10); expect(builder.take).toHaveBeenCalledWith(10);
     expect(result).toMatchObject({ page: 2, limit: 10, total: 1, totalPages: 1 });

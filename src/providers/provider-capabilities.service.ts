@@ -279,19 +279,19 @@ export class ProviderCapabilitiesService {
       .leftJoinAndSelect(
         "locationLinks.providerLocation",
         "location",
-        "location.is_active = true",
+        "location.isActive = true",
       )
-      .where("service.health_check_package_id = :healthCheckPackageId", {
+      .where("service.healthCheckPackageId = :healthCheckPackageId", {
         healthCheckPackageId,
       })
-      .andWhere("service.fulfilment_mode_id = :fulfilmentModeId", {
+      .andWhere("service.fulfilmentModeId = :fulfilmentModeId", {
         fulfilmentModeId,
       })
-      .andWhere("service.is_active = true")
+      .andWhere("service.isActive = true")
       .andWhere("provider.status = :status", { status: ProviderStatus.ACTIVE })
-      .andWhere("provider.deleted_at IS NULL")
-      .andWhere("package.is_active = true")
-      .andWhere("mode.is_active = true");
+      .andWhere("provider.deletedAt IS NULL")
+      .andWhere("package.isActive = true")
+      .andWhere("mode.isActive = true");
     if (window) {
       const dayOfWeek = this.validateAvailabilityWindow(window);
       const applicableLocation = `(scope.provider_location_id IS NULL OR EXISTS (SELECT 1 FROM provider_locations scoped_location INNER JOIN provider_service_locations scoped_link ON scoped_link.provider_location_id = scoped_location.id WHERE scoped_location.id = scope.provider_location_id AND scoped_location.is_active = true AND scoped_link.provider_service_id = service.id))`;

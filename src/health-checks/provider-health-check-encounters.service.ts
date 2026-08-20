@@ -50,7 +50,7 @@ export class ProviderHealthCheckEncountersService {
 
   async get(user: User, reference: string): Promise<ProviderHealthCheckEncounterResponseDto> {
     const provider = await this.currentProvider.resolve(user);
-    const encounter = await this.encounters.createQueryBuilder('encounter').innerJoinAndSelect('encounter.booking', 'booking').innerJoinAndSelect('booking.participant', 'participant').innerJoinAndSelect('booking.healthCheckPackage', 'package').innerJoinAndSelect('booking.fulfilmentMode', 'mode').innerJoinAndSelect('encounter.providerAssignment', 'assignment').leftJoinAndSelect('encounter.measurements', 'measurement').where('booking.booking_reference = :reference', { reference }).andWhere('encounter.provider_id = :providerId', { providerId: provider.id }).andWhere('assignment.status = :confirmed', { confirmed: ProviderAssignmentStatus.CONFIRMED }).orderBy('measurement.code', 'ASC').getOne();
+    const encounter = await this.encounters.createQueryBuilder('encounter').innerJoinAndSelect('encounter.booking', 'booking').innerJoinAndSelect('booking.participant', 'participant').innerJoinAndSelect('booking.healthCheckPackage', 'package').innerJoinAndSelect('booking.fulfilmentMode', 'mode').innerJoinAndSelect('encounter.providerAssignment', 'assignment').leftJoinAndSelect('encounter.measurements', 'measurement').where('booking.bookingReference = :reference', { reference }).andWhere('encounter.providerId = :providerId', { providerId: provider.id }).andWhere('assignment.status = :confirmed', { confirmed: ProviderAssignmentStatus.CONFIRMED }).orderBy('measurement.code', 'ASC').getOne();
     if (!encounter) this.notFound();
     return this.toResponse(encounter);
   }

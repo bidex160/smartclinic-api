@@ -272,7 +272,6 @@ export class PaymentFlowService {
     const verified = await this.provider.verifyPayment(
       context.attempt.providerReference,
     );
-    console.log(verified)
     await this.applyVerification(context.attempt.id, null, verified);
     return this.getPublicPaymentStatus(reference);
   }

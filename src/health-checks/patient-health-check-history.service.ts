@@ -19,10 +19,10 @@ export class PatientHealthCheckHistoryService {
   async list(user: User, query: PatientHealthCheckHistoryQueryDto): Promise<PatientHealthCheckHistoryResponseDto> {
     const patient = await this.patients.findOne({ where: { userId: user.id }, withDeleted: true });
     if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE) return this.empty(query);
-    const builder = this.bookings.createQueryBuilder('booking').innerJoinAndSelect('booking.healthCheckPackage', 'package').innerJoinAndSelect('booking.fulfilmentMode', 'fulfilmentMode').where('booking.participant_patient_id = :patientId', { patientId: patient.id });
+    const builder = this.bookings.createQueryBuilder('booking').innerJoinAndSelect('booking.healthCheckPackage', 'package').innerJoinAndSelect('booking.fulfilmentMode', 'fulfilmentMode').where('booking.participantPatientId = :patientId', { patientId: patient.id });
     if (query.bookingStatus) builder.andWhere('booking.status = :bookingStatus', { bookingStatus: query.bookingStatus });
     if (query.encounterStatus) builder.andWhere(`EXISTS (SELECT 1 FROM health_check_encounters filtered_encounter WHERE filtered_encounter.booking_id = booking.id AND filtered_encounter.status = :encounterStatus)`, { encounterStatus: query.encounterStatus });
-    builder.orderBy('booking.created_at', 'DESC').addOrderBy('booking.booking_reference', 'DESC').skip((query.page - 1) * query.limit).take(query.limit);
+    builder.orderBy('booking.createdAt', 'DESC').addOrderBy('booking.bookingReference', 'DESC').skip((query.page - 1) * query.limit).take(query.limit);
     const [bookings, total] = await builder.getManyAndCount(); const bookingIds = bookings.map((booking) => booking.id);
     const encounters = bookingIds.length ? await this.encounters.find({ where: { bookingId: In(bookingIds) } }) : [];
     const assignments = bookingIds.length ? await this.assignments.find({ where: { bookingId: In(bookingIds), status: ProviderAssignmentStatus.CONFIRMED }, relations: { provider: true }, order: { createdAt: 'DESC', id: 'DESC' } }) : [];

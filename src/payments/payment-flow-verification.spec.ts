@@ -13,17 +13,17 @@ describe('PaymentFlowService verified provider values', () => {
 
   function setup() {
     const booking: any = { id: 'booking', bookingReference: 'SC-2026-ABCDEF123456', status: BookingStatus.AWAITING_FUNDING };
-    const funding: any = { id: 'funding', booking, amount: '12500.00', currency: 'NGN', status: BookingFundingStatus.PENDING };
-    const attempt: any = { id: 'attempt', bookingFunding: funding, amount: '12500.00', currency: 'NGN', providerCode: 'PAYSTACK', providerReference: 'SC-PAY-ref', status: PaymentAttemptStatus.PENDING_CONFIRMATION, checkoutUrl: null };
+    const funding: any = { id: 'funding', bookingId: booking.id, booking, amount: '12500.00', currency: 'NGN', status: BookingFundingStatus.PENDING };
+    const attempt: any = { id: 'attempt', bookingFundingId: funding.id, bookingFunding: funding, amount: '12500.00', currency: 'NGN', providerCode: 'PAYSTACK', providerReference: 'SC-PAY-ref', status: PaymentAttemptStatus.PENDING_CONFIRMATION, checkoutUrl: null };
     const attempts: any = { findOne: jest.fn().mockResolvedValue(attempt), save: jest.fn(async (value: any) => value) };
-    const bookings: any = { save: jest.fn(async (value: any) => value) };
-    const fundings: any = { save: jest.fn(async (value: any) => value) };
+    const bookings: any = { findOne: jest.fn().mockResolvedValue(booking), save: jest.fn(async (value: any) => value) };
+    const fundings: any = { findOne: jest.fn().mockResolvedValue(funding), save: jest.fn(async (value: any) => value) };
     const transactions: any = { findOne: jest.fn().mockResolvedValue(null), create: jest.fn((value: any) => value), save: jest.fn(async (value: any) => value) };
     const history: any = { create: jest.fn((value: any) => value), save: jest.fn(async (value: any) => value) };
     const manager: any = { getRepository: jest.fn((entity: any) => entity === PaymentAttempt ? attempts : entity === Booking ? bookings : entity === BookingFunding ? fundings : entity === PaymentTransaction ? transactions : history) };
     manager.transaction = jest.fn(async (work: any) => work(manager));
     bookings.manager = manager;
-    return { subject: new PaymentFlowService(bookings, attempts, {} as never), attempt, funding, booking, transactions, history };
+    return { subject: new PaymentFlowService(bookings, attempts, {} as never), attempt, funding, booking, attempts, fundings, bookings, transactions, history };
   }
 
   it.each([{ label: 'amount', change: { amount: '1.00' } }, { label: 'currency', change: { currency: 'USD' } }, { label: 'reference', change: { providerReference: 'SC-PAY-other' } }])('rejects $label mismatch', async ({ change }) => {
@@ -48,5 +48,13 @@ describe('PaymentFlowService verified provider values', () => {
     await context.subject.applyProviderVerification('PAYSTACK', 'SC-PAY-ref', expected);
     expect(context.transactions.save).toHaveBeenCalledTimes(1);
     expect(context.history.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('locks attempt, funding, and booking separately without joined relations', async () => {
+    const context = setup(); await context.subject.applyProviderVerification('PAYSTACK', 'SC-PAY-ref', expected);
+    expect(context.attempts.findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'attempt' }, lock: { mode: 'pessimistic_write' } }));
+    expect(context.fundings.findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'funding' }, lock: { mode: 'pessimistic_write' } }));
+    expect(context.bookings.findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'booking' }, lock: { mode: 'pessimistic_write' } }));
+    for (const repository of [context.attempts, context.fundings, context.bookings]) for (const [options] of repository.findOne.mock.calls) if (options.lock) expect(options).not.toHaveProperty('relations');
   });
 });

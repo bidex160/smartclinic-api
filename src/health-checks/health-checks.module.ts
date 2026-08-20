@@ -29,7 +29,7 @@ import { MeHealthResultsController } from "./me-health-results.controller";
 import { AdminHealthResultAccessController } from "./admin-health-result-access.controller";
 import { PublicHealthResultsController } from "./public-health-results.controller";
 import { PatientHealthCheckHistoryService } from "./patient-health-check-history.service";
-import { User } from "src/users/entities/user.entity";
+import { User } from "../users/entities/user.entity";
 
 @Module({
   imports: [
@@ -48,7 +48,7 @@ import { User } from "src/users/entities/user.entity";
       HealthCheckEncounterHistory,
       HealthResultAccessGrant,
       Patient,
-      User
+      User,
     ]),
   ],
   controllers: [

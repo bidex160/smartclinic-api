@@ -27,7 +27,7 @@ export class HealthResultAccessService {
   async getRegisteredResult(user: User, bookingReference: string): Promise<HealthResultResponseDto> {
     const patient = await this.patients.findOne({ where: { userId: user.id }, withDeleted: true });
     if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE) this.denyRegistered();
-    const encounter = await this.completedResultQuery(this.encounters.manager, patient.id).andWhere('booking.booking_reference = :bookingReference', { bookingReference }).getOne();
+    const encounter = await this.completedResultQuery(this.encounters.manager, patient.id).andWhere('booking.bookingReference = :bookingReference', { bookingReference }).getOne();
     if (!encounter) this.denyRegistered();
     return this.toResult(encounter);
   }
@@ -92,7 +92,7 @@ export class HealthResultAccessService {
   }
 
   private completedResultQuery(manager: EntityManager, patientId: string) {
-    return manager.getRepository(HealthCheckEncounter).createQueryBuilder('encounter').innerJoinAndSelect('encounter.booking', 'booking').innerJoinAndSelect('booking.healthCheckPackage', 'package').innerJoinAndSelect('encounter.provider', 'provider').leftJoinAndSelect('encounter.measurements', 'measurement').where('booking.participant_patient_id = :patientId', { patientId }).andWhere('encounter.status = :completed', { completed: HealthCheckEncounterStatus.COMPLETED }).orderBy('measurement.code', 'ASC');
+    return manager.getRepository(HealthCheckEncounter).createQueryBuilder('encounter').innerJoinAndSelect('encounter.booking', 'booking').innerJoinAndSelect('booking.healthCheckPackage', 'package').innerJoinAndSelect('encounter.provider', 'provider').leftJoinAndSelect('encounter.measurements', 'measurement').where('booking.participantPatientId = :patientId', { patientId }).andWhere('encounter.status = :completed', { completed: HealthCheckEncounterStatus.COMPLETED }).orderBy('measurement.code', 'ASC');
   }
   private toResult(encounter: HealthCheckEncounter): HealthResultResponseDto { return { bookingReference: encounter.booking.bookingReference, completedAt: encounter.completedAt!, healthCheckPackage: { code: encounter.booking.healthCheckPackage.code, name: encounter.booking.healthCheckPackage.name }, provider: encounter.provider ? { displayName: encounter.provider.displayName } : null, measurements: encounter.measurements.map((measurement) => ({ code: measurement.code, value: Number(measurement.valueNumeric), secondaryValue: measurement.valueSecondaryNumeric === null ? null : Number(measurement.valueSecondaryNumeric), unit: measurement.unit, recordedAt: measurement.recordedAt })) }; }
   private grantResponse(grant: HealthResultAccessGrant, bookingReference: string): HealthResultAccessGrantResponseDto { return { id: grant.id, bookingReference, status: grant.status, expiresAt: grant.expiresAt, revokedAt: grant.revokedAt, createdAt: grant.createdAt }; }

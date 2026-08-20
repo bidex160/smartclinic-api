@@ -84,17 +84,22 @@ export class ProviderMatchingService {
         async (manager) => {
           const assignmentRepository =
             manager.getRepository(ProviderAssignment);
+          const bookingRepository = manager.getRepository(Booking);
           const assignment = await assignmentRepository.findOne({
             where: { id: assignmentId },
-            relations: { booking: true },
             lock: { mode: "pessimistic_write" },
           });
           if (!assignment)
             throw new NotFoundException("Provider assignment not found");
           this.assertProviderOwnsOffer(assignment, providerId);
           this.assertOfferCanReceiveResponse(assignment, now);
-          this.assertBookingAwaitingMatch(assignment.booking);
-          const lockedContext = bookingToAvailabilityWindow(assignment.booking);
+          const lockedBooking = await bookingRepository.findOne({
+            where: { id: assignment.bookingId },
+            lock: { mode: "pessimistic_write" },
+          });
+          if (!lockedBooking) throw new NotFoundException("Booking not found");
+          this.assertBookingAwaitingMatch(lockedBooking);
+          const lockedContext = bookingToAvailabilityWindow(lockedBooking);
           if (!lockedContext.ready)
             throw new BadRequestException({
               message: "Booking scheduling context is incomplete",
@@ -130,6 +135,7 @@ export class ProviderMatchingService {
             "PROVIDER_ACCEPTED",
             null,
           );
+          assignment.booking = lockedBooking;
           return assignment;
         },
       );
@@ -151,16 +157,21 @@ export class ProviderMatchingService {
     const declined = await this.assignments.manager.transaction(
       async (manager) => {
         const repository = manager.getRepository(ProviderAssignment);
+        const bookingRepository = manager.getRepository(Booking);
         const assignment = await repository.findOne({
           where: { id: assignmentId },
-          relations: { booking: true },
           lock: { mode: "pessimistic_write" },
         });
         if (!assignment)
           throw new NotFoundException("Provider assignment not found");
         this.assertProviderOwnsOffer(assignment, providerId);
         this.assertOfferCanReceiveResponse(assignment, now);
-        this.assertBookingAwaitingMatch(assignment.booking);
+        const lockedBooking = await bookingRepository.findOne({
+          where: { id: assignment.bookingId },
+          lock: { mode: "pessimistic_write" },
+        });
+        if (!lockedBooking) throw new NotFoundException("Booking not found");
+        this.assertBookingAwaitingMatch(lockedBooking);
         assignment.status = ProviderAssignmentStatus.DECLINED;
         assignment.respondedAt = now;
         assignment.reasonCode = "PROVIDER_DECLINED";
@@ -175,6 +186,7 @@ export class ProviderMatchingService {
           "PROVIDER_DECLINED",
           reason ?? null,
         );
+        assignment.booking = lockedBooking;
         return assignment;
       },
     );
@@ -196,7 +208,6 @@ export class ProviderMatchingService {
         const bookingRepository = manager.getRepository(Booking);
         const assignment = await assignmentRepository.findOne({
           where: { id: assignmentId },
-          relations: { booking: true },
           lock: { mode: "pessimistic_write" },
         });
         if (!assignment)
@@ -205,7 +216,12 @@ export class ProviderMatchingService {
           throw new ConflictException(
             "Only an accepted assignment can be confirmed",
           );
-        this.assertBookingAwaitingMatch(assignment.booking);
+        const lockedBooking = await bookingRepository.findOne({
+          where: { id: assignment.bookingId },
+          lock: { mode: "pessimistic_write" },
+        });
+        if (!lockedBooking) throw new NotFoundException("Booking not found");
+        this.assertBookingAwaitingMatch(lockedBooking);
         if (
           await assignmentRepository.exists({
             where: {
@@ -248,11 +264,12 @@ export class ProviderMatchingService {
         await this.transitionBooking(
           bookingRepository,
           manager.getRepository(BookingStatusHistory),
-          assignment.booking,
+          lockedBooking,
           BookingStatus.PROVIDER_ASSIGNED,
           actorUserId,
           "PROVIDER_ASSIGNMENT_CONFIRMED",
         );
+        assignment.booking = lockedBooking;
         return assignment;
       },
     );
