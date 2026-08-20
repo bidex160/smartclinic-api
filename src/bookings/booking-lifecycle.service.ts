@@ -43,7 +43,8 @@ export class BookingLifecycleService {
       const impact = await this.closeAssignmentsAndReservations(manager, booking.id, actorUserId, 'BOOKING_RESCHEDULED', null, ProviderBookingReservationStatus.RELEASED);
       const fromStatus = booking.status;
       const toStatus = [BookingStatus.DRAFT, BookingStatus.AWAITING_FUNDING].includes(fromStatus) ? fromStatus : BookingStatus.PENDING_PROVIDER_MATCH;
-      booking.preferredDate = dto.preferredDate; booking.preferredTimeWindowStart = dto.preferredTimeFrom; booking.preferredTimeWindowEnd = dto.preferredTimeTo; booking.preferredTimezone = dto.preferredTimezone; booking.status = toStatus;
+      booking.preferredDate = dto.preferredDate; booking.preferredTimeWindowStart = dto.preferredTimeFrom; booking.preferredTimeWindowEnd = dto.preferredTimeTo; booking.preferredTimezone = dto.preferredTimezone;
+      booking.scheduledDate = null; booking.scheduledTimeFrom = null; booking.scheduledTimeTo = null; booking.scheduledTimezone = null; booking.providerLocationId = null; booking.scheduledAt = null; booking.scheduledByUserId = null; booking.scheduledStartsAt = null; booking.scheduledEndsAt = null; booking.status = toStatus;
       await manager.getRepository(Booking).save(booking);
       await this.appendBookingHistory(manager, booking.id, fromStatus, toStatus, actorUserId, 'BOOKING_RESCHEDULED', 'Scheduling context updated; fresh provider matching required where applicable');
       return AdminBookingLifecycleResponseDto.fromEntity(booking, impact.assignments, impact.reservations);

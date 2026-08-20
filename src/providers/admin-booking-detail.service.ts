@@ -16,7 +16,7 @@ export class AdminBookingDetailService {
   constructor(@InjectRepository(Booking) private readonly bookings: Repository<Booking>, @InjectRepository(BookingFunding) private readonly funding: Repository<BookingFunding>, @InjectRepository(PaymentAttempt) private readonly attempts: Repository<PaymentAttempt>, @InjectRepository(PaymentTransaction) private readonly transactions: Repository<PaymentTransaction>, @InjectRepository(ProviderAssignment) private readonly assignments: Repository<ProviderAssignment>) {}
 
   async get(reference: string): Promise<AdminBookingDetailResponseDto> {
-    const booking = await this.bookings.findOne({ where: { bookingReference: reference }, relations: { healthCheckPackage: true, fulfilmentMode: true, participant: true, contact: true, booker: true } });
+    const booking = await this.bookings.findOne({ where: { bookingReference: reference }, relations: { healthCheckPackage: true, fulfilmentMode: true, participant: true, contact: true, booker: true, providerLocation: true } });
     if (!booking) throw new NotFoundException('Booking not found');
     const funding = await this.funding.findOne({ where: { bookingId: booking.id, sourceType: BookingFundingSourceType.SELF } });
     const attempt = funding ? await this.attempts.findOne({ where: { bookingFundingId: funding.id }, order: { createdAt: 'DESC', id: 'DESC' } }) : null;
@@ -28,6 +28,7 @@ export class AdminBookingDetailService {
       package: { code: booking.healthCheckPackage.code, name: booking.healthCheckPackage.name }, fulfilmentMode: { code: booking.fulfilmentMode.code, name: booking.fulfilmentMode.name }, participant: { givenName: booking.participant.givenName, familyName: booking.participant.familyName },
       bookerContact: { givenName: guestContact?.givenName ?? null, familyName: guestContact?.familyName ?? null, email: guestContact?.email ?? booking.booker?.email ?? null, phone: guestContact?.phone ?? null },
       preferredDate: booking.preferredDate, preferredTimeFrom: booking.preferredTimeWindowStart, preferredTimeTo: booking.preferredTimeWindowEnd, preferredTimezone: booking.preferredTimezone, locationNote: booking.preferredLocationNote,
+      confirmedSchedule: booking.scheduledDate ? { date: booking.scheduledDate, timeFrom: booking.scheduledTimeFrom!, timeTo: booking.scheduledTimeTo!, timezone: booking.scheduledTimezone!, scheduledAt: booking.scheduledAt!, providerLocation: booking.providerLocation ? { id: booking.providerLocation.id, name: booking.providerLocation.name, addressLine1: booking.providerLocation.addressLine1, addressLine2: booking.providerLocation.addressLine2, city: booking.providerLocation.city, state: booking.providerLocation.state, countryCode: booking.providerLocation.countryCode } : null } : null,
       quotedAmount: booking.quotedAmount, quotedCurrency: booking.currency,
       funding: { fundingStatus: funding?.status ?? null, fundingType: funding?.sourceType ?? null, amount: funding?.amount ?? null, currency: funding?.currency ?? null },
       payment: { status: attempt?.status ?? null, paymentReference: attempt?.providerReference ?? null, paidAt: transaction?.occurredAt ?? null },

@@ -12,6 +12,8 @@ class AdminBookingContactDto { @ApiPropertyOptional({ nullable: true }) givenNam
 class AdminBookingFundingSummaryDto { @ApiPropertyOptional({ enum: BookingFundingStatus, nullable: true }) fundingStatus!: BookingFundingStatus | null; @ApiPropertyOptional({ enum: BookingFundingSourceType, nullable: true }) fundingType!: BookingFundingSourceType | null; @ApiPropertyOptional({ nullable: true }) amount!: string | null; @ApiPropertyOptional({ nullable: true }) currency!: string | null; }
 class AdminBookingPaymentSummaryDto { @ApiPropertyOptional({ enum: PaymentAttemptStatus, nullable: true }) status!: PaymentAttemptStatus | null; @ApiPropertyOptional({ nullable: true }) paymentReference!: string | null; @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true }) paidAt!: Date | null; }
 class AdminBookingAssignmentSummaryDto { @ApiPropertyOptional({ format: 'uuid', nullable: true }) assignmentId!: string | null; @ApiPropertyOptional({ enum: ProviderAssignmentStatus, nullable: true }) assignmentStatus!: ProviderAssignmentStatus | null; @ApiPropertyOptional({ format: 'uuid', nullable: true }) providerId!: string | null; @ApiPropertyOptional({ nullable: true }) providerName!: string | null; @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true }) offeredAt!: Date | null; @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true }) acceptedAt!: Date | null; @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true }) confirmedAt!: Date | null; @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true }) expiresAt!: Date | null; }
+class AdminBookingConfirmedLocationDto { @ApiProperty({ format: 'uuid' }) id!: string; @ApiProperty() name!: string; @ApiProperty() addressLine1!: string; @ApiPropertyOptional({ nullable: true }) addressLine2!: string | null; @ApiProperty() city!: string; @ApiProperty() state!: string; @ApiProperty() countryCode!: string; }
+class AdminBookingConfirmedScheduleDto { @ApiProperty({ format: 'date' }) date!: string; @ApiProperty() timeFrom!: string; @ApiProperty() timeTo!: string; @ApiProperty() timezone!: string; @ApiProperty({ format: 'date-time' }) scheduledAt!: Date; @ApiPropertyOptional({ type: AdminBookingConfirmedLocationDto, nullable: true }) providerLocation!: AdminBookingConfirmedLocationDto | null; }
 
 export class AdminBookingDetailResponseDto {
   @ApiProperty() bookingReference!: string;
@@ -27,6 +29,7 @@ export class AdminBookingDetailResponseDto {
   @ApiPropertyOptional({ nullable: true }) preferredTimeTo!: string | null;
   @ApiPropertyOptional({ nullable: true }) preferredTimezone!: string | null;
   @ApiPropertyOptional({ nullable: true }) locationNote!: string | null;
+  @ApiPropertyOptional({ type: AdminBookingConfirmedScheduleDto, nullable: true }) confirmedSchedule!: AdminBookingConfirmedScheduleDto | null;
   @ApiPropertyOptional({ nullable: true }) quotedAmount!: string | null;
   @ApiPropertyOptional({ nullable: true }) quotedCurrency!: string | null;
   @ApiProperty({ type: AdminBookingFundingSummaryDto }) funding!: AdminBookingFundingSummaryDto;

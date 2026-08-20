@@ -5,7 +5,7 @@ import { AdminProviderAssignmentQueryDto } from './dto/admin-provider-assignment
 import { AdminProviderAssignmentResponseDto } from './dto/admin-provider-assignment-response.dto';
 import { ProviderAssignment } from './entities/provider-assignment.entity';
 
-const ADMIN_ASSIGNMENT_RELATIONS = { booking: { healthCheckPackage: true, fulfilmentMode: true, participant: true }, provider: true } as const;
+const ADMIN_ASSIGNMENT_RELATIONS = { booking: { healthCheckPackage: true, fulfilmentMode: true, participant: true, providerLocation: true }, provider: true } as const;
 
 @Injectable()
 export class AdminProviderAssignmentsService {

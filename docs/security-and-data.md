@@ -32,6 +32,8 @@ Provider capacity reservations are internal scheduling records created and trans
 
 Booking cancellation and rescheduling commands are restricted to JWT-authenticated `ADMIN` or `OPERATIONS` users at `/api/v1/admin/bookings/:reference/cancel` and `/api/v1/admin/bookings/:reference/reschedule`. Responses contain only the booking reference, resulting status and scheduling context, plus assignment/reservation impact counts. They do not expose histories, funding, payment, patient, or provider internals.
 
+Formal appointment confirmation at `/api/v1/admin/bookings/:reference/schedule` has the same ADMIN/OPERATIONS boundary. It accepts no provider or reservation authority from the client: the confirmed assignment determines the provider, and capability/location/availability/capacity are revalidated server-side. Its response is an explicit operational DTO without contact, payment, reservation IDs, or histories. Patient and provider projections distinguish the confirmed appointment from the original preference and minimize location detail for their audience.
+
 Administrative funding and test-adapter commands remain restricted to JWT-authenticated `ADMIN` or `OPERATIONS` users. Public funding initialisation requires the `smartclinic_public_booking_session` HttpOnly cookie bound to the exact reference; the reference alone grants nothing. Tokens are 256-bit random values, only SHA-256 hashes are stored, expiry/revocation is enforced, and wrong-reference failures are generic. Cookies are Secure in production, default to `SameSite=Lax`, are path-scoped, and credentialed CORS remains restricted to `FRONTEND_URL`.
 
 Public responses never contain raw tokens, token hashes, funding IDs, or internal booking UUIDs. Real production payment initiation remains deferred.

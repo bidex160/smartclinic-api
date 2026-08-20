@@ -9,7 +9,7 @@ import { ProviderAssignmentStatus } from './enums/provider-assignment-status.enu
 import { ProviderMatchingService } from './provider-matching.service';
 
 const DEFAULT_OFFER_STATUSES = [ProviderAssignmentStatus.OFFERED, ProviderAssignmentStatus.ACCEPTED, ProviderAssignmentStatus.CONFIRMED];
-const OFFER_RELATIONS = { booking: { healthCheckPackage: true, fulfilmentMode: true, participant: true } } as const;
+const OFFER_RELATIONS = { booking: { healthCheckPackage: true, fulfilmentMode: true, participant: true, providerLocation: true } } as const;
 
 @Injectable()
 export class ProviderOffersService {

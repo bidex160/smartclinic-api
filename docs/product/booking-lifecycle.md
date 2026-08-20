@@ -47,7 +47,7 @@ UNFULFILLABLE → CANCELLED
 
 The state sequence maps the earlier suggested milestones as follows: `PENDING_PAYMENT` becomes booking `AWAITING_FUNDING` plus payment/funding state; `PAYMENT_CONFIRMED` is a Payments/Sponsorships/Organisations outcome; `PENDING_PROVIDER_MATCH` remains booking state; `PROVIDER_ASSIGNED` occurs only after acceptance; and the proposed `PROVIDER_ACCEPTED` is an assignment state/event rather than a second booking state.
 
-The first clinical encounter foundation makes provider result capture the concrete service-delivery transition. The authenticated Provider owning the confirmed assignment may start from `PROVIDER_ASSIGNED` or `SCHEDULED`, moving the booking to `IN_PROGRESS` with history. Accepting `PROVIDER_ASSIGNED` is a temporary minimum because no separate scheduling command currently exists. Encounter completion requires all six structured measurements and atomically moves the booking from `IN_PROGRESS` to `COMPLETED` with history. Measurement interpretation and patient result access remain separate future workflows.
+The scheduling command now makes the lifecycle boundary explicit. A confirmed assignment leaves the booking at `PROVIDER_ASSIGNED`; an authorised operations user confirms the actual appointment and advances it to `SCHEDULED`. Only the authenticated Provider owning the confirmed assignment may then start the encounter, moving `SCHEDULED` to `IN_PROGRESS` with history. Encounter completion requires all six structured measurements and atomically moves the booking from `IN_PROGRESS` to `COMPLETED` with history. The former direct `PROVIDER_ASSIGNED → IN_PROGRESS` shortcut is no longer accepted.
 
 ## Rejection and failure handling
 
@@ -81,7 +81,7 @@ A booking may omit scheduling preference entirely. If a preferred date or either
 
 This complete scheduling context can be transformed into provider-availability discovery input. Existing development rows may retain a null timezone, but an incomplete scheduling context produces an explicit “not ready for availability matching” result rather than an assumed zone.
 
-Provider acceptance uses the same complete context to create a `HELD` provider-capacity reservation. Operations confirmation promotes that reservation to `CONFIRMED` while advancing the booking to `PROVIDER_ASSIGNED`. A future cancellation/rescheduling workflow must release or cancel the reservation before making the provider capacity available again; cancellation policy itself remains deferred.
+Provider acceptance uses the preferred context to create a `HELD` provider-capacity reservation. Operations assignment confirmation promotes that reservation to `CONFIRMED` while advancing the booking to `PROVIDER_ASSIGNED`. Scheduling records a separate confirmed local date, time range, IANA timezone, actor and timestamp without overwriting the preference. The command revalidates capability, weekly availability, exceptions and capacity; it transactionally reconciles the confirmed reservation to the final appointment window. PostgreSQL's active-reservation exclusion constraint prevents a conflicting replacement.
 
 Operational cancellation is available only to authenticated `ADMIN` and `OPERATIONS` users. It rejects `COMPLETED`, already `CANCELLED`, and `EXPIRED` bookings; expiry is treated as a distinct terminal outcome rather than relabelled as cancellation. Cancellation atomically moves the booking to `CANCELLED`, closes any `OFFERED`, `ACCEPTED`, or `CONFIRMED` assignment, appends both histories, and marks active reservations `CANCELLED`. Payment reversal and refund policy remain separate and deferred.
 
@@ -89,7 +89,7 @@ Operational rescheduling requires a complete new local date/time window and IANA
 
 `booking_status_history` supports a same-status row with the `BOOKING_RESCHEDULED` reason code when schedule context changes without a status transition. This is the current audit representation; a richer general booking-event log may replace it later.
 
-Location semantics remain separate: `PROVIDER_LOCATION` may later require a selected provider location or geographic preference, while `HOME_VISIT` requires a structured visit address and service-area policy. `preferred_location_note` is free text and must not be treated as a verified or routable address.
+For `PROVIDER_LOCATION`, scheduling requires an active location owned by the confirmed provider and linked to the exact package/mode capability. For `HOME_VISIT`, the confirmed provider location remains null. A structured visit address and service-area policy remain deferred; `preferred_location_note` is free text and is never treated as a verified or routable address.
 
 ## Decisions required before entities
 

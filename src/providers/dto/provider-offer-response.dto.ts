@@ -4,6 +4,7 @@ import { ProviderAssignmentStatus } from '../enums/provider-assignment-status.en
 
 class ProviderOfferCatalogueItemDto { @ApiProperty() code!: string; @ApiProperty() name!: string; }
 class ProviderOfferParticipantDto { @ApiProperty() givenName!: string; @ApiProperty() familyName!: string; }
+class ProviderOfferConfirmedScheduleDto { @ApiProperty({ format: 'date' }) date!: string; @ApiProperty() timeFrom!: string; @ApiProperty() timeTo!: string; @ApiProperty() timezone!: string; @ApiPropertyOptional({ nullable: true }) providerLocationName!: string | null; }
 
 export class ProviderOfferResponseDto {
   @ApiProperty({ format: 'uuid' }) assignmentId!: string;
@@ -20,6 +21,7 @@ export class ProviderOfferResponseDto {
   @ApiPropertyOptional({ nullable: true }) preferredTimeWindowStart!: string | null;
   @ApiPropertyOptional({ nullable: true }) preferredTimeWindowEnd!: string | null;
   @ApiPropertyOptional({ nullable: true }) preferredTimezone!: string | null;
+  @ApiPropertyOptional({ type: ProviderOfferConfirmedScheduleDto, nullable: true }) confirmedSchedule!: ProviderOfferConfirmedScheduleDto | null;
   @ApiPropertyOptional({ nullable: true }) responseReason!: string | null;
 
   static fromEntity(value: ProviderAssignment): ProviderOfferResponseDto {
@@ -31,6 +33,7 @@ export class ProviderOfferResponseDto {
       participant: { givenName: value.booking.participant.givenName, familyName: value.booking.participant.familyName },
       preferredDate: value.booking.preferredDate, preferredTimeWindowStart: value.booking.preferredTimeWindowStart,
       preferredTimeWindowEnd: value.booking.preferredTimeWindowEnd, preferredTimezone: value.booking.preferredTimezone,
+      confirmedSchedule: value.booking.scheduledDate ? { date: value.booking.scheduledDate, timeFrom: value.booking.scheduledTimeFrom!, timeTo: value.booking.scheduledTimeTo!, timezone: value.booking.scheduledTimezone!, providerLocationName: value.booking.providerLocation?.name ?? null } : null,
       responseReason: value.reasonNote,
     };
   }

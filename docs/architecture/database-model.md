@@ -116,6 +116,8 @@ A reservation links exactly one provider assignment to its provider and booking,
 
 Booking cancellation changes active reservation rows to `CANCELLED`; operational rescheduling changes them to `RELEASED`. In both cases the related actionable assignment becomes `CANCELLED`, with assignment and booking history appended in the same transaction. Reservation rows are retained rather than deleted. No schema migration is required for these operations because the existing status enums and reason/history fields cover the lifecycle.
 
+Formal scheduling preserves Booking's preferred fields and fills its confirmed `scheduled_*` fields. The assignment's confirmed reservation is locked separately and reconciled to the final local window in the same transaction; its location is set only after provider ownership, activation, and capability linkage are validated. The GiST exclusion constraint remains the concurrency backstop.
+
 #### `organisations`
 
 | Field | Proposed type / nullability | Notes |
@@ -189,7 +191,12 @@ An exclusion constraint prevents overlapping active date ranges for the same pac
 | `preferred_date` | `date`, nullable | Requested date before an appointment is confirmed. |
 | `preferred_time_window_start`, `preferred_time_window_end` | `time`, nullable | Requested local time range; both values are required together and end must be later. |
 | `preferred_timezone` | `varchar`, nullable | IANA timezone used to interpret preferred date/time. Nullable for older/no-preference rows; required by application validation when scheduling preference is supplied. |
-| `scheduled_starts_at`, `scheduled_ends_at` | `timestamptz`, nullable | Confirmed appointment values, not required for a draft. |
+| `scheduled_date` | `date`, nullable | Confirmed appointment date, separate from the participant's preference. |
+| `scheduled_time_from`, `scheduled_time_to` | `time`, nullable | Confirmed local half-open appointment range; all confirmed local scheduling fields are present together and end is later. |
+| `scheduled_timezone` | `varchar`, nullable | IANA timezone for the confirmed local appointment; v1 requires an exact identifier match with availability. |
+| `provider_location_id` | `uuid`, nullable FK | Confirmed active capability-linked location for `PROVIDER_LOCATION`; null for `HOME_VISIT`. |
+| `scheduled_at`, `scheduled_by_user_id` | `timestamptz`, nullable FK | When and by which authenticated operations user the appointment was confirmed. |
+| `scheduled_starts_at`, `scheduled_ends_at` | `timestamptz`, nullable | Legacy/reserved UTC appointment columns; the formal v1 command uses the explicit local confirmed fields above. |
 | `preferred_location_note` | `text`, nullable | Minimum v1 preference field; do not place detailed address/health data here. |
 | `cancellation_reason` | `varchar`, nullable | Set only when relevant; policy controls permitted values. |
 | `expires_at` | `timestamptz`, nullable | Explicit expiry deadline when an expiry policy applies. |

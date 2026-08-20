@@ -20,7 +20,7 @@ describe('ProviderHealthCheckEncountersService', () => {
   const response: any = { bookingReference: 'SC-2026-7F23B0C9D1E4', status: HealthCheckEncounterStatus.IN_PROGRESS, measurements: [] };
 
   beforeEach(() => {
-    booking = { id: 'booking-1', bookingReference: response.bookingReference, status: BookingStatus.PROVIDER_ASSIGNED };
+    booking = { id: 'booking-1', bookingReference: response.bookingReference, status: BookingStatus.SCHEDULED };
     assignment = { id: 'assignment-1', bookingId: booking.id, providerId: provider.id, status: ProviderAssignmentStatus.CONFIRMED };
     encounter = null; measurements = []; encounterHistory = []; measurementHistory = []; bookingHistory = [];
     bookingRepository = { findOne: jest.fn(async () => booking), save: jest.fn(async (value) => value) };
@@ -38,14 +38,16 @@ describe('ProviderHealthCheckEncountersService', () => {
   it('starts a confirmed provider encounter and advances booking with both histories', async () => {
     await subject.start(user, booking.bookingReference);
     expect(encounter).toMatchObject({ providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS, startedAt: expect.any(Date) });
-    expect(booking.status).toBe(BookingStatus.IN_PROGRESS); expect(encounterHistory).toHaveLength(1); expect(bookingHistory[0]).toMatchObject({ fromStatus: BookingStatus.PROVIDER_ASSIGNED, toStatus: BookingStatus.IN_PROGRESS, actorUserId: user.id });
+    expect(booking.status).toBe(BookingStatus.IN_PROGRESS); expect(encounterHistory).toHaveLength(1); expect(bookingHistory[0]).toMatchObject({ fromStatus: BookingStatus.SCHEDULED, toStatus: BookingStatus.IN_PROGRESS, actorUserId: user.id });
   });
 
-  it('allows SCHEDULED start and makes an already in-progress start idempotent', async () => {
-    booking.status = BookingStatus.SCHEDULED; await subject.start(user, booking.bookingReference);
+  it('makes an already in-progress start idempotent', async () => {
+    await subject.start(user, booking.bookingReference);
     const historyCount = encounterHistory.length; booking.status = BookingStatus.IN_PROGRESS; encounter.status = HealthCheckEncounterStatus.IN_PROGRESS;
     await subject.start(user, booking.bookingReference); expect(encounterHistory).toHaveLength(historyCount);
   });
+
+  it('no longer starts directly from PROVIDER_ASSIGNED', async () => { booking.status = BookingStatus.PROVIDER_ASSIGNED; await expect(subject.start(user, booking.bookingReference)).rejects.toBeInstanceOf(ConflictException); });
 
   it.each([BookingStatus.CANCELLED, BookingStatus.EXPIRED, BookingStatus.COMPLETED])('rejects starting a %s booking', async (status) => { booking.status = status; await expect(subject.start(user, booking.bookingReference)).rejects.toBeInstanceOf(ConflictException); });
   it('denies a provider without the confirmed assignment', async () => { assignmentRepository.findOne.mockResolvedValue(null); await expect(subject.start(user, booking.bookingReference)).rejects.toBeInstanceOf(NotFoundException); });

@@ -4,6 +4,7 @@ import { Organisation } from '../../organisations/entities/organisation.entity';
 import { Patient } from '../../patients/entities/patient.entity';
 import { ProviderAssignment } from '../../providers/entities/provider-assignment.entity';
 import { ProviderBookingReservation } from '../../providers/entities/provider-booking-reservation.entity';
+import { ProviderLocation } from '../../providers/entities/provider-location.entity';
 import { User } from '../../users/entities/user.entity';
 import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
@@ -106,6 +107,35 @@ export class Booking {
 
   @Column({ name: 'scheduled_ends_at', type: 'timestamptz', nullable: true })
   scheduledEndsAt!: Date | null;
+
+  @Column({ name: 'scheduled_date', type: 'date', nullable: true })
+  scheduledDate!: string | null;
+
+  @Column({ name: 'scheduled_time_from', type: 'time', nullable: true })
+  scheduledTimeFrom!: string | null;
+
+  @Column({ name: 'scheduled_time_to', type: 'time', nullable: true })
+  scheduledTimeTo!: string | null;
+
+  @Column({ name: 'scheduled_timezone', type: 'varchar', nullable: true })
+  scheduledTimezone!: string | null;
+
+  @Column({ name: 'provider_location_id', type: 'uuid', nullable: true })
+  providerLocationId!: string | null;
+
+  @ManyToOne(() => ProviderLocation, { nullable: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'provider_location_id' })
+  providerLocation!: ProviderLocation | null;
+
+  @Column({ name: 'scheduled_at', type: 'timestamptz', nullable: true })
+  scheduledAt!: Date | null;
+
+  @Column({ name: 'scheduled_by_user_id', type: 'uuid', nullable: true })
+  scheduledByUserId!: string | null;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'scheduled_by_user_id' })
+  scheduledBy!: User | null;
 
   @Column({ name: 'cancellation_reason', type: 'text', nullable: true })
   cancellationReason!: string | null;

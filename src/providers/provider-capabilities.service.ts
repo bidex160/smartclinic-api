@@ -268,6 +268,7 @@ export class ProviderCapabilitiesService {
     healthCheckPackageId: string,
     fulfilmentModeId: string,
     window?: AvailabilityWindow,
+    excludeProviderAssignmentId?: string,
   ): Promise<ProviderServiceResponseDto[]> {
     const query = this.services
       .createQueryBuilder("service")
@@ -309,7 +310,8 @@ export class ProviderCapabilitiesService {
         `NOT EXISTS (SELECT 1 FROM provider_availability_exceptions scope WHERE scope.provider_id = provider.id AND scope.is_active = true AND scope.type = 'UNAVAILABLE' AND scope.date = :requestedDate AND scope.timezone = :requestedTimezone AND (scope.start_time IS NULL OR (scope.start_time < :requestedEndTime AND scope.end_time > :requestedStartTime)) AND (scope.provider_service_id IS NULL OR scope.provider_service_id = service.id) AND ${applicableLocation})`,
       );
       query.andWhere(
-        `NOT EXISTS (SELECT 1 FROM provider_booking_reservations reservation WHERE reservation.provider_id = provider.id AND reservation.scheduled_date = :requestedDate AND reservation.status IN ('HELD', 'CONFIRMED') AND reservation.start_time < :requestedEndTime AND reservation.end_time > :requestedStartTime)`,
+        `NOT EXISTS (SELECT 1 FROM provider_booking_reservations reservation WHERE reservation.provider_id = provider.id AND reservation.scheduled_date = :requestedDate AND reservation.status IN ('HELD', 'CONFIRMED') AND reservation.start_time < :requestedEndTime AND reservation.end_time > :requestedStartTime${excludeProviderAssignmentId ? ' AND reservation.provider_assignment_id <> :excludeProviderAssignmentId' : ''})`,
+        excludeProviderAssignmentId ? { excludeProviderAssignmentId } : undefined,
       );
     }
     const rows = await query.orderBy("service.createdAt", "ASC").getMany();
