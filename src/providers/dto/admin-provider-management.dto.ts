@@ -19,6 +19,7 @@ import { ProviderStatus } from "../enums/provider-status.enum";
 import { ProviderOnboardingStatus } from "../enums/provider-onboarding-status.enum";
 import { ProviderType } from "../enums/provider-type.enum";
 import { CreatedProviderInvitationResponseDto } from "./provider-invitation.dto";
+import { ProviderOnboardingReadinessDto } from "./provider-onboarding-readiness.dto";
 
 export class CreateAdminProviderDto {
   @ApiProperty()
@@ -129,6 +130,7 @@ export class AdminProviderListItemResponseDto {
 export class AdminProviderDetailResponseDto extends AdminProviderListItemResponseDto {
   @ApiProperty() capabilityCount!: number;
   @ApiProperty() locationCount!: number;
+  @ApiProperty({ type: ProviderOnboardingReadinessDto }) readiness!: ProviderOnboardingReadinessDto;
 }
 export class AdminProviderListResponseDto {
   @ApiProperty({ type: AdminProviderListItemResponseDto, isArray: true })

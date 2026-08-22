@@ -70,9 +70,9 @@ export class ProviderCapabilitiesService {
       this.packages.findOne({ where: { id: dto.healthCheckPackageId } }),
       this.modes.findOne({ where: { id: dto.fulfilmentModeId } }),
     ]);
-    if (provider.status !== ProviderStatus.ACTIVE)
+    if (![ProviderStatus.ACTIVE, ProviderStatus.PENDING].includes(provider.status))
       throw new BadRequestException(
-        "Provider must be active to add capabilities",
+        "Provider must be active or pending to add capabilities",
       );
     if (!healthPackage)
       throw new NotFoundException("Health Check package not found");
@@ -108,9 +108,9 @@ export class ProviderCapabilitiesService {
   async activateService(id: string): Promise<ProviderServiceResponseDto> {
     const service = await this.requireService(id);
     const provider = await this.requireProvider(service.providerId);
-    if (provider.status !== ProviderStatus.ACTIVE)
+    if (![ProviderStatus.ACTIVE, ProviderStatus.PENDING].includes(provider.status))
       throw new BadRequestException(
-        "Provider must be active to activate capabilities",
+        "Provider must be active or pending to activate capabilities",
       );
     const [healthPackage, mode] = await Promise.all([
       this.packages.findOneBy({ id: service.healthCheckPackageId }),

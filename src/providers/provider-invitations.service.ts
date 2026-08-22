@@ -17,6 +17,7 @@ import { ProviderInvitationStatus } from './enums/provider-invitation-status.enu
 import { CreateAdminProviderDto, AdminCreatedProviderResponseDto } from './dto/admin-provider-management.dto';
 import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 import { ProviderStatus } from './enums/provider-status.enum';
+import { ProviderOnboardingBlocker } from './dto/provider-onboarding-readiness.dto';
 
 @Injectable()
 export class ProviderInvitationsService {
@@ -82,7 +83,8 @@ export class ProviderInvitationsService {
         provider.userId = user.id; provider.email = provider.email ?? invitation.emailNormalized;
         if (provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED) {
           provider.status = ProviderStatus.PENDING;
-          if (this.complete(provider)) { provider.onboardingStatus = ProviderOnboardingStatus.SUBMITTED; provider.submittedAt = now; } else provider.onboardingStatus = ProviderOnboardingStatus.DRAFT;
+          provider.onboardingStatus = ProviderOnboardingStatus.DRAFT;
+          provider.submittedAt = null;
           provider.reviewedAt = null; provider.reviewedByUserId = null; provider.reviewNote = null;
         }
         await providerRepository.save(provider);
@@ -98,8 +100,7 @@ export class ProviderInvitationsService {
   private async requireAdminInvitation(id: string): Promise<ProviderInvitation> { const invitation = await this.invitations.findOne({ where: { id }, relations: { provider: true, createdBy: true } }); if (!invitation) throw new NotFoundException('Provider invitation not found'); return invitation; }
   private adminSummary(invitation: ProviderInvitation): AdminProviderInvitationSummaryDto { const effectiveStatus = invitation.status === ProviderInvitationStatus.PENDING && invitation.expiresAt <= new Date() ? ProviderInvitationStatus.EXPIRED : invitation.status; return { id: invitation.id, provider: { displayName: invitation.provider.displayName }, email: invitation.email, status: effectiveStatus, expiresAt: invitation.expiresAt, acceptedAt: invitation.acceptedAt, revokedAt: invitation.revokedAt, createdAt: invitation.createdAt, createdBy: invitation.createdBy ? { id: invitation.createdBy.id, email: invitation.createdBy.email, displayName: invitation.createdBy.displayName } : null }; }
   private async deliver(invitation: ProviderInvitation, rawToken: string): Promise<CreatedProviderInvitationResponseDto> { const invitationLink = this.invitationLink(rawToken); try { const delivery = await this.emailProvider.sendTransactionalEmail(this.invitationEmail(invitation, invitationLink)); if (delivery.outcome === EmailSendOutcome.SENT) return { ...this.adminSummary(invitation), deliveryStatus: ProviderInvitationDeliveryStatus.SENT }; return { ...this.adminSummary(invitation), deliveryStatus: ProviderInvitationDeliveryStatus.MANUAL_REQUIRED, manualInvitationLink: invitationLink }; } catch { this.logger.warn(`Provider invitation email delivery failed for invitation ${invitation.id}`); return { ...this.adminSummary(invitation), deliveryStatus: ProviderInvitationDeliveryStatus.FAILED, manualInvitationLink: invitationLink }; } }
-  private createdProvider(provider: Provider) { return { id: provider.id, displayName: provider.displayName, email: provider.email, phone: provider.phone, professionalReference: provider.professionalReference, providerType: provider.providerType, countryCode: provider.countryCode, stateOrRegion: provider.stateOrRegion, city: provider.city, status: provider.status, onboardingStatus: provider.onboardingStatus, submittedAt: provider.submittedAt, reviewedAt: provider.reviewedAt, reviewNote: provider.reviewNote, linkedUser: null, createdAt: provider.createdAt, updatedAt: provider.updatedAt, capabilityCount: 0, locationCount: 0 }; }
-  private complete(provider: Provider): boolean { return [provider.displayName, provider.email, provider.providerType, provider.countryCode, provider.stateOrRegion, provider.city].every(Boolean); }
+  private createdProvider(provider: Provider) { return { id: provider.id, displayName: provider.displayName, email: provider.email, phone: provider.phone, professionalReference: provider.professionalReference, providerType: provider.providerType, countryCode: provider.countryCode, stateOrRegion: provider.stateOrRegion, city: provider.city, status: provider.status, onboardingStatus: provider.onboardingStatus, submittedAt: provider.submittedAt, reviewedAt: provider.reviewedAt, reviewNote: provider.reviewNote, linkedUser: null, createdAt: provider.createdAt, updatedAt: provider.updatedAt, capabilityCount: 0, locationCount: 0, readiness: { profileComplete: true, hasActiveCapability: false, providerLocationReady: true, hasAvailability: false, blockers: [ProviderOnboardingBlocker.NO_ACTIVE_CAPABILITY, ProviderOnboardingBlocker.NO_WEEKLY_AVAILABILITY], capabilityCount: 0, activeCapabilityCount: 0, locationCount: 0, activeLocationCount: 0, availabilityCount: 0 } }; }
   private hash(token: string): string { return createHash('sha256').update(token).digest('hex'); }
   private invitationLink(token: string): string { return `${this.config.providerInvitations.frontendUrl.replace(/\/+$/, '')}/${encodeURIComponent(token)}`; }
   private invitationEmail(invitation: ProviderInvitation, link: string) {

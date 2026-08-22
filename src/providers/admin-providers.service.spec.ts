@@ -12,7 +12,7 @@ import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enu
 
 describe('AdminProvidersService', () => {
   const creatorId = '30000000-0000-4000-8000-000000000001';
-  let provider: any, user: any, providers: any, users: any, assignments: any, reservations: any, capabilities: any, locations: any, subject: AdminProvidersService;
+  let provider: any, user: any, providers: any, users: any, assignments: any, reservations: any, capabilities: any, locations: any, readiness: any, subject: AdminProvidersService;
   beforeEach(() => {
     user = { id: '20000000-0000-4000-8000-000000000001', email: 'provider@example.test', displayName: 'Provider User', status: UserStatus.ACTIVE, roles: [UserRole.USER], deletedAt: null };
     provider = { id: '10000000-0000-4000-8000-000000000001', displayName: 'SmartClinic Ikeja', email: 'provider@example.test', phone: null, professionalReference: null, providerType: ProviderType.CLINIC, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', status: ProviderStatus.PENDING, onboardingStatus: ProviderOnboardingStatus.SUBMITTED, submittedAt: new Date(), reviewedAt: null, reviewedByUserId: null, reviewNote: null, userId: null, user: null, createdAt: new Date(), updatedAt: new Date(), deletedAt: null };
@@ -20,15 +20,17 @@ describe('AdminProvidersService', () => {
     users = { findOne: jest.fn(async () => user), save: jest.fn(async (value) => { user = value; return user; }) };
     assignments = { exists: jest.fn().mockResolvedValue(false) }; reservations = { exists: jest.fn().mockResolvedValue(false) };
     capabilities = { countBy: jest.fn().mockResolvedValue(2) }; locations = { countBy: jest.fn().mockResolvedValue(3) };
+    readiness = { evaluate: jest.fn().mockResolvedValue({ profileComplete: true, hasActiveCapability: true, providerLocationReady: true, hasAvailability: true, blockers: [], capabilityCount: 2, activeCapabilityCount: 1, locationCount: 3, activeLocationCount: 2, availabilityCount: 1 }) };
     const manager: any = { getRepository: jest.fn((entity) => entity === Provider ? providers : entity.name === 'User' ? users : entity === ProviderAssignment ? assignments : entity === ProviderBookingReservation ? reservations : {}) };
     manager.transaction = jest.fn(async (work) => work(manager)); providers.manager = manager;
-    subject = new AdminProvidersService(providers, users, assignments, reservations, capabilities, locations);
+    subject = new AdminProvidersService(providers, users, assignments, reservations, capabilities, locations, readiness);
   });
 
   it('gets a safe detail with capability and location counts', async () => { const result: any = await subject.get(provider.id); expect(result).toMatchObject({ id: provider.id, capabilityCount: 2, locationCount: 3 }); expect(result).not.toHaveProperty('deletedAt'); expect(result).not.toHaveProperty('credential'); });
   it('returns 404 for an unknown provider', async () => { providers.findOne.mockResolvedValue(null); await expect(subject.get(provider.id)).rejects.toBeInstanceOf(NotFoundException); });
   it('updates only basic profile fields', async () => { const result = await subject.update(provider.id, { displayName: 'Updated', professionalReference: 'REF-1' }); expect(result).toMatchObject({ displayName: 'Updated', professionalReference: 'REF-1' }); expect(provider.userId).toBeNull(); });
   it('approves submitted onboarding and activates, then permits operational suspension/reactivation', async () => { provider.userId = user.id; user.roles = [UserRole.PROVIDER]; expect(await subject.approve(provider.id, creatorId)).toMatchObject({ status: ProviderStatus.ACTIVE, onboardingStatus: ProviderOnboardingStatus.APPROVED }); expect((await subject.suspend(provider.id)).status).toBe(ProviderStatus.SUSPENDED); expect((await subject.activate(provider.id)).status).toBe(ProviderStatus.ACTIVE); });
+  it('rejects approval when provider configuration readiness has blockers', async () => { provider.userId = user.id; user.roles = [UserRole.PROVIDER]; readiness.evaluate.mockResolvedValueOnce({ blockers: ['NO_WEEKLY_AVAILABILITY'] }); await expect(subject.approve(provider.id, creatorId)).rejects.toBeInstanceOf(ConflictException); expect(provider.status).toBe(ProviderStatus.PENDING); });
   it('rejects submitted onboarding without deleting the account', async () => { provider.userId = user.id; const result = await subject.reject(provider.id, creatorId, 'Profile needs correction'); expect(result).toMatchObject({ status: ProviderStatus.PENDING, onboardingStatus: ProviderOnboardingStatus.REJECTED, reviewNote: 'Profile needs correction' }); expect(provider.userId).toBe(user.id); });
   it('does not activate unapproved onboarding', async () => { await expect(subject.activate(provider.id)).rejects.toBeInstanceOf(ConflictException); });
 

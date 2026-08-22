@@ -24,6 +24,7 @@ import { ProviderAssignmentStatus } from "./enums/provider-assignment-status.enu
 import { ProviderBookingReservationStatus } from "./enums/provider-booking-reservation-status.enum";
 import { ProviderStatus } from "./enums/provider-status.enum";
 import { ProviderOnboardingStatus } from "./enums/provider-onboarding-status.enum";
+import { ProviderOnboardingReadinessService } from "./provider-onboarding-readiness.service";
 
 @Injectable()
 export class AdminProvidersService {
@@ -39,6 +40,7 @@ export class AdminProvidersService {
     private readonly capabilities: Repository<ProviderService>,
     @InjectRepository(ProviderLocation)
     private readonly locations: Repository<ProviderLocation>,
+    private readonly readiness: ProviderOnboardingReadinessService,
   ) {}
 
  async list(
@@ -95,11 +97,12 @@ export class AdminProvidersService {
 
   async get(id: string): Promise<AdminProviderDetailResponseDto> {
     const provider = await this.requireProvider(id);
-    const [capabilityCount, locationCount] = await Promise.all([
+    const [capabilityCount, locationCount, readiness] = await Promise.all([
       this.capabilities.countBy({ providerId: id }),
       this.locations.countBy({ providerId: id }),
+      this.readiness.evaluate(id),
     ]);
-    return { ...this.map(provider), capabilityCount, locationCount };
+    return { ...this.map(provider), capabilityCount, locationCount, readiness };
   }
 
   async update(
@@ -145,6 +148,8 @@ export class AdminProvidersService {
       if (!provider.userId) throw new ConflictException("Provider requires a linked account before approval");
       const user = await manager.getRepository(User).findOne({ where: { id: provider.userId }, withDeleted: true, lock: { mode: "pessimistic_write" } });
       if (!user || user.deletedAt || user.status !== UserStatus.ACTIVE || !user.roles.includes(UserRole.PROVIDER)) throw new ConflictException("Linked provider account is not eligible for approval");
+      const readiness = await this.readiness.evaluate(provider.id, manager);
+      if (readiness.blockers.length) throw new ConflictException({ message: "Provider onboarding configuration is incomplete", blockers: readiness.blockers, readiness });
       provider.onboardingStatus = ProviderOnboardingStatus.APPROVED;
       provider.status = ProviderStatus.ACTIVE;
       provider.reviewedAt = new Date();

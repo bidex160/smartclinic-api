@@ -4,6 +4,7 @@ import { IsEmail, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } 
 import { ProviderOnboardingStatus } from '../enums/provider-onboarding-status.enum';
 import { ProviderStatus } from '../enums/provider-status.enum';
 import { ProviderType } from '../enums/provider-type.enum';
+import { ProviderOnboardingReadinessDto } from './provider-onboarding-readiness.dto';
 
 export class ProviderProfileFieldsDto {
   @ApiProperty() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @MinLength(1) @MaxLength(200) displayName!: string;
@@ -36,4 +37,10 @@ export class ProviderOnboardingProfileResponseDto {
   @ApiPropertyOptional({ nullable: true }) submittedAt!: Date | null;
   @ApiPropertyOptional({ nullable: true }) reviewedAt!: Date | null;
   @ApiPropertyOptional({ nullable: true }) reviewNote!: string | null;
+  @ApiProperty() capabilityCount!: number;
+  @ApiProperty() activeCapabilityCount!: number;
+  @ApiProperty() locationCount!: number;
+  @ApiProperty() activeLocationCount!: number;
+  @ApiProperty() availabilityCount!: number;
+  @ApiProperty({ type: ProviderOnboardingReadinessDto }) readiness!: ProviderOnboardingReadinessDto;
 }

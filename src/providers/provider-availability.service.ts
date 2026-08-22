@@ -56,7 +56,7 @@ export class ProviderAvailabilityService {
   private timeToSeconds(value: string): number { const [hours, minutes, seconds = '0'] = value.split(':'); return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds); }
   private async validateActiveScope(providerId: string, serviceId: string | null, locationId: string | null): Promise<void> {
     const provider = await this.requireProvider(providerId);
-    if (provider.status !== ProviderStatus.ACTIVE) throw new BadRequestException('Provider must be active to manage active availability');
+    if (![ProviderStatus.ACTIVE, ProviderStatus.PENDING].includes(provider.status)) throw new BadRequestException('Provider must be active or pending to manage availability');
     if (serviceId) { const service = await this.services.findOne({ where: { id: serviceId } }); if (!service) throw new NotFoundException('Provider service not found'); if (service.providerId !== providerId) throw new ConflictException('Provider service belongs to a different provider'); if (!service.isActive) throw new BadRequestException('Provider service is inactive'); }
     if (locationId) { const location = await this.locations.findOne({ where: { id: locationId } }); if (!location) throw new NotFoundException('Provider location not found'); if (location.providerId !== providerId) throw new ConflictException('Provider location belongs to a different provider'); if (!location.isActive) throw new BadRequestException('Provider location is inactive'); }
   }

@@ -10,6 +10,8 @@ import { ProviderOnboardingProfileResponseDto, RegisterProviderDto, UpdateProvid
 import { Provider } from './entities/provider.entity';
 import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 import { ProviderStatus } from './enums/provider-status.enum';
+import { ProviderConfigurationContextService } from './provider-configuration-context.service';
+import { ProviderOnboardingReadinessService } from './provider-onboarding-readiness.service';
 
 @Injectable()
 export class ProviderOnboardingService {
@@ -17,6 +19,8 @@ export class ProviderOnboardingService {
     @InjectRepository(Provider) private readonly providers: Repository<Provider>,
     @InjectRepository(User) private readonly users: Repository<User>,
     @InjectRepository(UserCredential) private readonly credentials: Repository<UserCredential>,
+    private readonly context: ProviderConfigurationContextService,
+    private readonly readiness: ProviderOnboardingReadinessService,
   ) {}
 
   async register(dto: RegisterProviderDto): Promise<ProviderOnboardingProfileResponseDto> {
@@ -30,8 +34,7 @@ export class ProviderOnboardingService {
         const providerRepository = manager.getRepository(Provider);
         const user = await userRepository.save(userRepository.create({ email, emailNormalized: email, displayName: dto.displayName.trim(), status: UserStatus.ACTIVE, roles: [UserRole.PROVIDER] }));
         await manager.getRepository(UserCredential).save(manager.getRepository(UserCredential).create({ userId: user.id, passwordHash }));
-        const submittedAt = new Date();
-        return providerRepository.save(providerRepository.create({ userId: user.id, displayName: dto.displayName.trim(), email, phone: dto.phone.trim(), professionalReference: dto.professionalReference?.trim() || null, providerType: dto.providerType, countryCode: dto.countryCode.toUpperCase(), stateOrRegion: dto.stateOrRegion.trim(), city: dto.city.trim(), status: ProviderStatus.PENDING, onboardingStatus: ProviderOnboardingStatus.SUBMITTED, submittedAt, reviewedAt: null, reviewedByUserId: null, reviewNote: null }));
+        return providerRepository.save(providerRepository.create({ userId: user.id, displayName: dto.displayName.trim(), email, phone: dto.phone.trim(), professionalReference: dto.professionalReference?.trim() || null, providerType: dto.providerType, countryCode: dto.countryCode.toUpperCase(), stateOrRegion: dto.stateOrRegion.trim(), city: dto.city.trim(), status: ProviderStatus.PENDING, onboardingStatus: ProviderOnboardingStatus.DRAFT, submittedAt: null, reviewedAt: null, reviewedByUserId: null, reviewNote: null }));
       });
       return this.map(provider);
     } catch (error) {
@@ -40,10 +43,10 @@ export class ProviderOnboardingService {
     }
   }
 
-  async get(user: User): Promise<ProviderOnboardingProfileResponseDto> { return this.map(await this.resolve(user)); }
+  async get(user: User): Promise<ProviderOnboardingProfileResponseDto> { return this.map(await this.context.resolve(user)); }
 
   async update(user: User, dto: UpdateProviderProfileDto): Promise<ProviderOnboardingProfileResponseDto> {
-    const provider = await this.resolve(user);
+    const provider = await this.context.resolve(user, true);
     if (provider.onboardingStatus === ProviderOnboardingStatus.APPROVED) throw new ConflictException('Approved provider identity changes require operations support');
     if (dto.displayName !== undefined) provider.displayName = dto.displayName.trim();
     if (dto.phone !== undefined) provider.phone = dto.phone.trim();
@@ -57,13 +60,15 @@ export class ProviderOnboardingService {
   }
 
   async submit(user: User): Promise<ProviderOnboardingProfileResponseDto> {
+    await this.context.resolve(user, true);
     await this.providers.manager.transaction(async (manager) => {
       const providerRepository = manager.getRepository(Provider);
       const provider = await providerRepository.findOne({ where: { userId: user.id }, withDeleted: true, lock: { mode: 'pessimistic_write' } });
       if (!provider || provider.deletedAt) throw new ForbiddenException('A linked provider account is required');
       const account = await manager.getRepository(User).findOne({ where: { id: user.id }, withDeleted: true, lock: { mode: 'pessimistic_write' } });
       if (!account || account.deletedAt || account.status !== UserStatus.ACTIVE || !account.roles.includes(UserRole.PROVIDER)) throw new ForbiddenException('Provider account is not eligible for onboarding');
-      this.requireComplete(provider);
+      const readiness = await this.readiness.evaluate(provider.id, manager);
+      if (readiness.blockers.length) throw new ConflictException({ message: 'Provider onboarding configuration is incomplete', blockers: readiness.blockers, readiness });
       if (provider.onboardingStatus === ProviderOnboardingStatus.APPROVED) throw new ConflictException('Provider onboarding is already approved');
       provider.onboardingStatus = ProviderOnboardingStatus.SUBMITTED;
       provider.status = ProviderStatus.PENDING;
@@ -76,18 +81,8 @@ export class ProviderOnboardingService {
     return this.get(user);
   }
 
-  private async resolve(user: User): Promise<Provider> {
-    if (user.status !== UserStatus.ACTIVE || user.deletedAt || !user.roles.includes(UserRole.PROVIDER)) throw new ForbiddenException('Provider account is not eligible for onboarding');
-    const provider = await this.providers.findOne({ where: { userId: user.id }, withDeleted: true });
-    if (!provider || provider.deletedAt) throw new ForbiddenException('A linked provider account is required');
-    return provider;
-  }
-
-  private requireComplete(provider: Provider): void {
-    if (![provider.displayName, provider.email, provider.providerType, provider.countryCode, provider.stateOrRegion, provider.city].every(Boolean)) throw new ConflictException('Provider profile is incomplete');
-  }
-
-  private map(provider: Provider): ProviderOnboardingProfileResponseDto {
-    return { displayName: provider.displayName, email: provider.email!, phone: provider.phone, professionalReference: provider.professionalReference, providerType: provider.providerType, countryCode: provider.countryCode, stateOrRegion: provider.stateOrRegion, city: provider.city, status: provider.status, onboardingStatus: provider.onboardingStatus, submittedAt: provider.submittedAt, reviewedAt: provider.reviewedAt, reviewNote: provider.reviewNote };
+  private async map(provider: Provider): Promise<ProviderOnboardingProfileResponseDto> {
+    const readiness = await this.readiness.evaluate(provider.id);
+    return { displayName: provider.displayName, email: provider.email!, phone: provider.phone, professionalReference: provider.professionalReference, providerType: provider.providerType, countryCode: provider.countryCode, stateOrRegion: provider.stateOrRegion, city: provider.city, status: provider.status, onboardingStatus: provider.onboardingStatus, submittedAt: provider.submittedAt, reviewedAt: provider.reviewedAt, reviewNote: provider.reviewNote, capabilityCount: readiness.capabilityCount, activeCapabilityCount: readiness.activeCapabilityCount, locationCount: readiness.locationCount, activeLocationCount: readiness.activeLocationCount, availabilityCount: readiness.availabilityCount, readiness };
   }
 }
