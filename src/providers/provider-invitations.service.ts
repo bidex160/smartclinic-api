@@ -14,11 +14,30 @@ import { AcceptProviderInvitationDto, AcceptedProviderInvitationResponseDto, Adm
 import { ProviderInvitation } from './entities/provider-invitation.entity';
 import { Provider } from './entities/provider.entity';
 import { ProviderInvitationStatus } from './enums/provider-invitation-status.enum';
+import { CreateAdminProviderDto, AdminCreatedProviderResponseDto } from './dto/admin-provider-management.dto';
+import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
+import { ProviderStatus } from './enums/provider-status.enum';
 
 @Injectable()
 export class ProviderInvitationsService {
   private readonly logger = new Logger(ProviderInvitationsService.name);
   constructor(@InjectRepository(ProviderInvitation) private readonly invitations: Repository<ProviderInvitation>, @InjectRepository(Provider) private readonly providers: Repository<Provider>, @InjectRepository(User) private readonly users: Repository<User>, @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>, @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider) {}
+
+  async createProvider(dto: CreateAdminProviderDto, creatorId: string): Promise<AdminCreatedProviderResponseDto> {
+    const email = dto.email.trim().toLowerCase(); const rawToken = randomBytes(32).toString('base64url'); const now = new Date();
+    let result: { provider: Provider; invitation: ProviderInvitation };
+    try { result = await this.invitations.manager.transaction(async (manager) => {
+        const providerRepository = manager.getRepository(Provider); const invitationRepository = manager.getRepository(ProviderInvitation); const userRepository = manager.getRepository(User);
+        if (await userRepository.exists({ where: { emailNormalized: email }, withDeleted: true })) throw new ConflictException('An account already exists for this email; use existing-user linking');
+        if (await providerRepository.exists({ where: { email }, withDeleted: true })) throw new ConflictException('A provider already exists for this email');
+        const provider = await providerRepository.save(providerRepository.create({ userId: null, displayName: dto.displayName.trim(), email, phone: dto.phone?.trim() || null, professionalReference: dto.professionalReference?.trim() || null, providerType: dto.providerType, countryCode: dto.countryCode.toUpperCase(), stateOrRegion: dto.stateOrRegion.trim(), city: dto.city.trim(), status: ProviderStatus.PENDING, onboardingStatus: ProviderOnboardingStatus.INVITED, submittedAt: null, reviewedAt: null, reviewedByUserId: null, reviewNote: null }));
+        const invitation = await invitationRepository.save(invitationRepository.create({ providerId: provider.id, email, emailNormalized: email, tokenHash: this.hash(rawToken), status: ProviderInvitationStatus.PENDING, expiresAt: new Date(now.getTime() + this.config.providerInvitations.ttlSeconds * 1000), acceptedAt: null, revokedAt: null, createdByUserId: creatorId }));
+        return { provider, invitation };
+      });
+    } catch (error) { if (error instanceof QueryFailedError) throw new ConflictException('A provider account or invitation already exists for this email'); throw error; }
+    const invitation = await this.requireAdminInvitation(result.invitation.id);
+    return { provider: this.createdProvider(result.provider), invitation: await this.deliver(invitation, rawToken) };
+  }
 
   async create(providerId: string, email: string, creatorId: string): Promise<CreatedProviderInvitationResponseDto> {
     const normalized = email.trim().toLowerCase(); const rawToken = randomBytes(32).toString('base64url'); const now = new Date();
@@ -34,16 +53,8 @@ export class ProviderInvitationsService {
       return invitationRepository.save(invitationRepository.create({ providerId, email: normalized, emailNormalized: normalized, tokenHash: this.hash(rawToken), status: ProviderInvitationStatus.PENDING, expiresAt: new Date(now.getTime() + this.config.providerInvitations.ttlSeconds * 1000), acceptedAt: null, revokedAt: null, createdByUserId: creatorId }));
     });
     const hydrated = await this.requireAdminInvitation(invitation.id);
-    const invitationLink = this.invitationLink(rawToken);
-    const message = this.invitationEmail(hydrated, invitationLink);
-    try {
-      const delivery = await this.emailProvider.sendTransactionalEmail(message);
-      if (delivery.outcome === EmailSendOutcome.SENT) return { ...this.adminSummary(hydrated), deliveryStatus: ProviderInvitationDeliveryStatus.SENT };
-      return { ...this.adminSummary(hydrated), deliveryStatus: ProviderInvitationDeliveryStatus.MANUAL_REQUIRED, manualInvitationLink: invitationLink };
-    } catch {
-      this.logger.warn(`Provider invitation email delivery failed for invitation ${hydrated.id}`);
-      return { ...this.adminSummary(hydrated), deliveryStatus: ProviderInvitationDeliveryStatus.FAILED, manualInvitationLink: invitationLink };
-    }
+    if (hydrated.provider.onboardingStatus === ProviderOnboardingStatus.DRAFT) { hydrated.provider.onboardingStatus = ProviderOnboardingStatus.INVITED; await this.providers.save(hydrated.provider); }
+    return this.deliver(hydrated, rawToken);
   }
 
   async list(providerId: string): Promise<AdminProviderInvitationSummaryDto[]> { await this.requireProvider(providerId); const rows = await this.invitations.find({ where: { providerId }, relations: { provider: true, createdBy: true }, order: { createdAt: 'DESC', id: 'DESC' } }); return rows.map((row) => this.adminSummary(row)); }
@@ -68,7 +79,13 @@ export class ProviderInvitationsService {
         if (await userRepository.exists({ where: { emailNormalized: invitation.emailNormalized }, withDeleted: true })) throw new ConflictException('An account already exists for this email; sign in and ask operations to link it');
         const user = await userRepository.save(userRepository.create({ email: invitation.emailNormalized, emailNormalized: invitation.emailNormalized, displayName: dto.displayName.trim(), status: UserStatus.ACTIVE, roles: [UserRole.PROVIDER] }));
         await credentialRepository.save(credentialRepository.create({ userId: user.id, passwordHash }));
-        provider.userId = user.id; await providerRepository.save(provider);
+        provider.userId = user.id; provider.email = provider.email ?? invitation.emailNormalized;
+        if (provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED) {
+          provider.status = ProviderStatus.PENDING;
+          if (this.complete(provider)) { provider.onboardingStatus = ProviderOnboardingStatus.SUBMITTED; provider.submittedAt = now; } else provider.onboardingStatus = ProviderOnboardingStatus.DRAFT;
+          provider.reviewedAt = null; provider.reviewedByUserId = null; provider.reviewNote = null;
+        }
+        await providerRepository.save(provider);
         invitation.status = ProviderInvitationStatus.ACCEPTED; invitation.acceptedAt = now; await invitationRepository.save(invitation);
         return { providerDisplayName: provider.displayName, email: invitation.email, status: ProviderInvitationStatus.ACCEPTED as const, loginRequired: true as const };
       });
@@ -80,6 +97,9 @@ export class ProviderInvitationsService {
   private async requireProvider(id: string): Promise<Provider> { const provider = await this.providers.findOne({ where: { id }, withDeleted: true }); if (!provider || provider.deletedAt) throw new NotFoundException('Provider not found'); return provider; }
   private async requireAdminInvitation(id: string): Promise<ProviderInvitation> { const invitation = await this.invitations.findOne({ where: { id }, relations: { provider: true, createdBy: true } }); if (!invitation) throw new NotFoundException('Provider invitation not found'); return invitation; }
   private adminSummary(invitation: ProviderInvitation): AdminProviderInvitationSummaryDto { const effectiveStatus = invitation.status === ProviderInvitationStatus.PENDING && invitation.expiresAt <= new Date() ? ProviderInvitationStatus.EXPIRED : invitation.status; return { id: invitation.id, provider: { displayName: invitation.provider.displayName }, email: invitation.email, status: effectiveStatus, expiresAt: invitation.expiresAt, acceptedAt: invitation.acceptedAt, revokedAt: invitation.revokedAt, createdAt: invitation.createdAt, createdBy: invitation.createdBy ? { id: invitation.createdBy.id, email: invitation.createdBy.email, displayName: invitation.createdBy.displayName } : null }; }
+  private async deliver(invitation: ProviderInvitation, rawToken: string): Promise<CreatedProviderInvitationResponseDto> { const invitationLink = this.invitationLink(rawToken); try { const delivery = await this.emailProvider.sendTransactionalEmail(this.invitationEmail(invitation, invitationLink)); if (delivery.outcome === EmailSendOutcome.SENT) return { ...this.adminSummary(invitation), deliveryStatus: ProviderInvitationDeliveryStatus.SENT }; return { ...this.adminSummary(invitation), deliveryStatus: ProviderInvitationDeliveryStatus.MANUAL_REQUIRED, manualInvitationLink: invitationLink }; } catch { this.logger.warn(`Provider invitation email delivery failed for invitation ${invitation.id}`); return { ...this.adminSummary(invitation), deliveryStatus: ProviderInvitationDeliveryStatus.FAILED, manualInvitationLink: invitationLink }; } }
+  private createdProvider(provider: Provider) { return { id: provider.id, displayName: provider.displayName, email: provider.email, phone: provider.phone, professionalReference: provider.professionalReference, providerType: provider.providerType, countryCode: provider.countryCode, stateOrRegion: provider.stateOrRegion, city: provider.city, status: provider.status, onboardingStatus: provider.onboardingStatus, submittedAt: provider.submittedAt, reviewedAt: provider.reviewedAt, reviewNote: provider.reviewNote, linkedUser: null, createdAt: provider.createdAt, updatedAt: provider.updatedAt, capabilityCount: 0, locationCount: 0 }; }
+  private complete(provider: Provider): boolean { return [provider.displayName, provider.email, provider.providerType, provider.countryCode, provider.stateOrRegion, provider.city].every(Boolean); }
   private hash(token: string): string { return createHash('sha256').update(token).digest('hex'); }
   private invitationLink(token: string): string { return `${this.config.providerInvitations.frontendUrl.replace(/\/+$/, '')}/${encodeURIComponent(token)}`; }
   private invitationEmail(invitation: ProviderInvitation, link: string) {

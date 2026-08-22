@@ -2,10 +2,13 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from "@nestjs/common";
 import {
@@ -24,16 +27,20 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { UserRole } from "../users/enums/user-role.enum";
+import { User } from "../users/entities/user.entity";
 import {
   AdminProviderDetailResponseDto,
+  AdminCreatedProviderResponseDto,
   AdminProviderListQueryDto,
   AdminProviderListResponseDto,
   CreateAdminProviderDto,
   LinkProviderUserDto,
+  RejectProviderDto,
   UpdateAdminProviderDto,
 } from "./dto/admin-provider-management.dto";
 import { ResourceIdParamsDto } from "./dto/provider-params.dto";
 import { AdminProvidersService } from "./admin-providers.service";
+import { ProviderInvitationsService } from "./provider-invitations.service";
 
 @ApiTags("Admin providers")
 @ApiBearerAuth()
@@ -46,7 +53,7 @@ import { AdminProvidersService } from "./admin-providers.service";
 @ApiConflictResponse()
 @Controller("admin/providers")
 export class AdminProvidersController {
-  constructor(private readonly providers: AdminProvidersService) {}
+  constructor(private readonly providers: AdminProvidersService, private readonly invitations: ProviderInvitationsService) {}
   @Get()
   @ApiOperation({
     summary:
@@ -66,11 +73,11 @@ export class AdminProvidersController {
   }
   @Post()
   @ApiOperation({
-    summary: "Create an unlinked pending provider (ADMIN or OPERATIONS)",
+    summary: "Create a pending provider and deliver its initial invitation (ADMIN or OPERATIONS)",
   })
-  @ApiCreatedResponse({ type: AdminProviderDetailResponseDto })
-  create(@Body() dto: CreateAdminProviderDto) {
-    return this.providers.create(dto);
+  @ApiCreatedResponse({ type: AdminCreatedProviderResponseDto })
+  create(@Body() dto: CreateAdminProviderDto, @Req() request: { user: User }) {
+    return this.invitations.createProvider(dto, request.user.id);
   }
   @Patch(":id")
   @ApiOperation({
@@ -91,6 +98,16 @@ export class AdminProvidersController {
   activate(@Param() { id }: ResourceIdParamsDto) {
     return this.providers.activate(id);
   }
+  @Post(":id/approve")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Approve submitted onboarding and activate the provider" })
+  @ApiOkResponse({ type: AdminProviderDetailResponseDto })
+  approve(@Param() { id }: ResourceIdParamsDto, @Req() request: { user: User }) { return this.providers.approve(id, request.user.id); }
+  @Post(":id/reject")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Reject submitted onboarding without deleting the account" })
+  @ApiOkResponse({ type: AdminProviderDetailResponseDto })
+  reject(@Param() { id }: ResourceIdParamsDto, @Req() request: { user: User }, @Body() dto: RejectProviderDto) { return this.providers.reject(id, request.user.id, dto.reviewNote); }
   @Patch(":id/suspend")
   @ApiOperation({
     summary: "Suspend a provider operationally (ADMIN or OPERATIONS)",

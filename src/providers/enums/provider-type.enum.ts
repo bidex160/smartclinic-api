@@ -1,0 +1,6 @@
+export enum ProviderType {
+  INDIVIDUAL = 'INDIVIDUAL',
+  CLINIC = 'CLINIC',
+  DIAGNOSTIC_CENTRE = 'DIAGNOSTIC_CENTRE',
+  OTHER = 'OTHER',
+}

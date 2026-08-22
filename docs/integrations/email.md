@@ -2,6 +2,8 @@
 
 SmartClinic sends transactional email through the provider-neutral `EmailProvider` contract. Provider onboarding supplies recipient and message content to that contract and does not know about vendor SDKs, credentials, or message identifiers.
 
+Normal administrative provider creation now creates the initial invitation automatically. Provider and invitation persistence commits before external delivery. `SENT` responses omit token material; `MANUAL_REQUIRED` and `FAILED` responses include the one-time setup link for manual delivery. The raw token remains absent from storage and logs. The older provider-specific invitation endpoint remains compatible for controlled follow-up invitation operations.
+
 Provider choice is explicit: `EMAIL_PROVIDER=none` performs no network delivery, `test` captures messages in memory and is rejected in production, and `resend` selects the first production adapter. Merely defining `RESEND_API_KEY` does not enable Resend. When `resend` is selected, startup validation requires both `RESEND_API_KEY` and `EMAIL_FROM_ADDRESS`; missing configuration fails closed.
 
 The sender is configured with `EMAIL_FROM_ADDRESS` and optional `EMAIL_FROM_NAME`, producing either `Name <address>` or the bare address. `PROVIDER_INVITATION_FRONTEND_URL` is the setup-route base; the opaque token is appended as one path segment. The invitation email contains the Provider display name, invited email context, setup link, expiry, single-use warning, and unexpected-invitation guidance in both text and HTML.

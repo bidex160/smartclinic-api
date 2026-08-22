@@ -44,11 +44,14 @@ import { PublicProviderInvitationsController } from './public-provider-invitatio
 import { EmailModule } from '../notifications/email/email.module';
 import { AdminBookingSchedulingController } from './admin-booking-scheduling.controller';
 import { AdminBookingSchedulingService } from './admin-booking-scheduling.service';
+import { ProviderOnboardingService } from './provider-onboarding.service';
+import { ProviderOnboardingController } from './provider-onboarding.controller';
+import { PublicProviderRegistrationController } from './public-provider-registration.controller';
 
 @Module({
   imports: [AuthModule, EmailModule, TypeOrmModule.forFeature([Provider, ProviderAssignment, ProviderAssignmentHistory, ProviderService, ProviderLocation, ProviderServiceLocation, ProviderAvailability, ProviderAvailabilityException, ProviderBookingReservation, ProviderInvitation, HealthCheckPackage, FulfilmentMode, Booking, BookingFunding, BookingStatusHistory, PaymentAttempt, PaymentTransaction, User, UserCredential])],
-  controllers: [AdminProvidersController, AdminProviderInvitationsController, PublicProviderInvitationsController, AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderAvailabilityExceptionsController, AdminProviderMatchingController, AdminBookingSchedulingController, ProviderOffersController],
-  providers: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderAvailabilityExceptionsService, ProviderMatchingService, AdminBookingSchedulingService, CurrentProviderService, ProviderOffersService, AdminProviderAssignmentsService, AdminMatchingQueueService, AdminBookingDetailService, AdminProvidersService, ProviderInvitationsService],
+  controllers: [AdminProvidersController, AdminProviderInvitationsController, PublicProviderInvitationsController, PublicProviderRegistrationController, ProviderOnboardingController, AdminProviderCapabilitiesController, AdminProviderLocationsController, AdminProviderAvailabilityController, AdminProviderAvailabilityExceptionsController, AdminProviderMatchingController, AdminBookingSchedulingController, ProviderOffersController],
+  providers: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderAvailabilityExceptionsService, ProviderMatchingService, AdminBookingSchedulingService, CurrentProviderService, ProviderOffersService, AdminProviderAssignmentsService, AdminMatchingQueueService, AdminBookingDetailService, AdminProvidersService, ProviderInvitationsService, ProviderOnboardingService],
   exports: [ProviderCapabilitiesService, ProviderAvailabilityService, ProviderMatchingService, CurrentProviderService],
 })
 export class ProvidersModule {}

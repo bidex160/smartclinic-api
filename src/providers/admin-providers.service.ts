@@ -13,7 +13,6 @@ import {
   AdminProviderListItemResponseDto,
   AdminProviderListQueryDto,
   AdminProviderListResponseDto,
-  CreateAdminProviderDto,
   UpdateAdminProviderDto,
 } from "./dto/admin-provider-management.dto";
 import { ProviderAssignment } from "./entities/provider-assignment.entity";
@@ -24,6 +23,7 @@ import { Provider } from "./entities/provider.entity";
 import { ProviderAssignmentStatus } from "./enums/provider-assignment-status.enum";
 import { ProviderBookingReservationStatus } from "./enums/provider-booking-reservation-status.enum";
 import { ProviderStatus } from "./enums/provider-status.enum";
+import { ProviderOnboardingStatus } from "./enums/provider-onboarding-status.enum";
 
 @Injectable()
 export class AdminProvidersService {
@@ -53,6 +53,7 @@ export class AdminProvidersService {
       status: query.status,
     });
   }
+  if (query.onboardingStatus) builder.andWhere("provider.onboardingStatus = :onboardingStatus", { onboardingStatus: query.onboardingStatus });
 
   if (query.linkedUserId) {
     builder.andWhere("provider.userId = :linkedUserId", {
@@ -101,20 +102,6 @@ export class AdminProvidersService {
     return { ...this.map(provider), capabilityCount, locationCount };
   }
 
-  async create(
-    dto: CreateAdminProviderDto,
-  ): Promise<AdminProviderDetailResponseDto> {
-    const provider = await this.providers.save(
-      this.providers.create({
-        displayName: dto.displayName.trim(),
-        professionalReference: dto.professionalReference?.trim() || null,
-        userId: null,
-        status: ProviderStatus.PENDING,
-      }),
-    );
-    return { ...this.map(provider), capabilityCount: 0, locationCount: 0 };
-  }
-
   async update(
     id: string,
     dto: UpdateAdminProviderDto,
@@ -122,15 +109,21 @@ export class AdminProvidersService {
     const provider = await this.requireProvider(id);
     if (dto.displayName !== undefined)
       provider.displayName = dto.displayName.trim();
+    if (dto.phone !== undefined) provider.phone = dto.phone?.trim() || null;
     if (dto.professionalReference !== undefined)
       provider.professionalReference =
         dto.professionalReference?.trim() || null;
+    if (dto.providerType !== undefined) provider.providerType = dto.providerType;
+    if (dto.countryCode !== undefined) provider.countryCode = dto.countryCode.toUpperCase();
+    if (dto.stateOrRegion !== undefined) provider.stateOrRegion = dto.stateOrRegion.trim();
+    if (dto.city !== undefined) provider.city = dto.city.trim();
     await this.providers.save(provider);
     return this.get(id);
   }
 
   async activate(id: string): Promise<AdminProviderDetailResponseDto> {
     const provider = await this.requireProvider(id);
+    if (provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED) throw new ConflictException("Provider must be approved before activation");
     provider.status = ProviderStatus.ACTIVE;
     await this.providers.save(provider);
     return this.get(id);
@@ -139,6 +132,42 @@ export class AdminProvidersService {
     const provider = await this.requireProvider(id);
     provider.status = ProviderStatus.SUSPENDED;
     await this.providers.save(provider);
+    return this.get(id);
+  }
+
+  async approve(id: string, actorUserId: string): Promise<AdminProviderDetailResponseDto> {
+    await this.providers.manager.transaction(async (manager) => {
+      const providerRepository = manager.getRepository(Provider);
+      const provider = await providerRepository.findOne({ where: { id }, withDeleted: true, lock: { mode: "pessimistic_write" } });
+      if (!provider || provider.deletedAt) throw new NotFoundException("Provider not found");
+      if (provider.onboardingStatus !== ProviderOnboardingStatus.SUBMITTED) throw new ConflictException("Only submitted provider onboarding can be approved");
+      if (![provider.displayName, provider.email, provider.providerType, provider.countryCode, provider.stateOrRegion, provider.city].every(Boolean)) throw new ConflictException("Provider profile is incomplete");
+      if (!provider.userId) throw new ConflictException("Provider requires a linked account before approval");
+      const user = await manager.getRepository(User).findOne({ where: { id: provider.userId }, withDeleted: true, lock: { mode: "pessimistic_write" } });
+      if (!user || user.deletedAt || user.status !== UserStatus.ACTIVE || !user.roles.includes(UserRole.PROVIDER)) throw new ConflictException("Linked provider account is not eligible for approval");
+      provider.onboardingStatus = ProviderOnboardingStatus.APPROVED;
+      provider.status = ProviderStatus.ACTIVE;
+      provider.reviewedAt = new Date();
+      provider.reviewedByUserId = actorUserId;
+      provider.reviewNote = null;
+      await providerRepository.save(provider);
+    });
+    return this.get(id);
+  }
+
+  async reject(id: string, actorUserId: string, reviewNote?: string | null): Promise<AdminProviderDetailResponseDto> {
+    await this.providers.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(Provider);
+      const provider = await repository.findOne({ where: { id }, withDeleted: true, lock: { mode: "pessimistic_write" } });
+      if (!provider || provider.deletedAt) throw new NotFoundException("Provider not found");
+      if (provider.onboardingStatus !== ProviderOnboardingStatus.SUBMITTED) throw new ConflictException("Only submitted provider onboarding can be rejected");
+      provider.onboardingStatus = ProviderOnboardingStatus.REJECTED;
+      provider.status = ProviderStatus.PENDING;
+      provider.reviewedAt = new Date();
+      provider.reviewedByUserId = actorUserId;
+      provider.reviewNote = reviewNote?.trim() || null;
+      await repository.save(provider);
+    });
     return this.get(id);
   }
 
@@ -245,8 +274,18 @@ export class AdminProvidersService {
     return {
       id: provider.id,
       displayName: provider.displayName,
+      email: provider.email,
+      phone: provider.phone,
       professionalReference: provider.professionalReference,
+      providerType: provider.providerType,
+      countryCode: provider.countryCode,
+      stateOrRegion: provider.stateOrRegion,
+      city: provider.city,
       status: provider.status,
+      onboardingStatus: provider.onboardingStatus,
+      submittedAt: provider.submittedAt,
+      reviewedAt: provider.reviewedAt,
+      reviewNote: provider.reviewNote,
       linkedUser: provider.user
         ? {
             id: provider.user.id,
