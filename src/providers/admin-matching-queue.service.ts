@@ -24,23 +24,26 @@ export class AdminMatchingQueueService {
     private readonly assignments: Repository<ProviderAssignment>,
   ) {}
 
- async list(
-  query: AdminMatchingQueueQueryDto,
-): Promise<AdminMatchingQueueResponseDto> {
-  const builder = this.bookings
-    .createQueryBuilder("booking")
-    .leftJoinAndSelect("booking.healthCheckPackage", "package")
-    .leftJoinAndSelect("booking.fulfilmentMode", "fulfilmentMode")
-    .leftJoinAndSelect("booking.participant", "participant")
-    .leftJoinAndSelect("booking.visitAddress", "visitAddress")
-    .where("booking.status = :bookingStatus", {
-      bookingStatus:
-        query.bookingStatus ?? BookingStatus.PENDING_PROVIDER_MATCH,
-    });
+  async list(
+    query: AdminMatchingQueueQueryDto,
+  ): Promise<AdminMatchingQueueResponseDto> {
+    const builder = this.bookings
+      .createQueryBuilder("booking")
+      .leftJoinAndSelect("booking.healthCheckPackage", "package")
+      .leftJoinAndSelect("booking.fulfilmentMode", "fulfilmentMode")
+      .leftJoinAndSelect("booking.participant", "participant")
+      .leftJoinAndSelect("booking.visitAddress", "visitAddress");
 
-  if (!query.bookingStatus) {
-    builder.andWhere(
-      `
+    if (query.bookingStatus) {
+      builder.where("booking.status = :bookingStatus", {
+        bookingStatus:
+          query.bookingStatus,
+      });
+    }
+
+    if (!query.bookingStatus) {
+      builder.andWhere(
+        `
         EXISTS (
           SELECT 1
           FROM booking_funding ready_funding
@@ -49,52 +52,40 @@ export class AdminMatchingQueueService {
             AND ready_funding.status = :settledFunding
         )
       `,
-      {
-        selfSource: BookingFundingSourceType.SELF,
-        settledFunding: BookingFundingStatus.SETTLED,
-      },
-    );
-  }
+        {
+          selfSource: BookingFundingSourceType.SELF,
+          settledFunding: BookingFundingStatus.SETTLED,
+        },
+      );
+    }
 
-  if (query.packageId) {
-    builder.andWhere(
-      "booking.healthCheckPackageId = :packageId",
-      {
+    if (query.packageId) {
+      builder.andWhere("booking.healthCheckPackageId = :packageId", {
         packageId: query.packageId,
-      },
-    );
-  }
+      });
+    }
 
-  if (query.fulfilmentModeId) {
-    builder.andWhere(
-      "booking.fulfilmentModeId = :fulfilmentModeId",
-      {
+    if (query.fulfilmentModeId) {
+      builder.andWhere("booking.fulfilmentModeId = :fulfilmentModeId", {
         fulfilmentModeId: query.fulfilmentModeId,
-      },
-    );
-  }
+      });
+    }
 
-  if (query.preferredDate) {
-    builder.andWhere(
-      "booking.preferredDate = :preferredDate",
-      {
+    if (query.preferredDate) {
+      builder.andWhere("booking.preferredDate = :preferredDate", {
         preferredDate: query.preferredDate,
-      },
-    );
-  }
+      });
+    }
 
-  if (query.bookingReference) {
-    builder.andWhere(
-      "booking.bookingReference = :bookingReference",
-      {
+    if (query.bookingReference) {
+      builder.andWhere("booking.bookingReference = :bookingReference", {
         bookingReference: query.bookingReference,
-      },
-    );
-  }
+      });
+    }
 
-  if (query.providerAssignmentStatus) {
-    builder.andWhere(
-      `(
+    if (query.providerAssignmentStatus) {
+      builder.andWhere(
+        `(
         SELECT latest_assignment.status
         FROM provider_assignments latest_assignment
         WHERE latest_assignment.booking_id = booking.id
@@ -102,83 +93,73 @@ export class AdminMatchingQueueService {
                  latest_assignment.id DESC
         LIMIT 1
       ) = :assignmentStatus`,
-      {
-        assignmentStatus: query.providerAssignmentStatus,
-      },
-    );
-  }
-
-  builder
-    .orderBy("booking.createdAt", "ASC")
-    .addOrderBy("booking.bookingReference", "ASC")
-    .skip((query.page - 1) * query.limit)
-    .take(query.limit);
-
-  const [bookings, total] = await builder.getManyAndCount();
-
-  const ids = bookings.map((booking) => booking.id);
-
-  const fundingRows = ids.length
-    ? await this.funding.find({
-        where: {
-          bookingId: In(ids),
-          sourceType: BookingFundingSourceType.SELF,
+        {
+          assignmentStatus: query.providerAssignmentStatus,
         },
-      })
-    : [];
-
-  const assignmentRows = ids.length
-    ? await this.assignments.find({
-        where: {
-          bookingId: In(ids),
-        },
-        relations: {
-          provider: true,
-        },
-        order: {
-          createdAt: "DESC",
-          id: "DESC",
-        },
-      })
-    : [];
-
-  const fundingByBooking = new Map(
-    fundingRows.map((funding) => [
-      funding.bookingId,
-      funding,
-    ]),
-  );
-
-  const assignmentByBooking =
-    new Map<string, ProviderAssignment>();
-
-  for (const assignment of assignmentRows) {
-    if (!assignmentByBooking.has(assignment.bookingId)) {
-      assignmentByBooking.set(
-        assignment.bookingId,
-        assignment,
       );
     }
-  }
 
-  return {
-    items: bookings.map((booking) =>
-      this.map(
-        booking,
-        fundingByBooking.get(booking.id) ?? null,
-        assignmentByBooking.get(booking.id) ?? null,
+    builder
+      .orderBy("booking.createdAt", "ASC")
+      .addOrderBy("booking.bookingReference", "ASC")
+      .skip((query.page - 1) * query.limit)
+      .take(query.limit);
+
+    const [bookings, total] = await builder.getManyAndCount();
+
+    const ids = bookings.map((booking) => booking.id);
+
+    const fundingRows = ids.length
+      ? await this.funding.find({
+          where: {
+            bookingId: In(ids),
+            sourceType: BookingFundingSourceType.SELF,
+          },
+        })
+      : [];
+
+    const assignmentRows = ids.length
+      ? await this.assignments.find({
+          where: {
+            bookingId: In(ids),
+          },
+          relations: {
+            provider: true,
+          },
+          order: {
+            createdAt: "DESC",
+            id: "DESC",
+          },
+        })
+      : [];
+
+    const fundingByBooking = new Map(
+      fundingRows.map((funding) => [funding.bookingId, funding]),
+    );
+
+    const assignmentByBooking = new Map<string, ProviderAssignment>();
+
+    for (const assignment of assignmentRows) {
+      if (!assignmentByBooking.has(assignment.bookingId)) {
+        assignmentByBooking.set(assignment.bookingId, assignment);
+      }
+    }
+
+    return {
+      items: bookings.map((booking) =>
+        this.map(
+          booking,
+          fundingByBooking.get(booking.id) ?? null,
+          assignmentByBooking.get(booking.id) ?? null,
+        ),
       ),
-    ),
 
-    page: query.page,
-    limit: query.limit,
-    total,
-    totalPages:
-      total === 0
-        ? 0
-        : Math.ceil(total / query.limit),
-  };
-}
+      page: query.page,
+      limit: query.limit,
+      total,
+      totalPages: total === 0 ? 0 : Math.ceil(total / query.limit),
+    };
+  }
 
   private map(
     booking: Booking,
@@ -204,7 +185,13 @@ export class AdminMatchingQueueService {
       preferredTimeFrom: booking.preferredTimeWindowStart,
       preferredTimeTo: booking.preferredTimeWindowEnd,
       preferredTimezone: booking.preferredTimezone,
-      visitArea: booking.visitAddress ? { city: booking.visitAddress.city, stateOrRegion: booking.visitAddress.stateOrRegion, countryCode: booking.visitAddress.countryCode } : null,
+      visitArea: booking.visitAddress
+        ? {
+            city: booking.visitAddress.city,
+            stateOrRegion: booking.visitAddress.stateOrRegion,
+            countryCode: booking.visitAddress.countryCode,
+          }
+        : null,
       fundingStatus: funding?.status ?? null,
       quotedAmount: booking.quotedAmount,
       quotedCurrency: booking.currency,

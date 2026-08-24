@@ -41,7 +41,11 @@ import { AdminMatchingQueueQueryDto } from "./dto/admin-matching-queue-query.dto
 import { AdminMatchingQueueResponseDto } from "./dto/admin-matching-queue-response.dto";
 import { AdminBookingDetailService } from "./admin-booking-detail.service";
 import { AdminBookingDetailResponseDto } from "./dto/admin-booking-detail-response.dto";
-import { ManualProviderAssignmentDto, OverrideProviderAssignmentDto, ReassignProviderDto } from "./dto/manual-provider-assignment.dto";
+import {
+  ManualProviderAssignmentDto,
+  OverrideProviderAssignmentDto,
+  ReassignProviderDto,
+} from "./dto/manual-provider-assignment.dto";
 
 @ApiTags("Admin provider matching")
 @ApiBearerAuth()
@@ -113,31 +117,83 @@ export class AdminProviderMatchingController {
   }
   @Post("bookings/:reference/matching/retry")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Retry matching for an unfulfillable booking (ADMIN or OPERATIONS)" })
+  @ApiOperation({
+    summary:
+      "Retry matching for an unfulfillable booking (ADMIN or OPERATIONS)",
+  })
   @ApiOkResponse({ type: AdminStartMatchingResponseDto })
-  async retry(@Param() { reference }: BookingReferenceParamsDto, @Req() request: { user: User }) {
-    return AdminStartMatchingResponseDto.fromDomain(reference, await this.matching.retryMatching(reference, request.user.id));
+  async retry(
+    @Param() { reference }: BookingReferenceParamsDto,
+    @Req() request: { user: User },
+  ) {
+    return AdminStartMatchingResponseDto.fromDomain(
+      reference,
+      await this.matching.retryMatching(reference, request.user.id),
+    );
   }
   @Post("bookings/:reference/assign-provider")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Offer a booking to a specifically selected eligible provider" })
+  @ApiOperation({
+    summary: "Offer a booking to a specifically selected eligible provider",
+  })
   @ApiOkResponse({ type: AdminStartMatchingResponseDto })
-  async assign(@Param() { reference }: BookingReferenceParamsDto, @Body() dto: ManualProviderAssignmentDto, @Req() request: { user: User }) {
-    return AdminStartMatchingResponseDto.fromDomain(reference, await this.matching.assignEligibleProvider(reference, dto.providerId, request.user.id));
+  async assign(
+    @Param() { reference }: BookingReferenceParamsDto,
+    @Body() dto: ManualProviderAssignmentDto,
+    @Req() request: { user: User },
+  ) {
+    return AdminStartMatchingResponseDto.fromDomain(
+      reference,
+      await this.matching.assignEligibleProvider(
+        reference,
+        dto.providerId,
+        request.user.id,
+      ),
+    );
   }
   @Post("bookings/:reference/assign-provider/override")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Exceptionally offer a booking to an active provider with an audited reason" })
+  @ApiOperation({
+    summary:
+      "Exceptionally offer a booking to an active provider with an audited reason",
+  })
   @ApiOkResponse({ type: AdminStartMatchingResponseDto })
-  async override(@Param() { reference }: BookingReferenceParamsDto, @Body() dto: OverrideProviderAssignmentDto, @Req() request: { user: User }) {
-    return AdminStartMatchingResponseDto.fromDomain(reference, await this.matching.assignProviderOverride(reference, dto.providerId, dto.reason, request.user.id));
+  async override(
+    @Param() { reference }: BookingReferenceParamsDto,
+    @Body() dto: OverrideProviderAssignmentDto,
+    @Req() request: { user: User },
+  ) {
+    return AdminStartMatchingResponseDto.fromDomain(
+      reference,
+      await this.matching.assignProviderOverride(
+        reference,
+        dto.providerId,
+        dto.reason,
+        request.user.id,
+      ),
+    );
   }
   @Post("bookings/:reference/reassign-provider")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Close the active assignment, release capacity, and rematch or offer a selected eligible provider" })
+  @ApiOperation({
+    summary:
+      "Close the active assignment, release capacity, and rematch or offer a selected eligible provider",
+  })
   @ApiOkResponse({ type: AdminStartMatchingResponseDto })
-  async reassign(@Param() { reference }: BookingReferenceParamsDto, @Body() dto: ReassignProviderDto, @Req() request: { user: User }) {
-    return AdminStartMatchingResponseDto.fromDomain(reference, await this.matching.reassign(reference, request.user.id, dto.reason, dto.providerId));
+  async reassign(
+    @Param() { reference }: BookingReferenceParamsDto,
+    @Body() dto: ReassignProviderDto,
+    @Req() request: { user: User },
+  ) {
+    return AdminStartMatchingResponseDto.fromDomain(
+      reference,
+      await this.matching.reassign(
+        reference,
+        request.user.id,
+        dto.reason,
+        dto.providerId,
+      ),
+    );
   }
   @Post("provider-assignments/:id/confirm")
   @HttpCode(HttpStatus.OK)

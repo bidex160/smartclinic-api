@@ -1,10 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { BookingFundingStatus } from "../../bookings/enums/booking-funding-status.enum";
 import { PaymentAttemptStatus } from "../enums/payment-attempt-status.enum";
+import { CheckoutFundingOption } from "../../bookings/enums/checkout-funding-option.enum";
 export class PaymentOperationResponseDto {
   @ApiProperty() bookingReference!: string;
   @ApiProperty({ enum: BookingFundingStatus })
   fundingStatus!: BookingFundingStatus;
+  @ApiPropertyOptional({ enum: CheckoutFundingOption, nullable: true }) checkoutOption!: CheckoutFundingOption | null;
   @ApiPropertyOptional({ format: "uuid", nullable: true }) attemptId!:
     | string
     | null;

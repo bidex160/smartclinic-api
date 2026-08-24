@@ -11,7 +11,7 @@ import {
 } from "@nestjs/common";
 import { ConfigType } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { In, Repository } from "typeorm";
 import { randomBytes } from "node:crypto";
 import { isEmail } from "class-validator";
 import { BookingContact } from "../bookings/entities/booking-contact.entity";
@@ -22,6 +22,7 @@ import { Booking } from "../bookings/entities/booking.entity";
 import { BookingFundingSourceType } from "../bookings/enums/booking-funding-source-type.enum";
 import { BookingFundingStatus } from "../bookings/enums/booking-funding-status.enum";
 import { BookingStatus } from "../bookings/enums/booking-status.enum";
+import { CheckoutFundingOption } from "../bookings/enums/checkout-funding-option.enum";
 import { PaymentAttempt } from "./entities/payment-attempt.entity";
 import { PaymentTransaction } from "./entities/payment-transaction.entity";
 import { PaymentAttemptStatus } from "./enums/payment-attempt-status.enum";
@@ -55,6 +56,7 @@ export class PaymentFlowService {
   async initializeFunding(
     reference: string,
     actorUserId: string | null,
+    checkoutOption: CheckoutFundingOption = CheckoutFundingOption.PAY_NOW,
   ): Promise<PaymentOperationResponseDto> {
     return this.bookings.manager.transaction(async (manager) => {
       const booking = await manager
@@ -113,8 +115,15 @@ export class PaymentFlowService {
             percentage: null,
             currency: booking.currency,
             status: BookingFundingStatus.PENDING,
+            checkoutOption,
           }),
         );
+      else if (funding.status === BookingFundingStatus.SETTLED)
+        throw new ConflictException('Settled funding cannot change checkout option');
+      else if (funding.checkoutOption !== checkoutOption) {
+        funding.checkoutOption = checkoutOption;
+        funding = await fundingRepository.save(funding);
+      }
       if (booking.status === BookingStatus.DRAFT) {
         booking.status = BookingStatus.AWAITING_FUNDING;
         await manager.getRepository(Booking).save(booking);
@@ -193,7 +202,23 @@ export class PaymentFlowService {
   }
   async initiatePublicPayment(
     reference: string,
+    option: CheckoutFundingOption = CheckoutFundingOption.PAY_NOW,
   ): Promise<PaymentOperationResponseDto> {
+    if (option === CheckoutFundingOption.PAY_LATER)
+      throw new BadRequestException('PAY_LATER does not initialize a payment provider');
+    const funding = await this.requireFunding(reference);
+    const active = await this.attempts.findOne({
+      where: {
+        bookingFundingId: funding.id,
+        status: In([
+          PaymentAttemptStatus.CREATED,
+          PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION,
+          PaymentAttemptStatus.PENDING_CONFIRMATION,
+        ]),
+      },
+      order: { createdAt: 'DESC' },
+    });
+    if (active) return this.response(funding.booking, funding, active);
     return this.initiatePayment(
       reference,
       `PUBLIC-${randomBytes(16).toString("hex")}`,
@@ -525,6 +550,7 @@ private async applyVerification(
     return {
       bookingReference: booking.bookingReference,
       fundingStatus: funding.status,
+      checkoutOption: funding.checkoutOption,
       attemptId: attempt?.id ?? null,
       attemptStatus: attempt?.status ?? null,
       amount: funding.amount!,

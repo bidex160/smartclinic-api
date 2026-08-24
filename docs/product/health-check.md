@@ -46,7 +46,7 @@ Patient health information, booking information, payment information, provider i
 
 `HealthCheckEncounter` is separate from Booking and is bound to the booking's confirmed ProviderAssignment and Provider. V1 permits one encounter per booking. Its lifecycle is `DRAFT → IN_PROGRESS → COMPLETED`; starting records `startedAt`, completion records `completedAt`, and completed encounters cannot be edited normally.
 
-The authenticated, active Provider owning the confirmed assignment may start, view, save, and complete through `/api/v1/provider/bookings/:reference/health-check`. ADMIN or OPERATIONS roles do not inherit clinical write access unless the user separately has `PROVIDER` and resolves to the owning active Provider. Public booking sessions and patient/public endpoints expose no encounter or measurement data.
+The authenticated, active Provider owning the confirmed assignment may start, view, save, and complete through `/api/v1/provider/bookings/:reference/health-check`. ADMIN or OPERATIONS roles do not inherit clinical write access unless the user separately has `PROVIDER` and resolves to the owning active Provider. Public booking sessions and patient/public endpoints expose no encounter or measurement data. For owned HOME_VISIT work, every encounter response includes the minimum operational visit address and optional supplemental directions needed to perform the visit; PROVIDER_LOCATION encounters keep that projection null and continue using their provider-location context.
 
 | Code | Values | Unit |
 | --- | --- | --- |

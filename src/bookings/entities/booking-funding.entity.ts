@@ -5,6 +5,7 @@ import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, 
 
 import { BookingFundingSourceType } from '../enums/booking-funding-source-type.enum';
 import { BookingFundingStatus } from '../enums/booking-funding-status.enum';
+import { CheckoutFundingOption } from '../enums/checkout-funding-option.enum';
 import { Booking } from './booking.entity';
 import { BookingContact } from './booking-contact.entity';
 
@@ -71,6 +72,9 @@ export class BookingFunding {
 
   @Column({ type: 'enum', enum: BookingFundingStatus, enumName: 'booking_funding_status_enum', default: BookingFundingStatus.PENDING })
   status!: BookingFundingStatus;
+
+  @Column({ name: 'checkout_option', type: 'enum', enum: CheckoutFundingOption, enumName: 'checkout_funding_option_enum', nullable: true })
+  checkoutOption!: CheckoutFundingOption | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

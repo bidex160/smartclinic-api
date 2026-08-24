@@ -32,6 +32,8 @@ import {
   PublicBookingSessionService,
 } from "./public-booking-session.service";
 import { PaymentFlowService } from "../payments/payment-flow.service";
+import { PublicCheckoutSelectionDto } from '../payments/dto/initiate-payment.dto';
+import { CheckoutFundingOption } from './enums/checkout-funding-option.enum';
 import { PublicPaymentInitiationResponseDto } from "../payments/dto/public-payment-initiation-response.dto";
 import { PublicPaymentStatusResponseDto } from "../payments/dto/public-payment-status-response.dto";
 
@@ -103,11 +105,16 @@ export class PublicBookingsController {
   async initiatePayment(
     @Param() p: BookingReferenceParamsDto,
     @Req() request: Request,
+    @Body() dto: PublicCheckoutSelectionDto,
   ) {
     await this.sessions.resolveBooking(this.readCookie(request), p.reference);
-    await this.payments.initializeFunding(p.reference, null);
+    const option = dto?.option ?? CheckoutFundingOption.PAY_NOW;
+    const funding = await this.payments.initializeFunding(p.reference, null, option);
+    if (option === CheckoutFundingOption.PAY_LATER)
+      return PublicPaymentInitiationResponseDto.fromOperation(funding, option);
     return PublicPaymentInitiationResponseDto.fromOperation(
-      await this.payments.initiatePublicPayment(p.reference),
+      await this.payments.initiatePublicPayment(p.reference, option),
+      option,
     );
   }
   @Get(":reference/payment-status")

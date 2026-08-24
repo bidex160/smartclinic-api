@@ -80,8 +80,26 @@ describe('ProviderHealthCheckEncountersService', () => {
   });
 
   it('maps only the safe provider encounter projection', () => {
-    const mapped = (subject as any).toResponse({ status: HealthCheckEncounterStatus.IN_PROGRESS, startedAt: new Date(), completedAt: null, booking: { bookingReference: booking.bookingReference, participant: { givenName: 'Ada', familyName: 'Okafor' }, healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential' }, fulfilmentMode: { code: 'HOME_VISIT', name: 'Home Visit' } }, measurements: [{ code: HealthCheckMeasurementCode.BLOOD_PRESSURE, valueNumeric: '120.0000', valueSecondaryNumeric: '80.0000', unit: 'mmHg', recordedAt: new Date() }] });
-    expect(mapped).toMatchObject({ bookingReference: booking.bookingReference, participant: { givenName: 'Ada', familyName: 'Okafor' }, measurements: [{ value: 120, secondaryValue: 80, unit: 'mmHg' }] });
+    const mapped = (subject as any).toResponse({ status: HealthCheckEncounterStatus.IN_PROGRESS, startedAt: new Date(), completedAt: null, booking: { bookingReference: booking.bookingReference, participant: { givenName: 'Ada', familyName: 'Okafor' }, healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential' }, fulfilmentMode: { code: 'HOME_VISIT', name: 'Home Visit' }, preferredLocationNote: 'Blue gate', visitAddress: { addressLine1: '12 Allen Avenue', addressLine2: 'Flat 4', city: 'Ikeja', stateOrRegion: 'Lagos', postalCode: '100271', countryCode: 'NG' } }, measurements: [{ code: HealthCheckMeasurementCode.BLOOD_PRESSURE, valueNumeric: '120.0000', valueSecondaryNumeric: '80.0000', unit: 'mmHg', recordedAt: new Date() }] });
+    expect(mapped).toMatchObject({ bookingReference: booking.bookingReference, participant: { givenName: 'Ada', familyName: 'Okafor' }, visitAddress: { addressLine1: '12 Allen Avenue', addressLine2: 'Flat 4', city: 'Ikeja', stateOrRegion: 'Lagos', postalCode: '100271', countryCode: 'NG', locationNote: 'Blue gate' }, measurements: [{ value: 120, secondaryValue: 80, unit: 'mmHg' }] });
     expect(mapped).not.toHaveProperty('providerId'); expect(mapped).not.toHaveProperty('history'); expect(mapped).not.toHaveProperty('funding');
+    expect(mapped).not.toHaveProperty('payment'); expect(mapped).not.toHaveProperty('contact'); expect(mapped.visitAddress).not.toHaveProperty('serviceAreaId');
+  });
+
+  it('does not project a home address for PROVIDER_LOCATION encounters', () => {
+    const mapped = (subject as any).toResponse({ status: HealthCheckEncounterStatus.IN_PROGRESS, startedAt: new Date(), completedAt: null, booking: { bookingReference: booking.bookingReference, participant: { givenName: 'Ada', familyName: 'Okafor' }, healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential' }, fulfilmentMode: { code: 'PROVIDER_LOCATION', name: 'Provider location' }, preferredLocationNote: 'private note', visitAddress: { addressLine1: 'Must not leak' } }, measurements: [] });
+    expect(mapped.visitAddress).toBeNull();
+  });
+
+  it('uses the same authorized get projection after start, save, and complete commands', async () => {
+    await subject.start(user, booking.bookingReference);
+    encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS };
+    await subject.saveMeasurements(user, booking.bookingReference, dto);
+    booking.status = BookingStatus.IN_PROGRESS; measurements = Object.values(HealthCheckMeasurementCode).map((code) => ({ code }));
+    await subject.complete(user, booking.bookingReference);
+    expect(subject.get).toHaveBeenCalledTimes(3);
+    expect(subject.get).toHaveBeenNthCalledWith(1, user, booking.bookingReference);
+    expect(subject.get).toHaveBeenNthCalledWith(2, user, booking.bookingReference);
+    expect(subject.get).toHaveBeenNthCalledWith(3, user, booking.bookingReference);
   });
 });

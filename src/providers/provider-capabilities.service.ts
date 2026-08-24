@@ -27,7 +27,12 @@ export interface AvailabilityWindow {
   requestedStartTime: string;
   requestedEndTime: string;
   requestedTimezone: string;
-  visitAddress?: { countryCode: string; stateOrRegion: string; city: string; postalCode: string | null } | null;
+  visitAddress?: {
+    countryCode: string;
+    stateOrRegion: string;
+    city: string;
+    postalCode: string | null;
+  } | null;
 }
 
 @Injectable()
@@ -71,7 +76,9 @@ export class ProviderCapabilitiesService {
       this.packages.findOne({ where: { id: dto.healthCheckPackageId } }),
       this.modes.findOne({ where: { id: dto.fulfilmentModeId } }),
     ]);
-    if (![ProviderStatus.ACTIVE, ProviderStatus.PENDING].includes(provider.status))
+    if (
+      ![ProviderStatus.ACTIVE, ProviderStatus.PENDING].includes(provider.status)
+    )
       throw new BadRequestException(
         "Provider must be active or pending to add capabilities",
       );
@@ -109,7 +116,9 @@ export class ProviderCapabilitiesService {
   async activateService(id: string): Promise<ProviderServiceResponseDto> {
     const service = await this.requireService(id);
     const provider = await this.requireProvider(service.providerId);
-    if (![ProviderStatus.ACTIVE, ProviderStatus.PENDING].includes(provider.status))
+    if (
+      ![ProviderStatus.ACTIVE, ProviderStatus.PENDING].includes(provider.status)
+    )
       throw new BadRequestException(
         "Provider must be active or pending to activate capabilities",
       );
@@ -294,6 +303,7 @@ export class ProviderCapabilitiesService {
       .andWhere("provider.deletedAt IS NULL")
       .andWhere("package.isActive = true")
       .andWhere("mode.isActive = true");
+    console.log(window);
     if (window) {
       const dayOfWeek = this.validateAvailabilityWindow(window);
       const applicableLocation = `(scope.provider_location_id IS NULL OR EXISTS (SELECT 1 FROM provider_locations scoped_location INNER JOIN provider_service_locations scoped_link ON scoped_link.provider_location_id = scoped_location.id WHERE scoped_location.id = scope.provider_location_id AND scoped_location.is_active = true AND scoped_link.provider_service_id = service.id))`;
@@ -310,10 +320,45 @@ export class ProviderCapabilitiesService {
       query.andWhere(
         `NOT EXISTS (SELECT 1 FROM provider_availability_exceptions scope WHERE scope.provider_id = provider.id AND scope.is_active = true AND scope.type = 'UNAVAILABLE' AND scope.date = :requestedDate AND scope.timezone = :requestedTimezone AND (scope.start_time IS NULL OR (scope.start_time < :requestedEndTime AND scope.end_time > :requestedStartTime)) AND (scope.provider_service_id IS NULL OR scope.provider_service_id = service.id) AND ${applicableLocation})`,
       );
-      query.andWhere(`(mode.code <> 'HOME_VISIT' OR (:visitCountry IS NOT NULL AND EXISTS (SELECT 1 FROM provider_service_areas area WHERE area.provider_id = provider.id AND area.provider_service_id = service.id AND area.is_active = true AND area.country_code = :visitCountry AND LOWER(area.state_or_region) = LOWER(:visitState) AND (area.city IS NULL OR LOWER(area.city) = LOWER(:visitCity)) AND (area.postal_code IS NULL OR LOWER(area.postal_code) = LOWER(:visitPostal)))))`, { visitCountry: window.visitAddress?.countryCode ?? null, visitState: window.visitAddress?.stateOrRegion ?? '', visitCity: window.visitAddress?.city ?? '', visitPostal: window.visitAddress?.postalCode ?? '' });
+      if (window.visitAddress) {
+        query.andWhere(
+          `(
+      mode.code <> 'HOME_VISIT'
+      OR EXISTS (
+        SELECT 1
+        FROM provider_service_areas area
+        WHERE area.provider_id = provider.id
+          AND area.provider_service_id = service.id
+          AND area.is_active = true
+          AND area.country_code = :visitCountry
+          AND LOWER(area.state_or_region) = LOWER(:visitState)
+          AND (
+            area.city IS NULL
+            OR LOWER(area.city) = LOWER(:visitCity)
+          )
+          AND (
+            area.postal_code IS NULL
+            OR LOWER(area.postal_code) = LOWER(:visitPostal)
+          )
+      )
+    )`,
+          {
+            visitCountry: window.visitAddress.countryCode,
+            visitState: window.visitAddress.stateOrRegion,
+            visitCity: window.visitAddress.city,
+            visitPostal: window.visitAddress.postalCode ?? "",
+          },
+        );
+      } else {
+        // HOME_VISIT cannot match without a structured visit address.
+        query.andWhere("mode.code <> 'HOME_VISIT'");
+      }
+      // query.andWhere(`(mode.code <> 'HOME_VISIT' OR (:visitCountry IS NOT NULL AND EXISTS (SELECT 1 FROM provider_service_areas area WHERE area.provider_id = provider.id AND area.provider_service_id = service.id AND area.is_active = true AND area.country_code = :visitCountry AND LOWER(area.state_or_region) = LOWER(:visitState) AND (area.city IS NULL OR LOWER(area.city) = LOWER(:visitCity)) AND (area.postal_code IS NULL OR LOWER(area.postal_code) = LOWER(:visitPostal)))))`, { visitCountry: window.visitAddress?.countryCode ?? null, visitState: window.visitAddress?.stateOrRegion ?? '', visitCity: window.visitAddress?.city ?? '', visitPostal: window.visitAddress?.postalCode ?? '' });
       query.andWhere(
-        `NOT EXISTS (SELECT 1 FROM provider_booking_reservations reservation WHERE reservation.provider_id = provider.id AND reservation.scheduled_date = :requestedDate AND reservation.status IN ('HELD', 'CONFIRMED') AND reservation.start_time < :requestedEndTime AND reservation.end_time > :requestedStartTime${excludeProviderAssignmentId ? ' AND reservation.provider_assignment_id <> :excludeProviderAssignmentId' : ''})`,
-        excludeProviderAssignmentId ? { excludeProviderAssignmentId } : undefined,
+        `NOT EXISTS (SELECT 1 FROM provider_booking_reservations reservation WHERE reservation.provider_id = provider.id AND reservation.scheduled_date = :requestedDate AND reservation.status IN ('HELD', 'CONFIRMED') AND reservation.start_time < :requestedEndTime AND reservation.end_time > :requestedStartTime${excludeProviderAssignmentId ? " AND reservation.provider_assignment_id <> :excludeProviderAssignmentId" : ""})`,
+        excludeProviderAssignmentId
+          ? { excludeProviderAssignmentId }
+          : undefined,
       );
     }
     const rows = await query.orderBy("service.createdAt", "ASC").getMany();
