@@ -10,6 +10,8 @@ import { ProviderBookingReservation } from './entities/provider-booking-reservat
 import { ProviderBookingReservationStatus } from './enums/provider-booking-reservation-status.enum';
 import { Provider } from './entities/provider.entity';
 import { ProviderStatus } from './enums/provider-status.enum';
+import { HealthCheckPackage } from '../health-checks/entities/health-check-package.entity';
+import { FulfilmentMode } from '../health-checks/entities/fulfilment-mode.entity';
 
 const ids = { booking: '10000000-0000-4000-8000-000000000001', provider1: '20000000-0000-4000-8000-000000000001', provider2: '20000000-0000-4000-8000-000000000002', assignment: '30000000-0000-4000-8000-000000000001', actor: '40000000-0000-4000-8000-000000000001' };
 const now = new Date('2026-08-24T08:00:00.000Z');
@@ -28,11 +30,13 @@ describe('ProviderMatchingService', () => {
     const reservationQuery = { where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), getExists: jest.fn().mockResolvedValue(false) };
     reservations = { findOne: jest.fn().mockResolvedValue({ id: 'reservation', providerAssignmentId: ids.assignment, status: ProviderBookingReservationStatus.HELD, releasedAt: null }), create: jest.fn((value) => value), save: jest.fn(async (value) => ({ id: 'reservation', ...value })), createQueryBuilder: jest.fn().mockReturnValue(reservationQuery) };
     const providers = { findOne: jest.fn().mockResolvedValue({ id: ids.provider1, status: ProviderStatus.ACTIVE, deletedAt: null }) };
-    const manager: any = { getRepository: jest.fn((entity) => entity === Booking ? bookings : entity === ProviderAssignment ? assignments : entity === ProviderBookingReservation ? reservations : entity === BookingStatusHistory ? bookingHistory : entity === Provider ? providers : assignmentHistory) };
+    const healthCheckPackages = { findOne: jest.fn().mockResolvedValue({ id: '50000000-0000-4000-8000-000000000001', estimatedDurationMinutes: 30 }) };
+    const fulfilmentModes = { findOne: jest.fn().mockResolvedValue({ id: '60000000-0000-4000-8000-000000000001', code: 'HOME_VISIT', isActive: true }) };
+    const manager: any = { getRepository: jest.fn((entity) => entity === Booking ? bookings : entity === ProviderAssignment ? assignments : entity === ProviderBookingReservation ? reservations : entity === BookingStatusHistory ? bookingHistory : entity === Provider ? providers : entity === HealthCheckPackage ? healthCheckPackages : entity === FulfilmentMode ? fulfilmentModes : assignmentHistory) };
     manager.transaction = jest.fn(async (work: (value: any) => unknown) => work(manager));
     assignments.manager = manager;
     capabilities = { findEligibleProviders: jest.fn().mockResolvedValue([eligible(ids.provider1), eligible(ids.provider2)]) };
-    subject = new ProviderMatchingService(bookings, assignments, capabilities, { providerMatching: { offerTtlMinutes: 30 } } as never);
+    subject = new ProviderMatchingService(bookings, assignments, capabilities, {} as never, { providerMatching: { offerTtlMinutes: 30 } } as never);
   });
 
   it('requires complete booking scheduling context', async () => { bookings.findOne.mockResolvedValue(booking({ preferredTimezone: null })); await expect(subject.startMatching('SC-2026-ABCDEFGHIJKL', ids.actor, now)).rejects.toBeInstanceOf(BadRequestException); });

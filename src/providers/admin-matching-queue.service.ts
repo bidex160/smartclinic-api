@@ -34,12 +34,9 @@ export class AdminMatchingQueueService {
       .leftJoinAndSelect("booking.participant", "participant")
       .leftJoinAndSelect("booking.visitAddress", "visitAddress");
 
-    if (query.bookingStatus) {
-      builder.where("booking.status = :bookingStatus", {
-        bookingStatus:
-          query.bookingStatus,
-      });
-    }
+    builder.where("booking.status = :bookingStatus", {
+      bookingStatus: query.bookingStatus ?? BookingStatus.PENDING_PROVIDER_MATCH,
+    });
 
     if (!query.bookingStatus) {
       builder.andWhere(

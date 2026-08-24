@@ -16,6 +16,7 @@ describe("Public payment boundary (e2e)", () => {
     bookingReference: reference,
     bookingStatus: "AWAITING_FUNDING",
     fundingStatus: "PENDING",
+    checkoutOption: "PAY_NOW",
     paymentStatus: "PENDING_CONFIRMATION",
     paymentAttemptReference: "SC-PAY-safe",
     amount: "12500.00",
@@ -35,22 +36,25 @@ describe("Public payment boundary (e2e)", () => {
       cookieOptions: jest.fn(),
     };
     const payments = {
-      initializeFunding: jest.fn().mockResolvedValue({}),
+      initializeFunding: jest.fn().mockImplementation((_reference, _actor, option = 'PAY_NOW') => Promise.resolve({ bookingReference: reference, fundingStatus: 'PENDING', checkoutOption: option, attemptId: null, attemptStatus: null, amount: '12500.00', currency: 'NGN', paymentReference: null, checkoutUrl: null, accessCode: null })),
       initiatePublicPayment: jest.fn().mockResolvedValue({
         bookingReference: reference,
         fundingStatus: "PENDING",
+        checkoutOption: "PAY_NOW",
         attemptId: "internal-id",
         attemptStatus: "AWAITING_CUSTOMER_ACTION",
         amount: "12500.00",
         currency: "NGN",
         paymentReference: "SC-PAY-safe",
         checkoutUrl: "https://checkout.paystack.test/safe",
+        accessCode: "popup-access-code",
       }),
       getPublicPaymentStatus: jest.fn().mockResolvedValue(status),
       verifyLatestBookingPayment: jest.fn().mockResolvedValue({
         ...status,
         bookingStatus: "PENDING_PROVIDER_MATCH",
         fundingStatus: "SETTLED",
+        checkoutOption: "PAY_NOW",
         paymentStatus: "SUCCEEDED",
         paidAt: "2026-08-18T10:00:00.000Z",
       }),
@@ -83,14 +87,27 @@ describe("Public payment boundary (e2e)", () => {
       .expect((response) => {
         expect(response.body).toEqual({
           bookingReference: reference,
+          fundingStatus: "PENDING",
+          checkoutOption: "PAY_NOW",
           paymentAttemptReference: "SC-PAY-safe",
           status: "AWAITING_CUSTOMER_ACTION",
           amount: "12500.00",
           currency: "NGN",
           checkoutUrl: "https://checkout.paystack.test/safe",
+          accessCode: "popup-access-code",
         });
         expect(response.body).not.toHaveProperty("attemptId");
       }));
+  it('returns a shareable hosted URL without Popup credentials for PAYMENT_LINK', () =>
+    request(app.getHttpServer()).post(`/api/v1/public/bookings/${reference}/payment/initiate`).set('Cookie', cookie).send({ option: 'PAYMENT_LINK' }).expect(200).expect((response) => {
+      expect(response.body).toMatchObject({ checkoutOption: 'PAYMENT_LINK', checkoutUrl: 'https://checkout.paystack.test/safe' });
+      expect(response.body.accessCode).toBeNull();
+      expect(response.body.fundingStatus).toBe('PENDING');
+    }));
+  it('keeps PAY_LATER outstanding without initializing Paystack', () =>
+    request(app.getHttpServer()).post(`/api/v1/public/bookings/${reference}/payment/initiate`).set('Cookie', cookie).send({ option: 'PAY_LATER' }).expect(200).expect((response) => {
+      expect(response.body).toMatchObject({ checkoutOption: 'PAY_LATER', fundingStatus: 'PENDING', paymentAttemptReference: null, status: null, checkoutUrl: null, accessCode: null });
+    }));
   it("denies status lookup without a session", () =>
     request(app.getHttpServer())
       .get(`/api/v1/public/bookings/${reference}/payment-status`)

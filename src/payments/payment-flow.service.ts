@@ -535,6 +535,7 @@ private async applyVerification(
       bookingReference: booking.bookingReference,
       bookingStatus: booking.status,
       fundingStatus: funding?.status ?? null,
+      checkoutOption: funding?.checkoutOption ?? null,
       paymentStatus: attempt?.status ?? null,
       paymentAttemptReference: attempt?.providerReference ?? null,
       amount: funding?.amount ?? booking.quotedAmount ?? null,

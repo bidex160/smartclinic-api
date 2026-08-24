@@ -440,6 +440,8 @@ Future organisation work needs explicit `organisation_programmes`, `organisation
 
 `booking_visit_addresses` stores one current structured HOME_VISIT address per booking through a unique `booking_id` foreign key. It is deliberately separate from ProviderLocation. `provider_service_areas` belongs jointly to Provider and ProviderService, supports country/state plus optional city/postal narrowing, and has active provider/service and geographic lookup indexes. A composite foreign key prevents a service from being attached to another provider's area.
 
+`booking_funding.checkout_option` records `PAY_NOW`, `PAYMENT_LINK`, or `PAY_LATER` on the funding obligation rather than the PaymentAttempt. This permits outstanding PAY_LATER obligations without manufacturing an attempt while allowing Popup and hosted-link navigation to share the same provider attempt and settlement rules. Existing SELF funding rows are backfilled to `PAY_NOW`; the nullable column preserves compatibility for non-SELF/future funding sources.
+
 Other planned extensions are a booking-group/order table, package-price table, address revisions, consent/authority records, matching cycles/eligibility snapshots, payment provider events, notification delivery, and clinical health-check/result records.
 
 ## 10. Open design decisions before entities

@@ -303,7 +303,6 @@ export class ProviderCapabilitiesService {
       .andWhere("provider.deletedAt IS NULL")
       .andWhere("package.isActive = true")
       .andWhere("mode.isActive = true");
-    console.log(window);
     if (window) {
       const dayOfWeek = this.validateAvailabilityWindow(window);
       const applicableLocation = `(scope.provider_location_id IS NULL OR EXISTS (SELECT 1 FROM provider_locations scoped_location INNER JOIN provider_service_locations scoped_link ON scoped_link.provider_location_id = scoped_location.id WHERE scoped_location.id = scope.provider_location_id AND scoped_location.is_active = true AND scoped_link.provider_service_id = service.id))`;

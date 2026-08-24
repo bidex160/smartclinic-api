@@ -91,6 +91,20 @@ ADMIN/OPERATIONS test-management endpoints remain available outside production. 
 
 Public checkout initiation is now available at `POST /api/v1/public/bookings/:reference/payment/initiate` after session authorization. It initializes/reuses quote-backed funding, resolves payer email from the responsible User or guest BookingContact, generates a retry-specific `SC-PAY-...` reference, and returns only the normalized reference/status/amount/currency/checkout URL. Missing email is a business error; no address is fabricated. A registered-owner initiation route remains deferred because registered booking ownership authorization is not yet sufficiently defined.
 
+## Checkout funding options
+
+The booking's SELF funding obligation records one current checkout option:
+
+- `PAY_NOW` initializes Paystack and returns the existing Popup `accessCode` plus hosted checkout URL. The Popup flow remains compatible.
+- `PAYMENT_LINK` initializes or reuses the same provider-neutral active attempt and returns the Paystack-hosted `checkoutUrl`; its Popup access code is intentionally omitted from this response. The URL can be shared with an external payer, but grants no SmartClinic booking, payment-status, patient, or result authority.
+- `PAY_LATER` creates or reuses the outstanding funding obligation, leaves the booking `AWAITING_FUNDING`, and creates no PaymentAttempt. It is not free or settled funding and holds no provider capacity.
+
+Before settlement, PAY_LATER can change to either collection option, and PAY_NOW/PAYMENT_LINK reuse the latest active provider attempt where possible. Failed, abandoned, or cancelled attempts may be replaced safely. Once funding is settled, the option cannot be changed and another collection cannot be initialized.
+
+For both provider checkout modes, only webhook or deliberate server-side verification can create the successful PaymentTransaction, settle funding, advance the booking, and trigger matching. Popup callbacks, redirects, hosted checkout pages, and possession of a checkout URL are never proof of payment. Webhook/manual verification races continue through the same locked idempotent settlement path.
+
+V1 continues using the booking contact/responsible-user email when initializing Paystack; a person paying a shared link is not separately modeled. Pay-later expiry, explicit external-payer identity, wallet funding, organisation funding, refunds, and payment-link delivery remain deferred.
+
 Paystack receives amounts in currency subunits. The adapter converts decimal strings using integer arithmetic (`NGN 12500.00 → 1250000`) and never floating point. Paystack status `success` is the only success mapping; `failed`, `abandoned`, `ongoing`, `pending`, `processing`, `queued`, `reversed`, and unknown states remain non-successful until a later verified success.
 
 `POST /api/v1/payments/paystack/webhook` authenticates the exact raw request bytes with HMAC-SHA512 and the server-only secret. `charge.success` triggers an independent `/transaction/verify/:reference` call, followed by reference, expected amount, and currency checks before the existing idempotent settlement transaction. Unsupported signed events are acknowledged without mutation; invalid signatures are rejected. Raw webhook payloads are not retained.

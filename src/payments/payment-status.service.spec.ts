@@ -1,6 +1,7 @@
 import { BookingFunding } from '../bookings/entities/booking-funding.entity';
 import { BookingFundingStatus } from '../bookings/enums/booking-funding-status.enum';
 import { BookingStatus } from '../bookings/enums/booking-status.enum';
+import { CheckoutFundingOption } from '../bookings/enums/checkout-funding-option.enum';
 import { PaymentAttempt } from './entities/payment-attempt.entity';
 import { PaymentTransaction } from './entities/payment-transaction.entity';
 import { PaymentAttemptStatus } from './enums/payment-attempt-status.enum';
@@ -8,7 +9,7 @@ import { PaymentFlowService } from './payment-flow.service';
 
 describe('PaymentFlowService public payment status', () => {
   const booking: any = { id: 'booking-id', bookingReference: 'SC-2026-ABCDEF123456', status: BookingStatus.AWAITING_FUNDING, quotedAmount: '12500.00', currency: 'NGN' };
-  const funding: any = { id: 'funding-id', bookingId: booking.id, status: BookingFundingStatus.PENDING, amount: '12500.00', currency: 'NGN' };
+  const funding: any = { id: 'funding-id', bookingId: booking.id, status: BookingFundingStatus.PENDING, checkoutOption: CheckoutFundingOption.PAY_LATER, amount: '12500.00', currency: 'NGN' };
 
   function setup(attempt: any = null, transaction: any = null) {
     const fundingRepository = { findOne: jest.fn().mockResolvedValue(funding) };
@@ -25,7 +26,7 @@ describe('PaymentFlowService public payment status', () => {
 
   it('returns a safe not-started state when there is no attempt', async () => {
     const { subject } = setup();
-    await expect(subject.getPublicPaymentStatus(booking.bookingReference)).resolves.toEqual({ bookingReference: booking.bookingReference, bookingStatus: BookingStatus.AWAITING_FUNDING, fundingStatus: BookingFundingStatus.PENDING, paymentStatus: null, paymentAttemptReference: null, amount: '12500.00', currency: 'NGN', paidAt: null });
+    await expect(subject.getPublicPaymentStatus(booking.bookingReference)).resolves.toEqual({ bookingReference: booking.bookingReference, bookingStatus: BookingStatus.AWAITING_FUNDING, fundingStatus: BookingFundingStatus.PENDING, checkoutOption: CheckoutFundingOption.PAY_LATER, paymentStatus: null, paymentAttemptReference: null, amount: '12500.00', currency: 'NGN', paidAt: null });
   });
 
   it('returns the latest pending attempt without internal IDs', async () => {
