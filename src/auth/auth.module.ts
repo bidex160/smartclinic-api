@@ -10,6 +10,7 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { RolesGuard } from './roles.guard';
 import { AuthSession } from './entities/auth-session.entity';
+import { Patient } from '../patients/entities/patient.entity';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { AuthSession } from './entities/auth-session.entity';
       User,
       UserCredential,
       AuthSession,
+      Patient,
     ]),
 
     JwtModule.registerAsync({

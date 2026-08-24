@@ -7,6 +7,7 @@ import { HealthCheckPackage } from '../health-checks/entities/health-check-packa
 import { PackagePricingService } from '../health-checks/package-pricing.service';
 import { Patient } from '../patients/entities/patient.entity';
 import { PatientStatus } from '../patients/enums/patient-status.enum';
+import { generatePatientReference, isPatientReferenceCollision } from '../patients/patient-reference';
 import {
   generateBookingReference,
   isBookingReferenceCollision,
@@ -65,6 +66,7 @@ export class PublicBookingsService {
 
           const patient = await patientRepository.save(
             patientRepository.create({
+              patientReference: generatePatientReference(),
               userId: null,
               givenName: participant.givenName,
               familyName: participant.familyName,
@@ -118,7 +120,7 @@ export class PublicBookingsService {
         });
         return { booking: await this.findResponseByReference(created.savedBooking.bookingReference), sessionToken: created.sessionToken };
       } catch (error) {
-        if (!isBookingReferenceCollision(error) || attempt === MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS - 1) {
+        if ((!isBookingReferenceCollision(error) && !isPatientReferenceCollision(error)) || attempt === MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS - 1) {
           throw error;
         }
       }

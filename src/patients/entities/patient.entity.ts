@@ -13,6 +13,9 @@ export class Patient {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  @Column({ name: 'patient_reference', type: 'varchar', length: 13, unique: true })
+  patientReference!: string;
+
   @Column({ name: 'user_id', type: 'uuid', nullable: true })
   userId!: string | null;
 

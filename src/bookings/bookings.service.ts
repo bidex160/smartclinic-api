@@ -20,6 +20,8 @@ import {
   MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS,
 } from './booking-reference';
 import { validateBookingSchedulingPreference } from './booking-scheduling';
+import { CreateSelfBookingDto } from './dto/create-self-booking.dto';
+import { PatientStatus } from '../patients/enums/patient-status.enum';
 
 
 @Injectable()
@@ -39,6 +41,12 @@ export class BookingsService {
     private readonly fulfilmentModeRepository: Repository<FulfilmentMode>,
     private readonly packagePricingService: PackagePricingService,
   ) {}
+
+  async createSelf(user: User, dto: CreateSelfBookingDto): Promise<BookingResponseDto> {
+    const patient = await this.patientRepository.findOne({ where: { userId: user.id }, withDeleted: true });
+    if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE) throw new NotFoundException('SELF Patient identity was not found for the authenticated user');
+    return this.create({ ...dto, bookerUserId: user.id, participantPatientId: patient.id });
+  }
 
   async create(createBookingDto: CreateBookingDto): Promise<BookingResponseDto> {
     validateBookingSchedulingPreference(createBookingDto);

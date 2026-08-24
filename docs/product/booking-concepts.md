@@ -45,6 +45,14 @@ Booking for another person requires authority and consent rules that will be des
 
 A guest Patient may later be linked explicitly to an authenticated User by proving control of one of that Patient's bookings with the booking-bound session, or by proving control of a completed encounter with its guest result token. The link reuses the existing Patient and therefore preserves every booking and clinical record. It does not convert the booking session into authenticated booking/payment ownership, and no contact-field match can trigger it automatically.
 
+## Registered patient identity
+
+Normal USER registration transactionally creates a distinct SELF Patient linked through the unique `patients.user_id` relationship. User is the authentication identity; Patient is the health identity; Booker creates a booking; Payer funds it; Participant is the Patient receiving care. None of Booker, Payer, matching email/phone, or possession of a patient reference grants medical-history ownership.
+
+`POST /api/v1/me/health-checks` creates a booking for the authenticated USER's existing SELF Patient and never accepts User or Patient IDs. Repeated bookings therefore remain attached to one Patient. Bookings made for another Patient are excluded from `/me` history even when the current User was their booker or payer. Dependent/family authorization remains deferred.
+
+Every Patient has a server-generated immutable reference such as `SCP-8K4M-27QD`. It is a non-sensitive identifier for communication, not a credential. It grants no profile, booking, result, or history access and is not accepted during creation.
+
 ## Public booking intake
 
 A public visitor may create a booking without a `User` record. The platform creates a separate `Patient`, a `BookingContact` snapshot, and a booking-bound session in one transaction; it does not auto-create a User. Only the session hash is stored and the raw token is delivered in an HttpOnly cookie.

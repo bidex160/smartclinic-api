@@ -14,6 +14,9 @@ import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { Patient } from '../patients/entities/patient.entity';
+import { PatientStatus } from '../patients/enums/patient-status.enum';
+import { generatePatientReference, isPatientReferenceCollision, MAX_PATIENT_REFERENCE_GENERATION_ATTEMPTS } from '../patients/patient-reference';
 
 @Injectable()
 export class AuthService {
@@ -22,17 +25,21 @@ export class AuthService {
     const email = dto.email.trim().toLowerCase();
     if (await this.users.exists({ where: { emailNormalized: email } })) throw new ConflictException('An account already exists for this email');
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    try {
-      const user = await this.users.manager.transaction(async manager => {
-        const saved = await manager.getRepository(User).save(manager.getRepository(User).create({ email, emailNormalized: email, displayName: dto.displayName.trim(), status: UserStatus.ACTIVE, roles: [UserRole.USER] }));
-        await manager.getRepository(UserCredential).save(manager.getRepository(UserCredential).create({ userId: saved.id, passwordHash }));
-        return saved;
-      });
-      return UserResponseDto.fromEntity(user);
-    } catch (error) {
-      if (error instanceof QueryFailedError && (error.driverError as { constraint?: string }).constraint === 'UQ_users_email_normalized') throw new ConflictException('An account already exists for this email');
-      throw error;
+    for (let attempt = 0; attempt < MAX_PATIENT_REFERENCE_GENERATION_ATTEMPTS; attempt += 1) {
+      try {
+        const user = await this.users.manager.transaction(async manager => {
+          const saved = await manager.getRepository(User).save(manager.getRepository(User).create({ email, emailNormalized: email, displayName: `${dto.givenName.trim()} ${dto.familyName.trim()}`, status: UserStatus.ACTIVE, roles: [UserRole.USER] }));
+          await manager.getRepository(UserCredential).save(manager.getRepository(UserCredential).create({ userId: saved.id, passwordHash }));
+          await manager.getRepository(Patient).save(manager.getRepository(Patient).create({ patientReference: generatePatientReference(), userId: saved.id, givenName: dto.givenName.trim(), familyName: dto.familyName.trim(), dateOfBirth: null, phone: dto.phone?.trim() || null, email, status: PatientStatus.ACTIVE }));
+          return saved;
+        });
+        return UserResponseDto.fromEntity(user);
+      } catch (error) {
+        if (error instanceof QueryFailedError && (error.driverError as { constraint?: string }).constraint === 'UQ_users_email_normalized') throw new ConflictException('An account already exists for this email');
+        if (!isPatientReferenceCollision(error) || attempt === MAX_PATIENT_REFERENCE_GENERATION_ATTEMPTS - 1) throw error;
+      }
     }
+    throw new ConflictException('Unable to generate a unique patient reference');
   }
   async login(dto: LoginDto): Promise<LoginResponseDto> {
     const user = await this.users.findOne({ where: { emailNormalized: dto.email.trim().toLowerCase() }, relations: { credential: true } });

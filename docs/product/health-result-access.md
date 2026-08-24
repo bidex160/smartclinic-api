@@ -8,6 +8,8 @@ Health-result authority is separate from booking and payment authority. A bookin
 
 `GET /api/v1/me/health-checks` is the corresponding read-only history. It accepts only optional `bookingStatus`, `encounterStatus`, `page`, and `limit` parameters; patient/user identifiers are not part of the contract. It returns newest bookings first, exposes safe scheduling/catalogue/provider-display/encounter summaries, and never includes measurement values. `hasCompletedResult` is true only when the booking has an actual `COMPLETED` encounter, after which the detailed endpoint above may be used. A User with no active linked Patient receives an empty page (`items: []`, `total: 0`) rather than an identity-link error.
 
+`GET /api/v1/me/profile` returns the safe USER/SELF Patient profile and public patient reference. `GET /api/v1/me/health-checks/:reference` returns one patient-safe booking detail only when its participant is that SELF Patient. History items include a derived portal category plus summarized funding/payment state; BookingStatus and encounter state remain authoritative. These `/me` routes require the USER role—provider/admin authority alone cannot masquerade as patient authority.
+
 Pagination defaults to page 1 and limit 20, with a maximum limit of 100. Provider display name comes only from the confirmed assignment and is null when no confirmed provider exists. Incomplete, cancelled, expired, and unfulfillable bookings may appear because this is “My Health Checks,” not only “My Results.” Multi-role users remain scoped through the same User/Patient relationship; ADMIN or PROVIDER roles do not broaden a `/me` query.
 
 ## Guest patients
@@ -25,5 +27,7 @@ An authenticated active User may explicitly claim an existing guest Patient thro
 The link command locks the User and Patient, enforces the v1 one-to-one relationship, and updates the existing Patient rather than copying any booking, encounter, measurement, or result. Retrying with the same independently valid proof is idempotent; a User or Patient linked elsewhere produces a conflict without disclosing the other account.
 
 After a successful link, all ACTIVE guest result grants for that Patient are marked `REVOKED` and retained as records. Authenticated `/me/health-checks` and detailed result access then work through the unchanged Patient and its historical records. Public booking sessions are not revoked or promoted: they retain only their original booking/funding authority. Linking does not grant authenticated control over historical public bookings or payments. Profile reconciliation, dependent/family linking, and formal identity-verification/consent workflows remain deferred.
+
+The Patient reference is intended to support a future consented provider identification workflow, but no provider lookup is exposed. Future access must require explicit scoped/time-limited Patient consent and auditing; the reference alone can never authorize records.
 
 Family, guardian, and dependent access remain deferred. A User can list only the Patient linked directly to that User.

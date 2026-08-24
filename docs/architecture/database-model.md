@@ -442,6 +442,8 @@ Future organisation work needs explicit `organisation_programmes`, `organisation
 
 `booking_funding.checkout_option` records `PAY_NOW`, `PAYMENT_LINK`, or `PAY_LATER` on the funding obligation rather than the PaymentAttempt. This permits outstanding PAY_LATER obligations without manufacturing an attempt while allowing Popup and hosted-link navigation to share the same provider attempt and settlement rules. Existing SELF funding rows are backfilled to `PAY_NOW`; the nullable column preserves compatibility for non-SELF/future funding sources.
 
+`patients.user_id` is the enforceable one-to-one SELF ownership relationship and remains nullable for guest Patients. `patients.patient_reference` is a unique immutable server-generated `SCP-XXXX-XXXX` identifier distinct from the internal UUID. Existing Patients are deterministically backfilled without merging records or inferring ownership from contact fields.
+
 Other planned extensions are a booking-group/order table, package-price table, address revisions, consent/authority records, matching cycles/eligibility snapshots, payment provider events, notification delivery, and clinical health-check/result records.
 
 ## 10. Open design decisions before entities

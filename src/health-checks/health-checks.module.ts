@@ -30,6 +30,10 @@ import { AdminHealthResultAccessController } from "./admin-health-result-access.
 import { PublicHealthResultsController } from "./public-health-results.controller";
 import { PatientHealthCheckHistoryService } from "./patient-health-check-history.service";
 import { User } from "../users/entities/user.entity";
+import { BookingFunding } from '../bookings/entities/booking-funding.entity';
+import { PaymentAttempt } from '../payments/entities/payment-attempt.entity';
+import { MePatientProfileController } from './me-patient-profile.controller';
+import { PatientPortalProfileService } from './patient-portal-profile.service';
 
 @Module({
   imports: [
@@ -49,6 +53,8 @@ import { User } from "../users/entities/user.entity";
       HealthResultAccessGrant,
       Patient,
       User,
+      BookingFunding,
+      PaymentAttempt,
     ]),
   ],
   controllers: [
@@ -59,6 +65,7 @@ import { User } from "../users/entities/user.entity";
     MeHealthResultsController,
     AdminHealthResultAccessController,
     PublicHealthResultsController,
+    MePatientProfileController,
   ],
   providers: [
     HealthCheckPackagesService,
@@ -68,6 +75,7 @@ import { User } from "../users/entities/user.entity";
     ProviderHealthCheckEncountersService,
     HealthResultAccessService,
     PatientHealthCheckHistoryService,
+    PatientPortalProfileService,
   ],
   exports: [PackagePricingService, HealthResultAccessService],
 })
