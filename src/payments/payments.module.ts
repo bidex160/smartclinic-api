@@ -17,9 +17,11 @@ import { PaymentFlowService } from "./payment-flow.service";
 import { PAYMENT_PROVIDER_ADAPTER } from "./payment-provider.adapter";
 import { PaystackWebhookController } from "./paystack-webhook.controller";
 import { User } from "../users/entities/user.entity";
+import { ProvidersModule } from "../providers/providers.module";
 @Module({
   imports: [
     AuthModule,
+    ProvidersModule,
     TypeOrmModule.forFeature([
       PaymentAttempt,
       PaymentTransaction,

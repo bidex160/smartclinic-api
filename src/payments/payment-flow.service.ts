@@ -5,6 +5,7 @@ import {
   HttpStatus,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from "@nestjs/common";
@@ -33,9 +34,11 @@ import {
 } from "./payment-provider.adapter";
 import { PaymentOperationResponseDto } from "./dto/payment-operation-response.dto";
 import { PublicPaymentStatusResponseDto } from "./dto/public-payment-status-response.dto";
+import { ProviderMatchingService } from "../providers/provider-matching.service";
 
 @Injectable()
 export class PaymentFlowService {
+  private readonly logger = new Logger(PaymentFlowService.name);
   constructor(
     @InjectRepository(Booking) private readonly bookings: Repository<Booking>,
     @InjectRepository(PaymentAttempt)
@@ -45,6 +48,8 @@ export class PaymentFlowService {
     @Optional()
     @Inject(appConfig.KEY)
     private readonly config?: ConfigType<typeof appConfig>,
+    @Optional()
+    private readonly matching?: ProviderMatchingService,
   ) {}
 
   async initializeFunding(
@@ -281,7 +286,8 @@ private async applyVerification(
   actorUserId: string | null,
   verified: VerifyPaymentResult,
 ): Promise<PaymentOperationResponseDto> {
-  return this.bookings.manager.transaction(async (manager) => {
+  let settledBookingReference: string | null = null;
+  const response = await this.bookings.manager.transaction(async (manager) => {
     const attemptRepository = manager.getRepository(PaymentAttempt);
     const fundingRepository = manager.getRepository(BookingFunding);
     const bookingRepository = manager.getRepository(Booking);
@@ -403,8 +409,18 @@ private async applyVerification(
       }),
     );
 
+    settledBookingReference = booking.bookingReference;
+
     return this.response(booking, funding, attempt);
   });
+  if (settledBookingReference && this.matching) {
+    try {
+      await this.matching.startMatching(settledBookingReference, null);
+    } catch {
+      this.logger.error(`Automatic provider matching failed after payment settlement for booking ${settledBookingReference}`);
+    }
+  }
+  return response;
 }
   private async requireFunding(reference: string): Promise<BookingFunding> {
     const funding = await this.bookings.manager
