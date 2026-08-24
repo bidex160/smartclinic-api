@@ -438,13 +438,15 @@ This v1 model is not full multi-tenancy. `bookings.organisation_context_id` and 
 
 Future organisation work needs explicit `organisation_programmes`, `organisation_memberships`/eligible-participant records, organisation-admin membership, and programme funding-allocation tables. Provider organisations, service locations, availability, and service/package capability need their own provider-network tables. These future records should carry an organisation/programme FK where ownership, eligibility, reporting, or access control requires it; do not add a blanket `organisation_id` to every current table.
 
-Other planned extensions are a booking-group/order table, package-price table, detailed booking-address model, consent/authority records, matching cycles/eligibility snapshots, payment provider events, notification delivery, and clinical health-check/result records.
+`booking_visit_addresses` stores one current structured HOME_VISIT address per booking through a unique `booking_id` foreign key. It is deliberately separate from ProviderLocation. `provider_service_areas` belongs jointly to Provider and ProviderService, supports country/state plus optional city/postal narrowing, and has active provider/service and geographic lookup indexes. A composite foreign key prevents a service from being attached to another provider's area.
+
+Other planned extensions are a booking-group/order table, package-price table, address revisions, consent/authority records, matching cycles/eligibility snapshots, payment provider events, notification delivery, and clinical health-check/result records.
 
 ## 10. Open design decisions before entities
 
 - Is a registered user always required as `booker_user_id`, or must v1 support anonymous/external operational bookings?
 - What minimum patient demographics and contact fields are required, and what consent/guardian evidence is required for adults, minors, and dependents?
-- Which structured address and service-area model applies to Home Visit scheduling?
+- What controlled address-change/rematching policy, postal normalization catalogue, and future geocoding model should extend the current deterministic Home Visit address/service-area foundation?
 - When is a price quoted/locked, and are discounts, taxes, deposits, instalments, or multiple currencies in v1 scope?
 - Must a funding row use an amount, percentage, or both; how are rounding and mixed funding reconciled?
 - What funding statuses and approval/expiry rules apply to sponsors and organisation programmes?

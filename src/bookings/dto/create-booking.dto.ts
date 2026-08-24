@@ -1,4 +1,6 @@
-import { IsDateString, IsOptional, IsString, IsTimeZone, IsUUID, Matches, MaxLength } from 'class-validator';
+import { IsDateString, IsOptional, IsString, IsTimeZone, IsUUID, Matches, MaxLength, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { BookingVisitAddressDto } from './booking-visit-address.dto';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -41,6 +43,8 @@ export class CreateBookingDto {
   @ApiProperty({ example: 'Africa/Lagos', description: 'IANA timezone used to interpret the preferred appointment start.' })
   @IsTimeZone()
   preferredTimezone!: string;
+
+  @ApiPropertyOptional({ type: BookingVisitAddressDto }) @IsOptional() @ValidateNested() @Type(() => BookingVisitAddressDto) visitAddress?: BookingVisitAddressDto;
 
   @ApiPropertyOptional({ maxLength: 1000, description: 'Minimum necessary fulfilment-location preference.' })
   @IsOptional()

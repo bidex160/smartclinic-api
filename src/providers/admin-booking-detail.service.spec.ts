@@ -25,7 +25,7 @@ describe('AdminBookingDetailService', () => {
 
   it('returns a minimized operational booking detail with guest contact', async () => {
     const result: any = await subject.get('SC-2026-ABCDEF123456');
-    expect(result).toMatchObject({ bookingReference: 'SC-2026-ABCDEF123456', participant: { givenName: 'Ada', familyName: 'Okafor' }, bookerContact: { givenName: 'Chidi', familyName: 'Okafor', email: 'chidi@example.test', phone: '+2348000000000' }, payment: { status: PaymentAttemptStatus.SUCCEEDED, paymentReference: 'SC-PAY-safe' }, readiness: MatchingQueueReadiness.READY });
+    expect(result).toMatchObject({ bookingReference: 'SC-2026-ABCDEF123456', participant: { givenName: 'Ada', familyName: 'Okafor' }, bookerContact: { givenName: 'Chidi', familyName: 'Okafor', email: 'chidi@example.test', phone: '+2348000000000' }, payment: { status: PaymentAttemptStatus.SUCCEEDED, paymentReference: 'SC-PAY-safe' }, readiness: MatchingQueueReadiness.INCOMPLETE_VISIT_ADDRESS });
     expect(result).toMatchObject({ preferredDate: '2026-09-01', confirmedSchedule: { date: '2026-09-02', timeFrom: '11:00', timeTo: '12:00', timezone: 'Africa/Lagos', providerLocation: null } });
     expect(result.participant).not.toHaveProperty('dateOfBirth'); expect(result).not.toHaveProperty('bookerUserId'); expect(result).not.toHaveProperty('history'); expect(result.payment).not.toHaveProperty('providerCode'); expect(JSON.stringify(result)).not.toContain('private-checkout'); expect(JSON.stringify(result)).not.toContain('provider-secret');
   });

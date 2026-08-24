@@ -50,3 +50,9 @@ A guest Patient may later be linked explicitly to an authenticated User by provi
 A public visitor may create a booking without a `User` record. The platform creates a separate `Patient`, a `BookingContact` snapshot, and a booking-bound session in one transaction; it does not auto-create a User. Only the session hash is stored and the raw token is delivered in an HttpOnly cookie.
 
 The session proves temporary control only of its bound booking. It is required for safe public retrieval and guest funding, expires server-side, may be revoked, and cannot authorize another reference. Successful use updates `last_used_at`; v1 does not rotate tokens on read.
+
+## Home-visit address
+
+`HOME_VISIT` intake requires one structured `BookingVisitAddress` containing street, city, state/region, and ISO alpha-2 country data; postal code and coordinates are optional. Text is trimmed and country codes are stored uppercase. `locationNote` remains supplemental and never substitutes for the structured address. `PROVIDER_LOCATION` bookings reject this object and continue to use a confirmed ProviderLocation.
+
+Street-level data is restricted by response purpose: the booking owner/session receives a safe summary, the patient history receives city/state/country, the matching queue receives geographic summary only, and operations or the provider owning relevant work may receive the operational address.

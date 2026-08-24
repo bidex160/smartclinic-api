@@ -17,6 +17,7 @@ export class AdminMatchingQueueItemDto {
   @ApiPropertyOptional({ nullable: true }) preferredTimeFrom!: string | null;
   @ApiPropertyOptional({ nullable: true }) preferredTimeTo!: string | null;
   @ApiPropertyOptional({ nullable: true }) preferredTimezone!: string | null;
+  @ApiPropertyOptional({ nullable: true }) visitArea!: { city: string; stateOrRegion: string; countryCode: string } | null;
   @ApiPropertyOptional({ enum: BookingFundingStatus, nullable: true }) fundingStatus!: BookingFundingStatus | null;
   @ApiPropertyOptional({ nullable: true }) quotedAmount!: string | null;
   @ApiPropertyOptional({ nullable: true }) quotedCurrency!: string | null;

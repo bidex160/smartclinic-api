@@ -17,6 +17,7 @@ import { CreatePublicBookingDto } from './dto/create-public-booking.dto';
 import { BookingContact } from './entities/booking-contact.entity';
 import { BookingStatusHistory } from './entities/booking-status-history.entity';
 import { Booking } from './entities/booking.entity';
+import { BookingVisitAddress } from './entities/booking-visit-address.entity';
 import { BookingStatus } from './enums/booking-status.enum';
 import { validateBookingSchedulingPreference } from './booking-scheduling';
 import { PublicBookingSessionService } from './public-booking-session.service';
@@ -44,6 +45,7 @@ export class PublicBookingsService {
       preferredTimezone: createPublicBookingDto.booking.preferredTimezone,
     });
     await this.validateCatalogue(createPublicBookingDto);
+    await this.validateVisitAddress(createPublicBookingDto.booking.fulfilmentModeId, createPublicBookingDto.booking.visitAddress);
 
     for (let attempt = 0; attempt < MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS; attempt += 1) {
       try {
@@ -52,6 +54,7 @@ export class PublicBookingsService {
           const bookingRepository = manager.getRepository(Booking);
           const contactRepository = manager.getRepository(BookingContact);
           const historyRepository = manager.getRepository(BookingStatusHistory);
+          const addressRepository = manager.getRepository(BookingVisitAddress);
           const { booker, participant, booking: bookingDetails } = createPublicBookingDto;
           const quote = await this.packagePricingService.resolveCurrentPrice(
             bookingDetails.healthCheckPackageId,
@@ -90,6 +93,7 @@ export class PublicBookingsService {
               preferredLocationNote: bookingDetails.locationNote ?? null,
             }),
           );
+          if (bookingDetails.visitAddress) await addressRepository.save(addressRepository.create({ ...this.normalizedAddress(bookingDetails.visitAddress), bookingId: savedBooking.id }));
 
           await contactRepository.save(
             contactRepository.create({
@@ -137,6 +141,8 @@ export class PublicBookingsService {
       throw new BadRequestException('The selected Health Check package or fulfilment mode is unavailable');
     }
   }
+  private async validateVisitAddress(modeId: string, address: CreatePublicBookingDto['booking']['visitAddress']): Promise<void> { const mode = await this.fulfilmentModeRepository.findOne({ where: { id: modeId } }); if (mode?.code === 'HOME_VISIT' && !address) throw new BadRequestException('visitAddress is required for HOME_VISIT bookings'); if (mode?.code === 'PROVIDER_LOCATION' && address) throw new BadRequestException('visitAddress is only accepted for HOME_VISIT bookings'); }
+  private normalizedAddress(value: NonNullable<CreatePublicBookingDto['booking']['visitAddress']>) { return { ...value, addressLine1: value.addressLine1.trim(), addressLine2: value.addressLine2?.trim() || null, city: value.city.trim(), stateOrRegion: value.stateOrRegion.trim(), postalCode: value.postalCode?.trim() || null, countryCode: value.countryCode.trim().toUpperCase(), latitude: value.latitude?.toString() ?? null, longitude: value.longitude?.toString() ?? null }; }
 
   private async findResponseByReference(bookingReference: string): Promise<BookingResponseDto> {
     const booking = await this.bookingRepository.findOne({
@@ -145,6 +151,7 @@ export class PublicBookingsService {
         healthCheckPackage: true,
         fulfilmentMode: true,
         participant: true,
+        visitAddress: true,
       },
     });
 

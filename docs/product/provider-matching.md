@@ -130,6 +130,14 @@ Matching needs relational records, not only a booking enum: a single booking can
 
 ## Remaining decisions
 
+## Home-visit coverage
+
+Each active `HOME_VISIT` ProviderService must have at least one active ProviderServiceArea before onboarding submission or approval is ready. Providers configure their own areas; ADMIN/OPERATIONS retains support read access. Physical ProviderLocation links are not used for HOME_VISIT.
+
+Coverage is deterministic: country must match exactly, state/region case-insensitively, and any non-null area city or postal code further narrows the match. There is no fuzzy matching, geocoding, radius, routing, or GIS. Automatic matching, ordinary manual assignment, and scheduling all apply this same rule alongside capability, ACTIVE status, availability, exceptions, and capacity. Override assignment may bypass coverage only through the existing reasoned/audited override path; it cannot bypass a missing structured booking address or lifecycle/capacity protections.
+
+Bookings without the required address derive `INCOMPLETE_VISIT_ADDRESS`; they are not made eligible through `locationNote`. The queue shows only city/state/country while booking detail retains the operational address.
+
 - What is the response deadline, and may it differ by package, location, or home visit?
 - What participant details can a provider see before accepting an offer?
 - Can a participant reject or change an assigned provider, and under what policy?

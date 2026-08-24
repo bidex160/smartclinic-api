@@ -29,6 +29,7 @@ export class AdminBookingDetailResponseDto {
   @ApiPropertyOptional({ nullable: true }) preferredTimeTo!: string | null;
   @ApiPropertyOptional({ nullable: true }) preferredTimezone!: string | null;
   @ApiPropertyOptional({ nullable: true }) locationNote!: string | null;
+  @ApiPropertyOptional({ nullable: true }) visitAddress!: { addressLine1: string; addressLine2: string | null; city: string; stateOrRegion: string; postalCode: string | null; countryCode: string } | null;
   @ApiPropertyOptional({ type: AdminBookingConfirmedScheduleDto, nullable: true }) confirmedSchedule!: AdminBookingConfirmedScheduleDto | null;
   @ApiPropertyOptional({ nullable: true }) quotedAmount!: string | null;
   @ApiPropertyOptional({ nullable: true }) quotedCurrency!: string | null;

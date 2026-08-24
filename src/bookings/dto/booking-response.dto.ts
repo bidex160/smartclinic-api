@@ -69,6 +69,7 @@ export class BookingResponseDto {
     description: 'The booking location preference supplied by the booker.',
   })
   locationNote!: string | null;
+  @ApiPropertyOptional({ nullable: true }) visitAddressSummary!: { city: string; stateOrRegion: string; postalCode: string | null; countryCode: string } | null;
 
   @ApiProperty({ format: 'date-time' })
   createdAt!: Date;
@@ -99,6 +100,7 @@ export class BookingResponseDto {
       preferredTimeWindowEnd: booking.preferredTimeWindowEnd,
       preferredTimezone: booking.preferredTimezone,
       locationNote: booking.preferredLocationNote,
+      visitAddressSummary: booking.visitAddress ? { city: booking.visitAddress.city, stateOrRegion: booking.visitAddress.stateOrRegion, postalCode: booking.visitAddress.postalCode, countryCode: booking.visitAddress.countryCode } : null,
       createdAt: booking.createdAt,
       updatedAt: booking.updatedAt,
     };

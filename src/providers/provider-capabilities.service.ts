@@ -27,6 +27,7 @@ export interface AvailabilityWindow {
   requestedStartTime: string;
   requestedEndTime: string;
   requestedTimezone: string;
+  visitAddress?: { countryCode: string; stateOrRegion: string; city: string; postalCode: string | null } | null;
 }
 
 @Injectable()
@@ -309,6 +310,7 @@ export class ProviderCapabilitiesService {
       query.andWhere(
         `NOT EXISTS (SELECT 1 FROM provider_availability_exceptions scope WHERE scope.provider_id = provider.id AND scope.is_active = true AND scope.type = 'UNAVAILABLE' AND scope.date = :requestedDate AND scope.timezone = :requestedTimezone AND (scope.start_time IS NULL OR (scope.start_time < :requestedEndTime AND scope.end_time > :requestedStartTime)) AND (scope.provider_service_id IS NULL OR scope.provider_service_id = service.id) AND ${applicableLocation})`,
       );
+      query.andWhere(`(mode.code <> 'HOME_VISIT' OR (:visitCountry IS NOT NULL AND EXISTS (SELECT 1 FROM provider_service_areas area WHERE area.provider_id = provider.id AND area.provider_service_id = service.id AND area.is_active = true AND area.country_code = :visitCountry AND LOWER(area.state_or_region) = LOWER(:visitState) AND (area.city IS NULL OR LOWER(area.city) = LOWER(:visitCity)) AND (area.postal_code IS NULL OR LOWER(area.postal_code) = LOWER(:visitPostal)))))`, { visitCountry: window.visitAddress?.countryCode ?? null, visitState: window.visitAddress?.stateOrRegion ?? '', visitCity: window.visitAddress?.city ?? '', visitPostal: window.visitAddress?.postalCode ?? '' });
       query.andWhere(
         `NOT EXISTS (SELECT 1 FROM provider_booking_reservations reservation WHERE reservation.provider_id = provider.id AND reservation.scheduled_date = :requestedDate AND reservation.status IN ('HELD', 'CONFIRMED') AND reservation.start_time < :requestedEndTime AND reservation.end_time > :requestedStartTime${excludeProviderAssignmentId ? ' AND reservation.provider_assignment_id <> :excludeProviderAssignmentId' : ''})`,
         excludeProviderAssignmentId ? { excludeProviderAssignmentId } : undefined,

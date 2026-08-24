@@ -32,10 +32,11 @@ describe('BookingsService', () => {
       status: BookingStatus.DRAFT,
       createdAt: new Date('2026-08-17T12:00:00.000Z'),
       updatedAt: new Date('2026-08-17T12:00:00.000Z'),
+      visitAddressSummary: null,
       healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential Health Check' },
       fulfilmentMode: { code: 'PROVIDER_LOCATION', name: 'Provider location' },
       participant: { givenName: 'Ada', familyName: 'Okafor' },
-    } as Booking;
+    } as unknown as Booking;
     const transactionalBookingRepository = {
       create: jest.fn((input: Booking) => input),
       save: jest.fn().mockResolvedValue(savedBooking),
@@ -53,7 +54,7 @@ describe('BookingsService', () => {
       manager: { transaction: jest.fn((work: (transactionManager: typeof manager) => unknown) => work(manager)) },
       findOne: jest.fn().mockResolvedValue(savedBooking),
     };
-    const referenceRepository = { exists: jest.fn().mockResolvedValue(exists) };
+    const referenceRepository = { exists: jest.fn().mockResolvedValue(exists), findOne: jest.fn().mockResolvedValue({ code: 'PROVIDER_LOCATION' }) };
     const packagePricingService = {
       resolveCurrentPrice: priceError
         ? jest.fn().mockRejectedValue(priceError)
@@ -154,12 +155,13 @@ describe('BookingsService', () => {
       preferredTimeWindowEnd: '12:00',
       preferredTimezone: 'Africa/Lagos',
       locationNote: null,
+      visitAddressSummary: null,
       createdAt: new Date('2026-08-17T12:00:00.000Z'),
       updatedAt: new Date('2026-08-17T12:00:00.000Z'),
     });
     expect(bookingRepository.findOne).toHaveBeenCalledWith({
       where: { bookingReference: 'SC-2026-ABCDEFGHIJKL' },
-      relations: { healthCheckPackage: true, fulfilmentMode: true, participant: true },
+      relations: { healthCheckPackage: true, fulfilmentMode: true, participant: true, visitAddress: true },
     });
     expect(packagePricingService.resolveCurrentPrice).not.toHaveBeenCalled();
   });

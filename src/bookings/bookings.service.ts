@@ -13,6 +13,7 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { BookingStatus } from './enums/booking-status.enum';
 import { BookingStatusHistory } from './entities/booking-status-history.entity';
 import { Booking } from './entities/booking.entity';
+import { BookingVisitAddress } from './entities/booking-visit-address.entity';
 import {
   generateBookingReference,
   isBookingReferenceCollision,
@@ -42,20 +43,23 @@ export class BookingsService {
   async create(createBookingDto: CreateBookingDto): Promise<BookingResponseDto> {
     validateBookingSchedulingPreference(createBookingDto);
     await this.validateReferences(createBookingDto);
+    await this.validateVisitAddress(createBookingDto.fulfilmentModeId, createBookingDto.visitAddress);
 
     for (let attempt = 0; attempt < MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS; attempt += 1) {
       try {
         const booking = await this.bookingRepository.manager.transaction(async (manager) => {
           const bookingRepository = manager.getRepository(Booking);
           const historyRepository = manager.getRepository(BookingStatusHistory);
+          const addressRepository = manager.getRepository(BookingVisitAddress);
           const quote = await this.packagePricingService.resolveCurrentPrice(
             createBookingDto.healthCheckPackageId,
             createBookingDto.fulfilmentModeId,
             new Date(),
             manager,
           );
+          const { visitAddress: _visitAddress, ...bookingInput } = createBookingDto;
           const booking = bookingRepository.create({
-            ...createBookingDto,
+            ...bookingInput,
             bookingReference: generateBookingReference(),
             organisationContextId: createBookingDto.organisationContextId ?? null,
             quotedAmount: quote.amount,
@@ -68,6 +72,7 @@ export class BookingsService {
             status: BookingStatus.DRAFT,
           });
           const savedBooking = await bookingRepository.save(booking);
+          if (createBookingDto.visitAddress) await addressRepository.save(addressRepository.create({ ...this.normalizedAddress(createBookingDto.visitAddress), bookingId: savedBooking.id }));
 
           await historyRepository.save(
             historyRepository.create({
@@ -99,6 +104,7 @@ export class BookingsService {
         healthCheckPackage: true,
         fulfilmentMode: true,
         participant: true,
+        visitAddress: true,
       },
     });
 
@@ -108,6 +114,9 @@ export class BookingsService {
 
     return BookingResponseDto.fromEntity(booking);
   }
+
+  private async validateVisitAddress(modeId: string, address: CreateBookingDto['visitAddress']): Promise<void> { const mode = await this.fulfilmentModeRepository.findOne({ where: { id: modeId } }); if (mode?.code === 'HOME_VISIT' && !address) throw new BadRequestException('visitAddress is required for HOME_VISIT bookings'); if (mode?.code === 'PROVIDER_LOCATION' && address) throw new BadRequestException('visitAddress is only accepted for HOME_VISIT bookings'); }
+  private normalizedAddress(value: NonNullable<CreateBookingDto['visitAddress']>) { return { ...value, addressLine1: value.addressLine1.trim(), addressLine2: value.addressLine2?.trim() || null, city: value.city.trim(), stateOrRegion: value.stateOrRegion.trim(), postalCode: value.postalCode?.trim() || null, countryCode: value.countryCode.trim().toUpperCase(), latitude: value.latitude?.toString() ?? null, longitude: value.longitude?.toString() ?? null }; }
 
   private async validateReferences(createBookingDto: CreateBookingDto): Promise<void> {
     const [bookerExists, participantExists, healthCheckPackageExists, fulfilmentModeExists, organisationExists] =

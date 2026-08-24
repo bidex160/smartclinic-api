@@ -12,6 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { BookingVisitAddressDto } from './booking-visit-address.dto';
 
 const PHONE_PATTERN = /^\+?[0-9][0-9 ()-]{6,29}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -109,6 +110,8 @@ class PublicBookingDetailsDto {
   @ApiProperty({ example: 'Africa/Lagos', description: 'IANA timezone used to interpret the preferred appointment start.' })
   @IsTimeZone()
   preferredTimezone!: string;
+
+  @ApiPropertyOptional({ type: BookingVisitAddressDto }) @IsOptional() @ValidateNested() @Type(() => BookingVisitAddressDto) visitAddress?: BookingVisitAddressDto;
 
   @ApiPropertyOptional({ maxLength: 1000, nullable: true })
   @IsOptional()

@@ -86,7 +86,7 @@ describe('PublicBookingsService', () => {
       } as Booking),
     };
     const healthCheckPackageRepository = { exists: jest.fn().mockResolvedValue(options.packageExists ?? true) };
-    const fulfilmentModeRepository = { exists: jest.fn().mockResolvedValue(options.modeExists ?? true) };
+    const fulfilmentModeRepository = { exists: jest.fn().mockResolvedValue(options.modeExists ?? true), findOne: jest.fn().mockResolvedValue({ code: 'PROVIDER_LOCATION' }) };
     const packagePricingService = {
       resolveCurrentPrice: options.priceError
         ? jest.fn().mockRejectedValue(options.priceError)

@@ -16,6 +16,7 @@ import { ProviderAssignmentStatus } from './enums/provider-assignment-status.enu
 import { ProviderBookingReservationStatus } from './enums/provider-booking-reservation-status.enum';
 import { ProviderStatus } from './enums/provider-status.enum';
 import { ProviderCapabilitiesService } from './provider-capabilities.service';
+import { BookingVisitAddress } from '../bookings/entities/booking-visit-address.entity';
 
 @Injectable()
 export class AdminBookingSchedulingService {
@@ -40,6 +41,8 @@ export class AdminBookingSchedulingService {
         const requestedLocationId = dto.providerLocationId ?? null;
         if (fulfilmentMode.code === 'PROVIDER_LOCATION' && !requestedLocationId) throw new BadRequestException('providerLocationId is required for PROVIDER_LOCATION scheduling');
         if (fulfilmentMode.code === 'HOME_VISIT' && requestedLocationId) throw new BadRequestException('providerLocationId must be omitted for HOME_VISIT scheduling');
+        const visitAddress = fulfilmentMode.code === 'HOME_VISIT' ? booking.visitAddress ?? await manager.getRepository(BookingVisitAddress).findOne({ where: { bookingId: booking.id } }) : null;
+        if (fulfilmentMode.code === 'HOME_VISIT' && !visitAddress) throw new ConflictException('HOME_VISIT booking requires a structured visit address');
         if (booking.status === BookingStatus.SCHEDULED) {
           if (!this.sameSchedule(booking, dto, requestedLocationId)) throw new ConflictException('Booking is already scheduled with different appointment details');
           const existingLocation = requestedLocationId ? await manager.getRepository(ProviderLocation).findOne({ where: { id: requestedLocationId } }) : null;
@@ -49,7 +52,7 @@ export class AdminBookingSchedulingService {
         const reservationRepository = manager.getRepository(ProviderBookingReservation);
         const reservation = await reservationRepository.findOne({ where: { providerAssignmentId: assignment.id }, lock: { mode: 'pessimistic_write' } });
         if (!reservation || reservation.bookingId !== booking.id || reservation.providerId !== provider.id || reservation.status !== ProviderBookingReservationStatus.CONFIRMED) throw new ConflictException('Confirmed assignment does not have a valid confirmed capacity reservation');
-        const eligible = await this.capabilities.findEligibleProviders(booking.healthCheckPackageId, booking.fulfilmentModeId, { requestedDate: dto.date, requestedStartTime: dto.timeFrom, requestedEndTime: dto.timeTo, requestedTimezone: dto.timezone }, assignment.id);
+        const eligible = await this.capabilities.findEligibleProviders(booking.healthCheckPackageId, booking.fulfilmentModeId, { requestedDate: dto.date, requestedStartTime: dto.timeFrom, requestedEndTime: dto.timeTo, requestedTimezone: dto.timezone, visitAddress }, assignment.id);
         const capability = eligible.find((service) => service.providerId === provider.id);
         if (!capability) throw new ConflictException('Confirmed provider is unavailable or ineligible for the requested appointment');
         let location: ProviderLocation | null = null;

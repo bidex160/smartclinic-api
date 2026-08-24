@@ -23,6 +23,7 @@ export class ProviderOfferResponseDto {
   @ApiPropertyOptional({ nullable: true }) preferredTimezone!: string | null;
   @ApiPropertyOptional({ type: ProviderOfferConfirmedScheduleDto, nullable: true }) confirmedSchedule!: ProviderOfferConfirmedScheduleDto | null;
   @ApiPropertyOptional({ nullable: true }) responseReason!: string | null;
+  @ApiPropertyOptional({ nullable: true }) visitAddress!: { addressLine1: string; addressLine2: string | null; city: string; stateOrRegion: string; postalCode: string | null; countryCode: string; locationNote: string | null } | null;
 
   static fromEntity(value: ProviderAssignment): ProviderOfferResponseDto {
     return {
@@ -35,6 +36,7 @@ export class ProviderOfferResponseDto {
       preferredTimeWindowEnd: value.booking.preferredTimeWindowEnd, preferredTimezone: value.booking.preferredTimezone,
       confirmedSchedule: value.booking.scheduledDate ? { date: value.booking.scheduledDate, timeFrom: value.booking.scheduledTimeFrom!, timeTo: value.booking.scheduledTimeTo!, timezone: value.booking.scheduledTimezone!, providerLocationName: value.booking.providerLocation?.name ?? null } : null,
       responseReason: value.reasonNote,
+      visitAddress: value.booking.fulfilmentMode.code === 'HOME_VISIT' && value.booking.visitAddress ? { addressLine1: value.booking.visitAddress.addressLine1, addressLine2: value.booking.visitAddress.addressLine2, city: value.booking.visitAddress.city, stateOrRegion: value.booking.visitAddress.stateOrRegion, postalCode: value.booking.visitAddress.postalCode, countryCode: value.booking.visitAddress.countryCode, locationNote: value.booking.preferredLocationNote } : null,
     };
   }
 }

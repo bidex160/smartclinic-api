@@ -70,6 +70,8 @@ Provider offer responses are deliberately minimized: they omit account IDs, prov
 
 ## Authentication foundation
 
+HOME_VISIT street addresses are sensitive operational location data. Public/session and patient history responses expose summaries only; matching queues expose city/state/country; full addresses are limited to ADMIN/OPERATIONS booking detail and providers acting on their own relevant work. Provider service-area self-service derives Provider identity from the authenticated linked account, never accepts provider ownership from input, and rejects cross-provider service references. Service areas contain coverage configuration, not patient addresses.
+
 Email/password accounts use a normalized-email unique lookup and a separate credential record containing only a bcrypt password hash. Authentication returns a short-lived JWT access token configured with `JWT_SECRET` and `JWT_EXPIRES_IN`; no secret is hardcoded for runtime environments. Protected routes verify both the token and that the current user remains `ACTIVE` and not deleted.
 
 Login creates a server-side refresh session with only a hash of a cryptographically random opaque token. The raw refresh token is delivered only in an HttpOnly cookie, rotates on every refresh, and is never returned in JSON. Logout revokes the current session; logout-all revokes the authenticated user's sessions. Browser clients must send credentialed requests to the configured frontend origin.

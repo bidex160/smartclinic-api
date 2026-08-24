@@ -17,6 +17,8 @@ import { ProviderAvailabilityExceptionsService } from './provider-availability-e
 import { ProviderAvailabilityService } from './provider-availability.service';
 import { ProviderCapabilitiesService } from './provider-capabilities.service';
 import { ProviderConfigurationContextService } from './provider-configuration-context.service';
+import { ProviderServiceAreasService } from './provider-service-areas.service';
+import { CreateProviderServiceAreaDto, UpdateProviderServiceAreaDto } from './dto/provider-service-area.dto';
 
 @Injectable()
 export class ProviderSelfServiceConfigurationService {
@@ -29,6 +31,7 @@ export class ProviderSelfServiceConfigurationService {
     @InjectRepository(ProviderLocation) private readonly locations: Repository<ProviderLocation>,
     @InjectRepository(ProviderAvailability) private readonly availability: Repository<ProviderAvailability>,
     @InjectRepository(ProviderAvailabilityException) private readonly exceptions: Repository<ProviderAvailabilityException>,
+    private readonly serviceAreas: ProviderServiceAreasService,
   ) {}
 
   async listServices(user: User) { const provider = await this.context.resolve(user); return this.capabilities.listServices(provider.id); }
@@ -58,6 +61,12 @@ export class ProviderSelfServiceConfigurationService {
   async updateException(user: User, id: string, dto: UpdateProviderAvailabilityExceptionDto) { await this.ownException(user, id, true); return this.exceptionService.update(id, dto); }
   async activateException(user: User, id: string) { await this.ownException(user, id, true); return this.exceptionService.activate(id); }
   async deactivateException(user: User, id: string) { await this.ownException(user, id, true); return this.exceptionService.deactivate(id); }
+  async listServiceAreas(user: User) { const provider = await this.context.resolve(user); return this.serviceAreas.list(provider.id); }
+  async getServiceArea(user: User, id: string) { const provider = await this.context.resolve(user); return this.serviceAreas.get(provider.id, id); }
+  async createServiceArea(user: User, dto: CreateProviderServiceAreaDto) { const provider = await this.context.resolve(user, true); return this.serviceAreas.create(provider.id, dto); }
+  async updateServiceArea(user: User, id: string, dto: UpdateProviderServiceAreaDto) { const provider = await this.context.resolve(user, true); return this.serviceAreas.update(provider.id, id, dto); }
+  async activateServiceArea(user: User, id: string) { const provider = await this.context.resolve(user, true); return this.serviceAreas.activate(provider.id, id); }
+  async deactivateServiceArea(user: User, id: string) { const provider = await this.context.resolve(user, true); return this.serviceAreas.deactivate(provider.id, id); }
 
   private async ownService(user: User, id: string, mutation = false) { const provider = await this.context.resolve(user, mutation); const row = await this.services.findOne({ where: { id, providerId: provider.id } }); if (!row) throw new NotFoundException('Provider service not found'); return row; }
   private async ownLocation(user: User, id: string, mutation = false) { const provider = await this.context.resolve(user, mutation); const row = await this.locations.findOne({ where: { id, providerId: provider.id } }); if (!row) throw new NotFoundException('Provider location not found'); return row; }

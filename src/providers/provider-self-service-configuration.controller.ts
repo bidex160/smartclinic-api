@@ -14,6 +14,7 @@ import { UpdateProviderAvailabilityDto } from './dto/update-provider-availabilit
 import { UpdateProviderAvailabilityExceptionDto } from './dto/update-provider-availability-exception.dto';
 import { UpdateProviderLocationDto } from './dto/update-provider-location.dto';
 import { ProviderSelfServiceConfigurationService } from './provider-self-service-configuration.service';
+import { CreateProviderServiceAreaDto, UpdateProviderServiceAreaDto } from './dto/provider-service-area.dto';
 
 @ApiTags('Provider configuration') @ApiBearerAuth() @UseGuards(JwtAuthGuard, RolesGuard) @Roles(UserRole.PROVIDER)
 @ApiUnauthorizedResponse() @ApiForbiddenResponse() @ApiNotFoundResponse() @ApiConflictResponse() @Controller('provider')
@@ -46,4 +47,10 @@ export class ProviderSelfServiceConfigurationController {
   @Patch('availability-exceptions/:id') updateException(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto, @Body() dto: UpdateProviderAvailabilityExceptionDto) { return this.configuration.updateException(req.user, p.id, dto); }
   @Patch('availability-exceptions/:id/activate') activateException(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.configuration.activateException(req.user, p.id); }
   @Patch('availability-exceptions/:id/deactivate') deactivateException(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.configuration.deactivateException(req.user, p.id); }
+  @Get('service-areas') listServiceAreas(@Req() req: { user: User }) { return this.configuration.listServiceAreas(req.user); }
+  @Post('service-areas') createServiceArea(@Req() req: { user: User }, @Body() dto: CreateProviderServiceAreaDto) { return this.configuration.createServiceArea(req.user, dto); }
+  @Get('service-areas/:id') getServiceArea(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.configuration.getServiceArea(req.user, p.id); }
+  @Patch('service-areas/:id') updateServiceArea(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto, @Body() dto: UpdateProviderServiceAreaDto) { return this.configuration.updateServiceArea(req.user, p.id, dto); }
+  @Patch('service-areas/:id/activate') activateServiceArea(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.configuration.activateServiceArea(req.user, p.id); }
+  @Patch('service-areas/:id/deactivate') deactivateServiceArea(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.configuration.deactivateServiceArea(req.user, p.id); }
 }

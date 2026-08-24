@@ -27,6 +27,7 @@ import { PaymentsModule } from '../payments/payments.module';
 import { HealthResultAccessGrant } from '../health-checks/entities/health-result-access-grant.entity';
 import { MePatientLinkingController } from './me-patient-linking.controller';
 import { PatientAccountLinkingService } from './patient-account-linking.service';
+import { BookingVisitAddress } from './entities/booking-visit-address.entity';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { PatientAccountLinkingService } from './patient-account-linking.service'
     PaymentsModule,
     TypeOrmModule.forFeature([
       Booking,
+      BookingVisitAddress,
       BookingContact,
       BookingStatusHistory,
       BookingFunding,

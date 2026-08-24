@@ -15,6 +15,7 @@ export class PatientHealthCheckHistoryItemDto {
   @ApiPropertyOptional({ nullable: true }) preferredTimeFrom!: string | null;
   @ApiPropertyOptional({ nullable: true }) preferredTimeTo!: string | null;
   @ApiPropertyOptional({ nullable: true }) preferredTimezone!: string | null;
+  @ApiPropertyOptional({ nullable: true }) visitAddressSummary!: { city: string; stateOrRegion: string; countryCode: string } | null;
   @ApiPropertyOptional({ type: PatientConfirmedScheduleDto, nullable: true }) confirmedSchedule!: PatientConfirmedScheduleDto | null;
   @ApiPropertyOptional({ nullable: true }) providerDisplayName!: string | null;
   @ApiPropertyOptional({ enum: HealthCheckEncounterStatus, nullable: true }) encounterStatus!: HealthCheckEncounterStatus | null;

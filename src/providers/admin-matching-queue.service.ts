@@ -32,6 +32,7 @@ export class AdminMatchingQueueService {
     .leftJoinAndSelect("booking.healthCheckPackage", "package")
     .leftJoinAndSelect("booking.fulfilmentMode", "fulfilmentMode")
     .leftJoinAndSelect("booking.participant", "participant")
+    .leftJoinAndSelect("booking.visitAddress", "visitAddress")
     .where("booking.status = :bookingStatus", {
       bookingStatus:
         query.bookingStatus ?? BookingStatus.PENDING_PROVIDER_MATCH,
@@ -203,6 +204,7 @@ export class AdminMatchingQueueService {
       preferredTimeFrom: booking.preferredTimeWindowStart,
       preferredTimeTo: booking.preferredTimeWindowEnd,
       preferredTimezone: booking.preferredTimezone,
+      visitArea: booking.visitAddress ? { city: booking.visitAddress.city, stateOrRegion: booking.visitAddress.stateOrRegion, countryCode: booking.visitAddress.countryCode } : null,
       fundingStatus: funding?.status ?? null,
       quotedAmount: booking.quotedAmount,
       quotedCurrency: booking.currency,

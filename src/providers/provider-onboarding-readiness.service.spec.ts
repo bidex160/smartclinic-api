@@ -8,7 +8,8 @@ describe('ProviderOnboardingReadinessService', () => {
     const capabilities = { find: jest.fn().mockResolvedValue(services) };
     const locations = { count: jest.fn().mockResolvedValueOnce(locationCount).mockResolvedValueOnce(activeLocationCount) };
     const availability = { count: jest.fn().mockResolvedValue(availabilityCount) };
-    return new ProviderOnboardingReadinessService(providers as never, capabilities as never, locations as never, availability as never);
+    const areas = { find: jest.fn().mockResolvedValue(services.filter((service) => service.fulfilmentMode?.code === 'HOME_VISIT').map((service) => ({ providerServiceId: service.id }))) };
+    return new ProviderOnboardingReadinessService(providers as never, capabilities as never, locations as never, availability as never, areas as never);
   };
 
   it('derives profile, capability, location-link, and availability blockers', async () => {

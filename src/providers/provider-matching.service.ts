@@ -151,7 +151,7 @@ export class ProviderMatchingService {
   ): Promise<ProviderAssignmentResponseDto> {
     const offered = await this.assignments.findOne({
       where: { id: assignmentId },
-      relations: { booking: { healthCheckPackage: true } },
+      relations: { booking: { healthCheckPackage: true, visitAddress: true } },
     });
     if (!offered) throw new NotFoundException("Provider assignment not found");
     this.assertProviderOwnsOffer(offered, providerId);
@@ -199,6 +199,7 @@ export class ProviderMatchingService {
           if (!lockedBooking) throw new NotFoundException("Booking not found");
           this.assertBookingAwaitingMatch(lockedBooking);
           lockedBooking.healthCheckPackage = offered.booking.healthCheckPackage;
+          lockedBooking.visitAddress = offered.booking.visitAddress;
           const lockedContext = bookingToAvailabilityWindow(lockedBooking);
           if (!lockedContext.ready)
             throw new BadRequestException({
@@ -519,6 +520,7 @@ export class ProviderMatchingService {
       throw new BadRequestException({ message: context.reason === "INVALID_PACKAGE_DURATION" ? "Health Check package duration is missing or invalid" : "Booking scheduling context is incomplete", reason: context.reason, missingFields: context.missingFields });
     if (!booking.healthCheckPackage?.isActive || !booking.fulfilmentMode?.isActive)
       throw new BadRequestException("Booking package or fulfilment mode is inactive");
+    if (booking.fulfilmentMode.code === 'HOME_VISIT' && !booking.visitAddress) throw new BadRequestException({ message: 'HOME_VISIT booking requires a structured visit address', reason: 'INCOMPLETE_VISIT_ADDRESS' });
     return context.window;
   }
 
@@ -579,7 +581,7 @@ export class ProviderMatchingService {
   private async requireBookingByReference(reference: string): Promise<Booking> {
     const booking = await this.bookings.findOne({
       where: { bookingReference: reference },
-      relations: { healthCheckPackage: true, fulfilmentMode: true },
+      relations: { healthCheckPackage: true, fulfilmentMode: true, visitAddress: true },
     });
     if (!booking) throw new NotFoundException("Booking not found");
     return booking;
@@ -587,7 +589,7 @@ export class ProviderMatchingService {
   private async requireBookingById(id: string): Promise<Booking> {
     const booking = await this.bookings.findOne({
       where: { id },
-      relations: { healthCheckPackage: true, fulfilmentMode: true },
+      relations: { healthCheckPackage: true, fulfilmentMode: true, visitAddress: true },
     });
     if (!booking) throw new NotFoundException("Booking not found");
     return booking;

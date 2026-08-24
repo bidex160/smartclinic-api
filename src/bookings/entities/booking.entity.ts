@@ -13,6 +13,7 @@ import { BookingFunding } from './booking-funding.entity';
 import { BookingContact } from './booking-contact.entity';
 import { BookingStatusHistory } from './booking-status-history.entity';
 import { PublicBookingSession } from './public-booking-session.entity';
+import { BookingVisitAddress } from './booking-visit-address.entity';
 
 @Entity('bookings')
 @Index('UQ_bookings_booking_reference', ['bookingReference'], { unique: true })
@@ -101,6 +102,8 @@ export class Booking {
 
   @Column({ name: 'preferred_location_note', type: 'text', nullable: true })
   preferredLocationNote!: string | null;
+
+  @OneToOne(() => BookingVisitAddress, (address) => address.booking) visitAddress!: BookingVisitAddress | null;
 
   @Column({ name: 'scheduled_starts_at', type: 'timestamptz', nullable: true })
   scheduledStartsAt!: Date | null;

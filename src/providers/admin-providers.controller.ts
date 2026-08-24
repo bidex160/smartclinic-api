@@ -41,6 +41,7 @@ import {
 import { ResourceIdParamsDto } from "./dto/provider-params.dto";
 import { AdminProvidersService } from "./admin-providers.service";
 import { ProviderInvitationsService } from "./provider-invitations.service";
+import { ProviderServiceAreasService } from './provider-service-areas.service';
 
 @ApiTags("Admin providers")
 @ApiBearerAuth()
@@ -53,7 +54,7 @@ import { ProviderInvitationsService } from "./provider-invitations.service";
 @ApiConflictResponse()
 @Controller("admin/providers")
 export class AdminProvidersController {
-  constructor(private readonly providers: AdminProvidersService, private readonly invitations: ProviderInvitationsService) {}
+  constructor(private readonly providers: AdminProvidersService, private readonly invitations: ProviderInvitationsService, private readonly serviceAreas: ProviderServiceAreasService) {}
   @Get()
   @ApiOperation({
     summary:
@@ -71,6 +72,7 @@ export class AdminProvidersController {
   get(@Param() { id }: ResourceIdParamsDto) {
     return this.providers.get(id);
   }
+  @Get(':id/service-areas') listServiceAreas(@Param() { id }: ResourceIdParamsDto) { return this.serviceAreas.list(id); }
   @Post()
   @ApiOperation({
     summary: "Create a pending provider and deliver its initial invitation (ADMIN or OPERATIONS)",

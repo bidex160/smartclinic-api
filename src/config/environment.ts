@@ -36,7 +36,7 @@ export function createAppConfiguration(
   return {
     environment: environmentName,
     port: getNumber(environment.PORT, 3000),
-    frontendUrl: environment.FRONTEND_URL ?? 'http://localhost:4200',
+    frontendUrl: environment.FRONTEND_URL ?? 'http://localhost:3500',
     auth: {
       jwtSecret: environment.JWT_SECRET ?? (environmentName === 'test' ? 'test-only-jwt-secret-must-not-be-used-in-production' : ''),
       jwtExpiresIn: environment.JWT_EXPIRES_IN ?? '15m',
@@ -50,7 +50,7 @@ export function createAppConfiguration(
     },
     providerInvitations: {
       ttlSeconds: getNumber(environment.PROVIDER_INVITATION_TTL, 60 * 60 * 24 * 7),
-      frontendUrl: environment.PROVIDER_INVITATION_FRONTEND_URL ?? `${(environment.FRONTEND_URL ?? 'http://localhost:4200').replace(/\/$/, '')}/provider/setup`,
+      frontendUrl: environment.PROVIDER_INVITATION_FRONTEND_URL ?? `${(environment.FRONTEND_URL ?? 'http://localhost:3500').replace(/\/$/, '')}/provider/setup`,
     },
     healthResults: { guestAccessTtlSeconds: getNumber(environment.HEALTH_RESULT_ACCESS_TTL, 60 * 60 * 24 * 7) },
     email: {

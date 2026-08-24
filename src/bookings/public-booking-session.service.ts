@@ -76,6 +76,7 @@ export class PublicBookingSessionService {
             healthCheckPackage: true,
             fulfilmentMode: true,
             participant: true,
+            visitAddress: true,
           },
         }
       : { booking: true };

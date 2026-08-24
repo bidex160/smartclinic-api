@@ -30,6 +30,7 @@ export function bookingToAvailabilityWindow(booking: Booking): BookingAvailabili
       requestedStartTime: booking.preferredTimeWindowStart!,
       requestedEndTime: derivedEnd,
       requestedTimezone: booking.preferredTimezone!,
+      visitAddress: booking.visitAddress ? { countryCode: booking.visitAddress.countryCode, stateOrRegion: booking.visitAddress.stateOrRegion, city: booking.visitAddress.city, postalCode: booking.visitAddress.postalCode } : null,
     },
   };
 }

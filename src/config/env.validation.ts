@@ -27,7 +27,7 @@ class EnvironmentVariables {
   DATABASE_NAME = 'smartclinic';
 
   @IsString()
-  FRONTEND_URL = 'http://localhost:4200';
+  FRONTEND_URL = 'http://localhost:3500';
 
   @IsOptional()
   @IsIn(['true', 'false'])
