@@ -151,7 +151,7 @@ export class ProviderMatchingService {
   ): Promise<ProviderAssignmentResponseDto> {
     const offered = await this.assignments.findOne({
       where: { id: assignmentId },
-      relations: { booking: true },
+      relations: { booking: { healthCheckPackage: true } },
     });
     if (!offered) throw new NotFoundException("Provider assignment not found");
     this.assertProviderOwnsOffer(offered, providerId);
@@ -198,6 +198,7 @@ export class ProviderMatchingService {
           });
           if (!lockedBooking) throw new NotFoundException("Booking not found");
           this.assertBookingAwaitingMatch(lockedBooking);
+          lockedBooking.healthCheckPackage = offered.booking.healthCheckPackage;
           const lockedContext = bookingToAvailabilityWindow(lockedBooking);
           if (!lockedContext.ready)
             throw new BadRequestException({
@@ -515,7 +516,7 @@ export class ProviderMatchingService {
   private requireAvailabilityContext(booking: Booking) {
     const context = bookingToAvailabilityWindow(booking);
     if (!context.ready)
-      throw new BadRequestException({ message: "Booking scheduling context is incomplete", missingFields: context.missingFields });
+      throw new BadRequestException({ message: context.reason === "INVALID_PACKAGE_DURATION" ? "Health Check package duration is missing or invalid" : "Booking scheduling context is incomplete", reason: context.reason, missingFields: context.missingFields });
     if (!booking.healthCheckPackage?.isActive || !booking.fulfilmentMode?.isActive)
       throw new BadRequestException("Booking package or fulfilment mode is inactive");
     return context.window;

@@ -26,16 +26,16 @@ export class ProviderAvailabilityService {
   async get(id: string): Promise<ProviderAvailabilityResponseDto> { return ProviderAvailabilityResponseDto.fromEntity(await this.requireAvailability(id)); }
   async create(providerId: string, dto: CreateProviderAvailabilityDto): Promise<ProviderAvailabilityResponseDto> {
     await this.validateActiveScope(providerId, dto.providerServiceId ?? null, dto.providerLocationId ?? null);
-    this.validateTimeRange(dto.startTime, dto.endTime);
+    this.validateTimeRange(dto.startTime, dto.endTime, dto.bookingStopTime ?? null);
     await this.rejectOverlap(providerId, dto.dayOfWeek, dto.startTime, dto.endTime, dto.providerServiceId ?? null, dto.providerLocationId ?? null);
     try {
-      return ProviderAvailabilityResponseDto.fromEntity(await this.availability.save(this.availability.create({ ...dto, providerId, providerServiceId: dto.providerServiceId ?? null, providerLocationId: dto.providerLocationId ?? null, isActive: true })));
+      return ProviderAvailabilityResponseDto.fromEntity(await this.availability.save(this.availability.create({ ...dto, providerId, providerServiceId: dto.providerServiceId ?? null, providerLocationId: dto.providerLocationId ?? null, bookingStopTime: dto.bookingStopTime ?? null, isActive: true })));
     } catch (error) { this.rethrowOverlap(error); }
   }
   async update(id: string, dto: UpdateProviderAvailabilityDto): Promise<ProviderAvailabilityResponseDto> {
     const value = await this.requireAvailability(id);
-    const candidate = { providerServiceId: dto.providerServiceId !== undefined ? dto.providerServiceId : value.providerServiceId, providerLocationId: dto.providerLocationId !== undefined ? dto.providerLocationId : value.providerLocationId, dayOfWeek: dto.dayOfWeek ?? value.dayOfWeek, startTime: dto.startTime ?? value.startTime, endTime: dto.endTime ?? value.endTime, timezone: dto.timezone ?? value.timezone };
-    this.validateTimeRange(candidate.startTime, candidate.endTime);
+    const candidate = { providerServiceId: dto.providerServiceId !== undefined ? dto.providerServiceId : value.providerServiceId, providerLocationId: dto.providerLocationId !== undefined ? dto.providerLocationId : value.providerLocationId, dayOfWeek: dto.dayOfWeek ?? value.dayOfWeek, startTime: dto.startTime ?? value.startTime, endTime: dto.endTime ?? value.endTime, bookingStopTime: dto.bookingStopTime !== undefined ? dto.bookingStopTime : value.bookingStopTime, timezone: dto.timezone ?? value.timezone };
+    this.validateTimeRange(candidate.startTime, candidate.endTime, candidate.bookingStopTime);
     if (value.isActive) {
       await this.validateActiveScope(value.providerId, candidate.providerServiceId ?? null, candidate.providerLocationId ?? null);
       await this.rejectOverlap(value.providerId, candidate.dayOfWeek, candidate.startTime, candidate.endTime, candidate.providerServiceId ?? null, candidate.providerLocationId ?? null, value.id);
@@ -52,7 +52,11 @@ export class ProviderAvailabilityService {
   }
   async deactivate(id: string): Promise<ProviderAvailabilityResponseDto> { const value = await this.requireAvailability(id); value.isActive = false; return ProviderAvailabilityResponseDto.fromEntity(await this.availability.save(value)); }
 
-  private validateTimeRange(startTime: string, endTime: string): void { if (this.timeToSeconds(startTime) >= this.timeToSeconds(endTime)) throw new BadRequestException('startTime must be before endTime; overnight blocks are not supported'); }
+  private validateTimeRange(startTime: string, endTime: string, bookingStopTime: string | null): void {
+    const start = this.timeToSeconds(startTime); const end = this.timeToSeconds(endTime);
+    if (start >= end) throw new BadRequestException('startTime must be before endTime; overnight blocks are not supported');
+    if (bookingStopTime != null) { const stop = this.timeToSeconds(bookingStopTime); if (stop <= start || stop > end) throw new BadRequestException('bookingStopTime must be after startTime and no later than endTime'); }
+  }
   private timeToSeconds(value: string): number { const [hours, minutes, seconds = '0'] = value.split(':'); return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds); }
   private async validateActiveScope(providerId: string, serviceId: string | null, locationId: string | null): Promise<void> {
     const provider = await this.requireProvider(providerId);

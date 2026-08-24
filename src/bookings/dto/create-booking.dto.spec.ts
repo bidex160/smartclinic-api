@@ -9,6 +9,9 @@ describe('CreateBookingDto', () => {
     participantPatientId: '4c7b8fe6-f9c1-4f01-9a0c-68daf48e1e0e',
     healthCheckPackageId: 'd3f17322-2dab-42bd-a006-35c3b864849d',
     fulfilmentModeId: '3c233f29-a510-4602-a337-df7e2d1e5a4a',
+    preferredDate: '2026-08-20',
+    preferredTimeWindowStart: '09:00',
+    preferredTimezone: 'Africa/Lagos',
   };
 
   it('accepts a valid request without client-controlled quote fields', async () => {
@@ -52,10 +55,10 @@ describe('CreateBookingDto', () => {
     await expect(validate(plainToInstance(CreateBookingDto, { ...validInput, preferredDate: '2026-08-20', preferredTimeWindowStart: '09:00', preferredTimeWindowEnd: '12:00', preferredTimezone: 'Africa/Lagos' }))).resolves.toHaveLength(0);
   });
   it('rejects scheduling without a timezone and rejects invalid timezones', async () => {
-    expect(await validate(plainToInstance(CreateBookingDto, { ...validInput, preferredDate: '2026-08-20' }))).not.toHaveLength(0);
+    expect(await validate(plainToInstance(CreateBookingDto, { ...validInput, preferredTimezone: undefined }))).not.toHaveLength(0);
     expect(await validate(plainToInstance(CreateBookingDto, { ...validInput, preferredDate: '2026-08-20', preferredTimezone: 'Lagos' }))).not.toHaveLength(0);
   });
-  it('rejects a partial time range', async () => {
-    expect(await validate(plainToInstance(CreateBookingDto, { ...validInput, preferredTimeWindowStart: '09:00', preferredTimezone: 'Africa/Lagos' }))).not.toHaveLength(0);
+  it('does not require a client-supplied end time', async () => {
+    expect(await validate(plainToInstance(CreateBookingDto, validInput))).toHaveLength(0);
   });
 });

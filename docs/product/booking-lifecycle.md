@@ -77,7 +77,7 @@ Creating a booking resolves an active, effective catalogue price server-side for
 
 ## Preferred scheduling context
 
-A booking may omit scheduling preference entirely. If a preferred date or either preferred time is supplied, `preferred_timezone` is required and must be an IANA timezone such as `Africa/Lagos` or `Europe/London`. Both preferred times must be supplied together and the end must be after the start. The date and time values are interpreted as local values in `preferred_timezone`; they are not server-local or UTC timestamps.
+A new bookable Health Check requires a preferred date, appointment start time, and IANA timezone such as `Africa/Lagos`. The patient does not select an end time. Matching derives the appointment end from the selected package's positive `estimated_duration_minutes`; a missing/invalid catalogue duration is a configuration error and prevents matching. The legacy nullable `preferred_time_to` column remains for compatibility but is not matching authority for new bookings. Date and time values are local to `preferred_timezone`, not server-local or UTC timestamps.
 
 This complete scheduling context can be transformed into provider-availability discovery input. Existing development rows may retain a null timezone, but an incomplete scheduling context produces an explicit “not ready for availability matching” result rather than an assumed zone.
 
@@ -85,7 +85,7 @@ Provider acceptance uses the preferred context to create a `HELD` provider-capac
 
 Operational cancellation is available only to authenticated `ADMIN` and `OPERATIONS` users. It rejects `COMPLETED`, already `CANCELLED`, and `EXPIRED` bookings; expiry is treated as a distinct terminal outcome rather than relabelled as cancellation. Cancellation atomically moves the booking to `CANCELLED`, closes any `OFFERED`, `ACCEPTED`, or `CONFIRMED` assignment, appends both histories, and marks active reservations `CANCELLED`. Payment reversal and refund policy remain separate and deferred.
 
-Operational rescheduling requires a complete new local date/time window and IANA timezone. `DRAFT` and `AWAITING_FUNDING` remain in their funding lifecycle state. Other eligible states return to `PENDING_PROVIDER_MATCH`; current offers or assignments are cancelled and held/confirmed reservations become `RELEASED`. The existing provider is not assumed available at the new time and matching is not restarted automatically. `IN_PROGRESS` and terminal bookings cannot be rescheduled.
+Operational rescheduling that returns a booking to matching accepts a new local date, start time, and IANA timezone; its matching interval is again derived from package duration. `DRAFT` and `AWAITING_FUNDING` remain in their funding lifecycle state. Other eligible states return to `PENDING_PROVIDER_MATCH`; current offers or assignments are cancelled and held/confirmed reservations become `RELEASED`. The existing provider is not assumed available at the new time and matching is not restarted automatically. `IN_PROGRESS` and terminal bookings cannot be rescheduled. Formal appointment scheduling remains distinct and continues to store explicit confirmed start and end times.
 
 `booking_status_history` supports a same-status row with the `BOOKING_RESCHEDULED` reason code when schedule context changes without a status transition. This is the current audit representation; a richer general booking-event log may replace it later.
 

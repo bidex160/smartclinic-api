@@ -107,20 +107,18 @@ describe('BookingsService', () => {
     });
   });
 
-  it('rejects an invalid requested-time window before persistence', async () => {
+  it('ignores a legacy client end time and persists no authoritative preference end', async () => {
     const { service, bookingRepository } = createService();
 
-    await expect(
-      service.create({ ...createBookingDto, preferredTimeWindowStart: '12:00', preferredTimeWindowEnd: '09:00' }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(bookingRepository.manager.transaction).not.toHaveBeenCalled();
+    await expect(service.create({ ...createBookingDto, preferredTimeWindowStart: '12:00', preferredTimeWindowEnd: '09:00' })).resolves.toBeDefined();
+    expect(bookingRepository.manager.transaction).toHaveBeenCalled();
   });
 
   it('rejects incomplete scheduling context before persistence', async () => {
     const { service, bookingRepository } = createService();
-    await expect(service.create({ ...createBookingDto, preferredTimezone: undefined })).rejects.toBeInstanceOf(BadRequestException);
-    await expect(service.create({ ...createBookingDto, preferredTimeWindowEnd: undefined })).rejects.toBeInstanceOf(BadRequestException);
-    expect(bookingRepository.manager.transaction).not.toHaveBeenCalled();
+    await expect(service.create({ ...createBookingDto, preferredTimezone: undefined } as unknown as CreateBookingDto)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create({ ...createBookingDto, preferredTimeWindowEnd: undefined })).resolves.toBeDefined();
+    expect(bookingRepository.manager.transaction).toHaveBeenCalledTimes(1);
   });
 
   it('rejects unavailable referenced records before persistence', async () => {

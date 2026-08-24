@@ -9,6 +9,7 @@ import { Provider } from './provider.entity';
 @Index('IDX_provider_availability_service', ['providerServiceId'], { where: '"provider_service_id" IS NOT NULL' })
 @Index('IDX_provider_availability_location', ['providerLocationId'], { where: '"provider_location_id" IS NOT NULL' })
 @Check('CHK_provider_availability_time_range', '"start_time" < "end_time"')
+@Check('CHK_provider_availability_booking_stop_time', '"booking_stop_time" IS NULL OR ("start_time" < "booking_stop_time" AND "booking_stop_time" <= "end_time")')
 export class ProviderAvailability {
   @PrimaryGeneratedColumn('uuid') id!: string;
   @Column({ name: 'provider_id', type: 'uuid' }) providerId!: string;
@@ -20,6 +21,7 @@ export class ProviderAvailability {
   @Column({ name: 'day_of_week', type: 'enum', enum: DayOfWeek, enumName: 'day_of_week_enum' }) dayOfWeek!: DayOfWeek;
   @Column({ name: 'start_time', type: 'time' }) startTime!: string;
   @Column({ name: 'end_time', type: 'time' }) endTime!: string;
+  @Column({ name: 'booking_stop_time', type: 'time', nullable: true }) bookingStopTime!: string | null;
   @Column({ type: 'varchar' }) timezone!: string;
   @Column({ name: 'is_active', type: 'boolean', default: true }) isActive!: boolean;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;

@@ -170,11 +170,11 @@ describe('PublicBookingsService', () => {
     expect(invalidMode.bookingRepository.manager.transaction).not.toHaveBeenCalled();
   });
 
-  it('rejects public scheduling without timezone or with a partial range', async () => {
+  it('rejects public scheduling without timezone and accepts no client end time', async () => {
     const { service, bookingRepository } = createService();
-    await expect(service.create({ ...createPublicBookingDto, booking: { ...createPublicBookingDto.booking, preferredTimezone: undefined } })).rejects.toBeInstanceOf(BadRequestException);
-    await expect(service.create({ ...createPublicBookingDto, booking: { ...createPublicBookingDto.booking, preferredTimeTo: undefined } })).rejects.toBeInstanceOf(BadRequestException);
-    expect(bookingRepository.manager.transaction).not.toHaveBeenCalled();
+    await expect(service.create({ ...createPublicBookingDto, booking: { ...createPublicBookingDto.booking, preferredTimezone: undefined } } as unknown as CreatePublicBookingDto)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create({ ...createPublicBookingDto, booking: { ...createPublicBookingDto.booking, preferredTimeTo: undefined } })).resolves.toBeDefined();
+    expect(bookingRepository.manager.transaction).toHaveBeenCalledTimes(1);
   });
 
   it('propagates transactional failures so the database transaction can roll back every record', async () => {

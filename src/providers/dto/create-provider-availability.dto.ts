@@ -8,5 +8,6 @@ export class CreateProviderAvailabilityDto {
   @ApiProperty({ enum: DayOfWeek }) @IsEnum(DayOfWeek) dayOfWeek!: DayOfWeek;
   @ApiProperty({ example: '09:00' }) @IsMilitaryTime() startTime!: string;
   @ApiProperty({ example: '17:00' }) @IsMilitaryTime() endTime!: string;
+  @ApiPropertyOptional({ example: '16:30', nullable: true, description: 'Exclusive latest time at which a new appointment may start.' }) @IsOptional() @IsMilitaryTime() bookingStopTime?: string | null;
   @ApiProperty({ example: 'Africa/Lagos' }) @IsTimeZone() timezone!: string;
 }

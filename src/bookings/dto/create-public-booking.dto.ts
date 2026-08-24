@@ -1,7 +1,6 @@
 import { Type } from 'class-transformer';
 import {
   IsDateString,
-  IsDefined,
   IsEmail,
   IsEnum,
   IsOptional,
@@ -11,7 +10,6 @@ import {
   Matches,
   MaxLength,
   ValidateNested,
-  ValidateIf,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -95,28 +93,22 @@ class PublicBookingDetailsDto {
   @IsUUID()
   fulfilmentModeId!: string;
 
-  @ApiPropertyOptional({ format: 'date', nullable: true })
-  @IsOptional()
+  @ApiProperty({ format: 'date' })
   @IsDateString()
-  preferredDate?: string;
+  preferredDate!: string;
 
-  @ApiPropertyOptional({ example: '09:00', nullable: true })
-  @ValidateIf((value: PublicBookingDetailsDto) => value.preferredTimeFrom != null || value.preferredTimeTo != null)
-  @IsDefined({ message: 'preferredTimeFrom is required when preferredTimeTo is supplied' })
+  @ApiProperty({ example: '09:00' })
   @Matches(TIME_PATTERN, { message: 'preferredTimeFrom must be a valid time' })
-  preferredTimeFrom?: string;
+  preferredTimeFrom!: string;
 
-  @ApiPropertyOptional({ example: '12:00', nullable: true })
-  @ValidateIf((value: PublicBookingDetailsDto) => value.preferredTimeFrom != null || value.preferredTimeTo != null)
-  @IsDefined({ message: 'preferredTimeTo is required when preferredTimeFrom is supplied' })
-  @Matches(TIME_PATTERN, { message: 'preferredTimeTo must be a valid time' })
+  @ApiPropertyOptional({ deprecated: true, description: 'Ignored. Appointment end is derived from package duration.' })
+  @IsOptional()
+  @Matches(TIME_PATTERN)
   preferredTimeTo?: string;
 
-  @ApiPropertyOptional({ example: 'Africa/Lagos', nullable: true, description: 'IANA timezone used to interpret the preferred date and time window.' })
-  @ValidateIf((value: PublicBookingDetailsDto) => value.preferredDate != null || value.preferredTimeFrom != null || value.preferredTimeTo != null || value.preferredTimezone != null)
-  @IsDefined({ message: 'preferredTimezone is required when a scheduling preference is supplied' })
+  @ApiProperty({ example: 'Africa/Lagos', description: 'IANA timezone used to interpret the preferred appointment start.' })
   @IsTimeZone()
-  preferredTimezone?: string;
+  preferredTimezone!: string;
 
   @ApiPropertyOptional({ maxLength: 1000, nullable: true })
   @IsOptional()

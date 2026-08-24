@@ -114,7 +114,9 @@ Each row belongs to a provider and date, has an IANA timezone, an `AVAILABLE` or
 
 #### `provider_booking_reservations`
 
-A reservation links exactly one provider assignment to its provider and booking, with an optional owned provider location. Its scheduled date, start/end times, and timezone are copied from complete booking scheduling context at provider acceptance. Status is `HELD`, `CONFIRMED`, `RELEASED`, or `CANCELLED`; release time is retained separately. Pricing, patient, and clinical data are not duplicated.
+A reservation links exactly one provider assignment to its provider and booking, with an optional owned provider location. Before formal scheduling, its date/start/timezone come from the booking preference and its end is derived from the package catalogue duration; `Booking.preferred_time_to` is retained only as a nullable legacy compatibility field. Status is `HELD`, `CONFIRMED`, `RELEASED`, or `CANCELLED`; release time is retained separately. Pricing, patient, and clinical data are not duplicated.
+
+`provider_availability.booking_stop_time` is a nullable local `time` constrained to be after `start_time` and at or before `end_time`. It controls the exclusive latest appointment start; it does not truncate the package-derived reservation interval.
 
 `HELD` and `CONFIRMED` rows participate in a GiST exclusion constraint keyed by provider and scheduled date over a half-open local-time range. Consequently adjacent reservations are valid and overlaps are rejected safely under concurrent acceptance. Released/cancelled rows remain as lifecycle records but do not consume capacity. The assignment FK is unique so one acceptance cannot create multiple reservations.
 

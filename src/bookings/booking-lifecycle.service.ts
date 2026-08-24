@@ -36,14 +36,14 @@ export class BookingLifecycleService {
   }
 
   async rescheduleBooking(reference: string, actorUserId: string, dto: RescheduleBookingDto): Promise<AdminBookingLifecycleResponseDto> {
-    validateBookingSchedulingPreference({ preferredDate: dto.preferredDate, preferredTimeWindowStart: dto.preferredTimeFrom, preferredTimeWindowEnd: dto.preferredTimeTo, preferredTimezone: dto.preferredTimezone });
+    validateBookingSchedulingPreference({ preferredDate: dto.preferredDate, preferredTimeWindowStart: dto.preferredTimeFrom, preferredTimeWindowEnd: null, preferredTimezone: dto.preferredTimezone });
     return this.bookings.manager.transaction(async (manager) => {
       const booking = await this.requireLockedBooking(manager, reference);
       if ([BookingStatus.CANCELLED, BookingStatus.COMPLETED, BookingStatus.EXPIRED, BookingStatus.IN_PROGRESS].includes(booking.status)) throw new ConflictException(`Booking in ${booking.status} cannot be rescheduled`);
       const impact = await this.closeAssignmentsAndReservations(manager, booking.id, actorUserId, 'BOOKING_RESCHEDULED', null, ProviderBookingReservationStatus.RELEASED);
       const fromStatus = booking.status;
       const toStatus = [BookingStatus.DRAFT, BookingStatus.AWAITING_FUNDING].includes(fromStatus) ? fromStatus : BookingStatus.PENDING_PROVIDER_MATCH;
-      booking.preferredDate = dto.preferredDate; booking.preferredTimeWindowStart = dto.preferredTimeFrom; booking.preferredTimeWindowEnd = dto.preferredTimeTo; booking.preferredTimezone = dto.preferredTimezone;
+      booking.preferredDate = dto.preferredDate; booking.preferredTimeWindowStart = dto.preferredTimeFrom; booking.preferredTimeWindowEnd = null; booking.preferredTimezone = dto.preferredTimezone;
       booking.scheduledDate = null; booking.scheduledTimeFrom = null; booking.scheduledTimeTo = null; booking.scheduledTimezone = null; booking.providerLocationId = null; booking.scheduledAt = null; booking.scheduledByUserId = null; booking.scheduledStartsAt = null; booking.scheduledEndsAt = null; booking.status = toStatus;
       await manager.getRepository(Booking).save(booking);
       await this.appendBookingHistory(manager, booking.id, fromStatus, toStatus, actorUserId, 'BOOKING_RESCHEDULED', 'Scheduling context updated; fresh provider matching required where applicable');

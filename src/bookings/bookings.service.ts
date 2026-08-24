@@ -62,7 +62,7 @@ export class BookingsService {
             currency: quote.currency,
             preferredDate: createBookingDto.preferredDate ?? null,
             preferredTimeWindowStart: createBookingDto.preferredTimeWindowStart ?? null,
-            preferredTimeWindowEnd: createBookingDto.preferredTimeWindowEnd ?? null,
+            preferredTimeWindowEnd: null,
             preferredTimezone: createBookingDto.preferredTimezone ?? null,
             preferredLocationNote: createBookingDto.preferredLocationNote ?? null,
             status: BookingStatus.DRAFT,

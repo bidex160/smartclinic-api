@@ -40,7 +40,7 @@ export class PublicBookingsService {
     validateBookingSchedulingPreference({
       preferredDate: createPublicBookingDto.booking.preferredDate,
       preferredTimeWindowStart: createPublicBookingDto.booking.preferredTimeFrom,
-      preferredTimeWindowEnd: createPublicBookingDto.booking.preferredTimeTo,
+      preferredTimeWindowEnd: null,
       preferredTimezone: createPublicBookingDto.booking.preferredTimezone,
     });
     await this.validateCatalogue(createPublicBookingDto);
@@ -85,7 +85,7 @@ export class PublicBookingsService {
               currency: quote.currency,
               preferredDate: bookingDetails.preferredDate ?? null,
               preferredTimeWindowStart: bookingDetails.preferredTimeFrom ?? null,
-              preferredTimeWindowEnd: bookingDetails.preferredTimeTo ?? null,
+              preferredTimeWindowEnd: null,
               preferredTimezone: bookingDetails.preferredTimezone ?? null,
               preferredLocationNote: bookingDetails.locationNote ?? null,
             }),

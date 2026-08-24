@@ -9,11 +9,12 @@ export class ProviderAvailabilityResponseDto {
   @ApiProperty({ enum: DayOfWeek }) dayOfWeek!: DayOfWeek;
   @ApiProperty({ example: '09:00:00' }) startTime!: string;
   @ApiProperty({ example: '17:00:00' }) endTime!: string;
+  @ApiPropertyOptional({ example: '16:30:00', nullable: true }) bookingStopTime!: string | null;
   @ApiProperty({ example: 'Africa/Lagos' }) timezone!: string;
   @ApiProperty() isActive!: boolean;
   @ApiProperty({ format: 'date-time' }) createdAt!: Date;
   @ApiProperty({ format: 'date-time' }) updatedAt!: Date;
   static fromEntity(value: ProviderAvailability): ProviderAvailabilityResponseDto {
-    return { id: value.id, providerId: value.providerId, providerServiceId: value.providerServiceId, providerLocationId: value.providerLocationId, dayOfWeek: value.dayOfWeek, startTime: value.startTime, endTime: value.endTime, timezone: value.timezone, isActive: value.isActive, createdAt: value.createdAt, updatedAt: value.updatedAt };
+    return { id: value.id, providerId: value.providerId, providerServiceId: value.providerServiceId, providerLocationId: value.providerLocationId, dayOfWeek: value.dayOfWeek, startTime: value.startTime, endTime: value.endTime, bookingStopTime: value.bookingStopTime, timezone: value.timezone, isActive: value.isActive, createdAt: value.createdAt, updatedAt: value.updatedAt };
   }
 }

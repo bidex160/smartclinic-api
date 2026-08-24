@@ -18,6 +18,7 @@ describe('CreatePublicBookingDto', () => {
     booking: {
       healthCheckPackageId: 'd3f17322-2dab-42bd-a006-35c3b864849d',
       fulfilmentModeId: '3c233f29-a510-4602-a337-df7e2d1e5a4a',
+      preferredDate: '2026-08-20',
       preferredTimeFrom: '09:00',
       preferredTimeTo: '12:00',
       preferredTimezone: 'Africa/Lagos',
@@ -58,6 +59,6 @@ describe('CreatePublicBookingDto', () => {
     const partial = { ...validInput, booking: { ...validInput.booking, preferredTimeTo: undefined } };
     expect(await validate(plainToInstance(CreatePublicBookingDto, withoutTimezone))).not.toHaveLength(0);
     expect(await validate(plainToInstance(CreatePublicBookingDto, invalidTimezone))).not.toHaveLength(0);
-    expect(await validate(plainToInstance(CreatePublicBookingDto, partial))).not.toHaveLength(0);
+    expect(await validate(plainToInstance(CreatePublicBookingDto, partial))).toHaveLength(0);
   });
 });
