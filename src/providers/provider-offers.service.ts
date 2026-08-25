@@ -33,7 +33,7 @@ export class ProviderOffersService {
   async accept(user: User, assignmentId: string): Promise<ProviderOfferResponseDto> {
     const provider = await this.currentProvider.resolve(user);
     await this.requireOwnedOffer(provider.id, assignmentId);
-    await this.matching.acceptOffer(assignmentId, provider.id);
+    await this.matching.acceptOffer(assignmentId, provider.id, undefined, user.id);
     return ProviderOfferResponseDto.fromEntity(await this.requireOwnedOffer(provider.id, assignmentId));
   }
 

@@ -198,7 +198,8 @@ export class AdminProviderMatchingController {
   @Post("provider-assignments/:id/confirm")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: "Confirm an accepted provider assignment (ADMIN or OPERATIONS)",
+    summary: "Recover/confirm a legacy accepted provider assignment (ADMIN or OPERATIONS)",
+    description: "Routine provider acceptance confirms and schedules automatically. This endpoint remains for exceptional recovery of legacy ACCEPTED assignments.",
   })
   @ApiOkResponse({ type: AdminProviderAssignmentResponseDto })
   async confirm(

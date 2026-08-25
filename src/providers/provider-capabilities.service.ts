@@ -169,7 +169,13 @@ export class ProviderCapabilitiesService {
         this.locations.create({
           ...dto,
           providerId,
-          addressLine2: dto.addressLine2 ?? null,
+          name: dto.name.trim(),
+          addressLine1: dto.addressLine1.trim(),
+          addressLine2: dto.addressLine2?.trim() || null,
+          city: dto.city.trim(),
+          state: dto.state.trim(),
+          postalCode: dto.postalCode?.trim() || null,
+          countryCode: dto.countryCode.trim().toUpperCase(),
           latitude: dto.latitude?.toString() ?? null,
           longitude: dto.longitude?.toString() ?? null,
           isActive: true,
@@ -182,14 +188,15 @@ export class ProviderCapabilitiesService {
     dto: UpdateProviderLocationDto,
   ): Promise<ProviderLocationResponseDto> {
     const location = await this.requireLocation(id);
-    if (dto.name !== undefined) location.name = dto.name;
+    if (dto.name !== undefined) location.name = dto.name.trim();
     if (dto.addressLine1 !== undefined)
-      location.addressLine1 = dto.addressLine1;
+      location.addressLine1 = dto.addressLine1.trim();
     if (dto.addressLine2 !== undefined)
-      location.addressLine2 = dto.addressLine2;
-    if (dto.city !== undefined) location.city = dto.city;
-    if (dto.state !== undefined) location.state = dto.state;
-    if (dto.countryCode !== undefined) location.countryCode = dto.countryCode;
+      location.addressLine2 = dto.addressLine2?.trim() || null;
+    if (dto.city !== undefined) location.city = dto.city.trim();
+    if (dto.state !== undefined) location.state = dto.state.trim();
+    if (dto.postalCode !== undefined) location.postalCode = dto.postalCode?.trim() || null;
+    if (dto.countryCode !== undefined) location.countryCode = dto.countryCode.trim().toUpperCase();
     if (dto.latitude !== undefined)
       location.latitude =
         dto.latitude === null ? null : dto.latitude.toString();
@@ -280,6 +287,14 @@ export class ProviderCapabilitiesService {
     window?: AvailabilityWindow,
     excludeProviderAssignmentId?: string,
   ): Promise<ProviderServiceResponseDto[]> {
+    const dayOfWeek = window ? this.validateAvailabilityWindow(window) : null;
+    const locationAvailability = window
+      ? ` AND ((EXISTS (SELECT 1 FROM provider_availability location_scope WHERE location_scope.provider_id = provider.id AND location_scope.is_active = true AND location_scope.day_of_week = :dayOfWeek AND location_scope.timezone = :requestedTimezone AND location_scope.start_time <= :requestedStartTime AND :requestedStartTime < COALESCE(location_scope.booking_stop_time, location_scope.end_time) AND (location_scope.provider_service_id IS NULL OR location_scope.provider_service_id = service.id) AND (location_scope.provider_location_id IS NULL OR location_scope.provider_location_id = location.id)) OR EXISTS (SELECT 1 FROM provider_availability_exceptions location_scope WHERE location_scope.provider_id = provider.id AND location_scope.is_active = true AND location_scope.type = 'AVAILABLE' AND location_scope.date = :requestedDate AND location_scope.timezone = :requestedTimezone AND (location_scope.start_time IS NULL OR (location_scope.start_time <= :requestedStartTime AND location_scope.end_time >= :requestedEndTime)) AND (location_scope.provider_service_id IS NULL OR location_scope.provider_service_id = service.id) AND (location_scope.provider_location_id IS NULL OR location_scope.provider_location_id = location.id))) AND NOT EXISTS (SELECT 1 FROM provider_availability_exceptions location_scope WHERE location_scope.provider_id = provider.id AND location_scope.is_active = true AND location_scope.type = 'UNAVAILABLE' AND location_scope.date = :requestedDate AND location_scope.timezone = :requestedTimezone AND (location_scope.start_time IS NULL OR (location_scope.start_time < :requestedEndTime AND location_scope.end_time > :requestedStartTime)) AND (location_scope.provider_service_id IS NULL OR location_scope.provider_service_id = service.id) AND (location_scope.provider_location_id IS NULL OR location_scope.provider_location_id = location.id)))`
+      : '';
+    const locationGeography = window?.visitAddress
+      ? `location.isActive = true AND location.countryCode = :locationCountry AND LOWER(location.state) = LOWER(:locationState) AND LOWER(location.city) = LOWER(:locationCity) AND (:locationPostal = '' OR location.postalCode IS NULL OR LOWER(location.postalCode) = LOWER(:locationPostal))${locationAvailability}`
+      : `location.isActive = true${locationAvailability}`;
+    const locationGeographyParams = window?.visitAddress ? { locationCountry: window.visitAddress.countryCode, locationState: window.visitAddress.stateOrRegion, locationCity: window.visitAddress.city, locationPostal: window.visitAddress.postalCode ?? "" } : undefined;
     const query = this.services
       .createQueryBuilder("service")
       .distinct(true)
@@ -290,7 +305,8 @@ export class ProviderCapabilitiesService {
       .leftJoinAndSelect(
         "locationLinks.providerLocation",
         "location",
-        "location.isActive = true",
+        locationGeography,
+        locationGeographyParams,
       )
       .where("service.healthCheckPackageId = :healthCheckPackageId", {
         healthCheckPackageId,
@@ -304,8 +320,8 @@ export class ProviderCapabilitiesService {
       .andWhere("package.isActive = true")
       .andWhere("mode.isActive = true");
     if (window) {
-      const dayOfWeek = this.validateAvailabilityWindow(window);
-      const applicableLocation = `(scope.provider_location_id IS NULL OR EXISTS (SELECT 1 FROM provider_locations scoped_location INNER JOIN provider_service_locations scoped_link ON scoped_link.provider_location_id = scoped_location.id WHERE scoped_location.id = scope.provider_location_id AND scoped_location.is_active = true AND scoped_link.provider_service_id = service.id))`;
+      const scopedLocationGeography = window.visitAddress ? ` AND scoped_location.country_code = :locationCountry AND LOWER(scoped_location.state) = LOWER(:locationState) AND LOWER(scoped_location.city) = LOWER(:locationCity) AND (:locationPostal = '' OR scoped_location.postal_code IS NULL OR LOWER(scoped_location.postal_code) = LOWER(:locationPostal))` : '';
+      const applicableLocation = `(scope.provider_location_id IS NULL OR EXISTS (SELECT 1 FROM provider_locations scoped_location INNER JOIN provider_service_locations scoped_link ON scoped_link.provider_location_id = scoped_location.id WHERE scoped_location.id = scope.provider_location_id AND scoped_location.is_active = true AND scoped_link.provider_service_id = service.id${scopedLocationGeography}))`;
       query.andWhere(
         `(EXISTS (SELECT 1 FROM provider_availability scope WHERE scope.provider_id = provider.id AND scope.is_active = true AND scope.day_of_week = :dayOfWeek AND scope.timezone = :requestedTimezone AND scope.start_time <= :requestedStartTime AND :requestedStartTime < COALESCE(scope.booking_stop_time, scope.end_time) AND (scope.provider_service_id IS NULL OR scope.provider_service_id = service.id) AND ${applicableLocation}) OR EXISTS (SELECT 1 FROM provider_availability_exceptions scope WHERE scope.provider_id = provider.id AND scope.is_active = true AND scope.type = 'AVAILABLE' AND scope.date = :requestedDate AND scope.timezone = :requestedTimezone AND (scope.start_time IS NULL OR (scope.start_time <= :requestedStartTime AND scope.end_time >= :requestedEndTime)) AND (scope.provider_service_id IS NULL OR scope.provider_service_id = service.id) AND ${applicableLocation}))`,
         {
@@ -360,8 +376,14 @@ export class ProviderCapabilitiesService {
           : undefined,
       );
     }
-    const rows = await query.orderBy("service.createdAt", "ASC").getMany();
-    return rows.map(ProviderServiceResponseDto.fromEntity);
+    const rows = await query.orderBy({ "service.createdAt": "ASC", "service.id": "ASC", "location.createdAt": "ASC", "location.id": "ASC" }).getMany();
+    return rows.map((service) => ({
+      ...ProviderServiceResponseDto.fromEntity(service),
+      providerLocationIds: service.locationLinks
+        ?.filter((link) => link.providerLocation?.isActive)
+        .sort((left, right) => left.providerLocation.createdAt.getTime() - right.providerLocation.createdAt.getTime() || left.providerLocationId.localeCompare(right.providerLocationId))
+        .map((link) => link.providerLocationId) ?? [],
+    }));
   }
 
   private validateAvailabilityWindow(window: AvailabilityWindow): DayOfWeek {

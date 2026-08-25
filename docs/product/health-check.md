@@ -61,7 +61,7 @@ The authenticated, active Provider owning the confirmed assignment may start, vi
 
 One mutable current row is retained per encounter/code. Each creation or update appends an immutable measurement-history snapshot containing previous/new values, actor, and timestamp. Encounter lifecycle transitions have a separate append-only history. Detailed correction/version workflows remain future work.
 
-Starting an encounter requires a confirmed assignment and a `SCHEDULED` booking, and moves the booking to `IN_PROGRESS` with BookingStatusHistory. `PROVIDER_ASSIGNED` is no longer a valid encounter-start state: operations must first confirm the appointment through the scheduling command. Completion requires all six current measurements and atomically moves encounter and booking to `COMPLETED`, appending both histories.
+Starting an encounter requires a confirmed assignment and a `SCHEDULED` booking, and moves the booking to `IN_PROGRESS` with BookingStatusHistory. Normal provider acceptance now produces that confirmed/scheduled state automatically; `PROVIDER_ASSIGNED` remains invalid for encounter start. Completion requires all six current measurements and atomically moves encounter and booking to `COMPLETED`, appending both histories.
 
 ## Patient result access
 

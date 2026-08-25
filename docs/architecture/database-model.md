@@ -122,7 +122,11 @@ A reservation links exactly one provider assignment to its provider and booking,
 
 Booking cancellation changes active reservation rows to `CANCELLED`; operational rescheduling changes them to `RELEASED`. In both cases the related actionable assignment becomes `CANCELLED`, with assignment and booking history appended in the same transaction. Reservation rows are retained rather than deleted. No schema migration is required for these operations because the existing status enums and reason/history fields cover the lifecycle.
 
-Formal scheduling preserves Booking's preferred fields and fills its confirmed `scheduled_*` fields. The assignment's confirmed reservation is locked separately and reconciled to the final local window in the same transaction; its location is set only after provider ownership, activation, and capability linkage are validated. The GiST exclusion constraint remains the concurrency backstop.
+Scheduling preserves Booking's preferred fields and fills its confirmed `scheduled_*` fields. In the routine path, matching derives the local window from preferred start plus package duration and creates a location-bearing hold; provider acceptance locks mutable rows separately, confirms that reservation and assignment, and schedules the booking in one transaction. HOME_VISIT location remains null. The GiST exclusion constraint remains the concurrency backstop.
+
+`booking_visit_addresses` is retained as the internal/table name for migration compatibility. It now stores structured booking geography for both HOME_VISIT destinations and PROVIDER_LOCATION patient origins; fulfilment mode determines the meaning. `provider_locations.postal_code` is nullable for compatibility with existing branches. Country/state/city are the minimum physical-location matching geography, while postal code only narrows a match when both sides provide conflicting non-null values.
+
+For PROVIDER_LOCATION offers, `provider_booking_reservations.provider_location_id` is the single persisted source of the matched branch. The HELD reservation is created with the offer, using deterministic eligible-location ordering, and becomes CONFIRMED on provider acceptance. Assignment does not duplicate provider-location state.
 
 #### `organisations`
 

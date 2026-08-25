@@ -30,6 +30,7 @@ describe('PublicBookingsService', () => {
       preferredTimeTo: '12:00',
       preferredTimezone: 'Africa/Lagos',
       locationNote: 'Reception desk',
+      visitAddress: { addressLine1: '12 Ring Road', city: 'Ibadan', stateOrRegion: 'Oyo', countryCode: 'NG' },
     },
   };
 
@@ -109,6 +110,7 @@ describe('PublicBookingsService', () => {
       contactRepository,
       historyRepository,
       packagePricingService,
+      fulfilmentModeRepository,
     };
   }
 
@@ -141,6 +143,8 @@ describe('PublicBookingsService', () => {
       expect.objectContaining({ fromStatus: null, toStatus: 'DRAFT', actorUserId: null }),
     );
   });
+  it('requires a structured address for PROVIDER_LOCATION public bookings', async () => { const { service } = createService(); await expect(service.create({ ...createPublicBookingDto, booking: { ...createPublicBookingDto.booking, visitAddress: undefined } })).rejects.toBeInstanceOf(BadRequestException); });
+  it('retains HOME_VISIT structured-address requirements', async () => { const { service, fulfilmentModeRepository } = createService(); fulfilmentModeRepository.findOne.mockResolvedValue({ code: 'HOME_VISIT' }); await expect(service.create({ ...createPublicBookingDto, booking: { ...createPublicBookingDto.booking, visitAddress: undefined } })).rejects.toBeInstanceOf(BadRequestException); await expect(service.create(createPublicBookingDto)).resolves.toBeDefined(); });
 
   it('creates a distinct patient for a booking made for another person', async () => {
     const { service, patientRepository } = createService();

@@ -143,7 +143,7 @@ export class PublicBookingsService {
       throw new BadRequestException('The selected Health Check package or fulfilment mode is unavailable');
     }
   }
-  private async validateVisitAddress(modeId: string, address: CreatePublicBookingDto['booking']['visitAddress']): Promise<void> { const mode = await this.fulfilmentModeRepository.findOne({ where: { id: modeId } }); if (mode?.code === 'HOME_VISIT' && !address) throw new BadRequestException('visitAddress is required for HOME_VISIT bookings'); if (mode?.code === 'PROVIDER_LOCATION' && address) throw new BadRequestException('visitAddress is only accepted for HOME_VISIT bookings'); }
+  private async validateVisitAddress(modeId: string, address: CreatePublicBookingDto['booking']['visitAddress']): Promise<void> { const mode = await this.fulfilmentModeRepository.findOne({ where: { id: modeId } }); if (['HOME_VISIT', 'PROVIDER_LOCATION'].includes(mode?.code ?? '') && !address) throw new BadRequestException('visitAddress is required for this fulfilment mode'); }
   private normalizedAddress(value: NonNullable<CreatePublicBookingDto['booking']['visitAddress']>) { return { ...value, addressLine1: value.addressLine1.trim(), addressLine2: value.addressLine2?.trim() || null, city: value.city.trim(), stateOrRegion: value.stateOrRegion.trim(), postalCode: value.postalCode?.trim() || null, countryCode: value.countryCode.trim().toUpperCase(), latitude: value.latitude?.toString() ?? null, longitude: value.longitude?.toString() ?? null }; }
 
   private async findResponseByReference(bookingReference: string): Promise<BookingResponseDto> {

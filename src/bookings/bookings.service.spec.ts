@@ -18,6 +18,7 @@ describe('BookingsService', () => {
     preferredTimeWindowStart: '09:00',
     preferredTimeWindowEnd: '12:00',
     preferredTimezone: 'Africa/Lagos',
+    visitAddress: { addressLine1: '12 Ring Road', city: 'Ibadan', stateOrRegion: 'Oyo', countryCode: 'NG' },
   };
 
   function createService(exists = true, priceError?: Error) {
@@ -32,7 +33,7 @@ describe('BookingsService', () => {
       status: BookingStatus.DRAFT,
       createdAt: new Date('2026-08-17T12:00:00.000Z'),
       updatedAt: new Date('2026-08-17T12:00:00.000Z'),
-      visitAddressSummary: null,
+      visitAddressSummary: { city: 'Ibadan', stateOrRegion: 'Oyo', postalCode: undefined, countryCode: 'NG' },
       healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential Health Check' },
       fulfilmentMode: { code: 'PROVIDER_LOCATION', name: 'Provider location' },
       participant: { givenName: 'Ada', familyName: 'Okafor' },
@@ -107,6 +108,8 @@ describe('BookingsService', () => {
       actorUserId: createBookingDto.bookerUserId,
     });
   });
+  it('requires a structured address for PROVIDER_LOCATION registered bookings', async () => { const { service } = createService(); await expect(service.create({ ...createBookingDto, visitAddress: undefined })).rejects.toBeInstanceOf(BadRequestException); });
+  it('accepts and normalizes a structured PROVIDER_LOCATION origin address', async () => { const { service, transactionalHistoryRepository } = createService(); await service.create({ ...createBookingDto, visitAddress: { addressLine1: ' 12 Ring Road ', city: ' Ibadan ', stateOrRegion: ' Oyo ', countryCode: 'ng' } }); expect(transactionalHistoryRepository.save).toHaveBeenCalledWith(expect.objectContaining({ addressLine1: '12 Ring Road', city: 'Ibadan', stateOrRegion: 'Oyo', countryCode: 'NG' })); });
 
   it('ignores a legacy client end time and persists no authoritative preference end', async () => {
     const { service, bookingRepository } = createService();
@@ -155,7 +158,7 @@ describe('BookingsService', () => {
       preferredTimeWindowEnd: '12:00',
       preferredTimezone: 'Africa/Lagos',
       locationNote: null,
-      visitAddressSummary: null,
+      visitAddressSummary: { city: 'Ibadan', stateOrRegion: 'Oyo', postalCode: undefined, countryCode: 'NG' },
       createdAt: new Date('2026-08-17T12:00:00.000Z'),
       updatedAt: new Date('2026-08-17T12:00:00.000Z'),
     });

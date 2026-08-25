@@ -47,13 +47,15 @@ UNFULFILLABLE → CANCELLED
 
 The state sequence maps the earlier suggested milestones as follows: `PENDING_PAYMENT` becomes booking `AWAITING_FUNDING` plus payment/funding state; `PAYMENT_CONFIRMED` is a Payments/Sponsorships/Organisations outcome; `PENDING_PROVIDER_MATCH` remains booking state; `PROVIDER_ASSIGNED` occurs only after acceptance; and the proposed `PROVIDER_ACCEPTED` is an assignment state/event rather than a second booking state.
 
-The scheduling command now makes the lifecycle boundary explicit. A confirmed assignment leaves the booking at `PROVIDER_ASSIGNED`; an authorised operations user confirms the actual appointment and advances it to `SCHEDULED`. Only the authenticated Provider owning the confirmed assignment may then start the encounter, moving `SCHEDULED` to `IN_PROGRESS` with history. Encounter completion requires all six structured measurements and atomically moves the booking from `IN_PROGRESS` to `COMPLETED` with history. The former direct `PROVIDER_ASSIGNED → IN_PROGRESS` shortcut is no longer accepted.
+In the normal automatic-matching path, provider acceptance finalizes and schedules the work atomically: assignment history records `OFFERED → ACCEPTED → CONFIRMED`, reservation capacity becomes `CONFIRMED`, and booking history records `PENDING_PROVIDER_MATCH → PROVIDER_ASSIGNED → SCHEDULED`. `ACCEPTED` remains an auditable intermediate assignment event, not an operations queue state. Encounter start continues to require the resulting `SCHEDULED` booking and the owning confirmed assignment.
+
+Automatic provider acceptance now crosses the scheduling boundary after revalidation. Only the authenticated Provider owning the confirmed assignment may then start the encounter, moving `SCHEDULED` to `IN_PROGRESS` with history. Encounter completion requires all six structured measurements and atomically moves the booking from `IN_PROGRESS` to `COMPLETED` with history. The direct `PROVIDER_ASSIGNED → IN_PROGRESS` shortcut remains invalid.
 
 ## Rejection and failure handling
 
 Provider rejection is not normally a booking rejection: it records a declined provider offer and returns the booking to `PENDING_PROVIDER_MATCH`. If matching cannot find a suitable provider, the booking moves to `UNFULFILLABLE`, not automatically to `CANCELLED`. Operations may later retry matching, change fulfilment details, or cancel it in line with policy.
 
-In the implemented sequential workflow, verified payment moves the booking to `PENDING_PROVIDER_MATCH` and triggers matching after settlement commits. Matching never starts from `DRAFT` or `AWAITING_FUNDING`. Provider acceptance remains an assignment-level `ACCEPTED` state; only operations/admin confirmation changes it to `CONFIRMED` and advances the booking, with history, to `PROVIDER_ASSIGNED`. Decline and processed offer expiry automatically try the next eligible provider. Exhausting eligible providers moves the booking to `UNFULFILLABLE`, never `CANCELLED`.
+In the implemented sequential workflow, verified payment moves the booking to `PENDING_PROVIDER_MATCH` and triggers matching after settlement commits. Matching never starts from `DRAFT` or `AWAITING_FUNDING`. Provider acceptance records the assignment-level `ACCEPTED` event and automatically proceeds to `CONFIRMED` and `SCHEDULED`. Decline and processed offer expiry automatically try the next eligible provider. Exhausting eligible providers moves the booking to `UNFULFILLABLE`, never `CANCELLED`.
 
 Funding rejection or payment failure is likewise not a booking state. It updates the funding summary and leaves the booking in `AWAITING_FUNDING` until paid, re-funded, cancelled, or expired.
 
@@ -89,12 +91,13 @@ Operational rescheduling that returns a booking to matching accepts a new local 
 
 `booking_status_history` supports a same-status row with the `BOOKING_RESCHEDULED` reason code when schedule context changes without a status transition. This is the current audit representation; a richer general booking-event log may replace it later.
 
-For `PROVIDER_LOCATION`, scheduling requires an active location owned by the confirmed provider and linked to the exact package/mode capability. For `HOME_VISIT`, the confirmed provider location remains null. A structured visit address and service-area policy remain deferred; `preferred_location_note` is free text and is never treated as a verified or routable address.
+For `PROVIDER_LOCATION`, scheduling requires an active location owned by the confirmed provider and linked to the exact package/mode capability. Matching resolves multiple compatible branches by stable creation-time/ID order and persists the selected branch on the held reservation. For `HOME_VISIT`, the confirmed provider location remains null and structured visit-address/service-area coverage is revalidated. `preferred_location_note` is supplemental free text, never matching geography.
+
+Both supported fulfilment modes require a structured `visitAddress`. For HOME_VISIT it is the service destination. For PROVIDER_LOCATION it is the patient origin used to choose a compatible physical branch; the selected ProviderLocation is preserved separately as the confirmed appointment destination. Coordinates remain optional and unused by v1 matching.
 
 ## Decisions required before entities
 
 - Is funding always required before matching, or may approved organisation programmes or selected pay-later journeys match first?
-- When does a booking become `SCHEDULED`: provider acceptance, participant confirmation, or a separate operations confirmation?
 - What are the configurable cancellation, rescheduling, no-show, expiry, and refund policies?
 - What matching threshold or operational decision moves a booking to `UNFULFILLABLE`?
 - Can a completed booking be corrected, reopened, or disputed, and by whom?

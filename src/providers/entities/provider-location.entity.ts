@@ -21,6 +21,7 @@ export class ProviderLocation {
   @Column({ name: 'address_line_2', type: 'varchar', nullable: true }) addressLine2!: string | null;
   @Column({ type: 'varchar' }) city!: string;
   @Column({ type: 'varchar' }) state!: string;
+  @Column({ name: 'postal_code', type: 'varchar', length: 30, nullable: true }) postalCode!: string | null;
   @Column({ name: 'country_code', type: 'char', length: 2 }) countryCode!: string;
   @Column({ type: 'decimal', precision: 9, scale: 6, nullable: true }) latitude!: string | null;
   @Column({ type: 'decimal', precision: 9, scale: 6, nullable: true }) longitude!: string | null;
