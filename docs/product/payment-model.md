@@ -89,7 +89,11 @@ Provider-specific SDK identifiers, statuses, raw webhook payloads, and implement
 
 ADMIN/OPERATIONS test-management endpoints remain available outside production. Public guests may initialize funding, begin Paystack checkout, read status, and request reconciliation only with a booking-bound session cookie. A signed Paystack webhook is the primary production confirmation path. No raw webhook storage is implemented.
 
-Public checkout initiation is now available at `POST /api/v1/public/bookings/:reference/payment/initiate` after session authorization. It initializes/reuses quote-backed funding, resolves payer email from the responsible User or guest BookingContact, generates a retry-specific `SC-PAY-...` reference, and returns only the normalized reference/status/amount/currency/checkout URL. Missing email is a business error; no address is fabricated. A registered-owner initiation route remains deferred because registered booking ownership authorization is not yet sufficiently defined.
+Public checkout initiation remains available at `POST /api/v1/public/bookings/:reference/payment/initiate` after session authorization. Registered patients use `POST /api/v1/me/health-checks/:reference/payment`; the backend resolves the authenticated User's active SELF Patient and requires that Patient to be the booking participant. Both paths reuse quote-backed SELF funding and the same provider-neutral attempt, verification, transaction, settlement, and post-commit matching services. Neither contract accepts amount, currency, payment-provider reference, User ID, or Patient ID as authority.
+
+Registered payment status is read at `GET /api/v1/me/health-checks/:reference/payment`, and deliberate provider reconciliation is `POST /api/v1/me/health-checks/:reference/payment/verify`. A succeeded attempt is not recollected. If settlement is complete but the booking remains `PENDING_PROVIDER_MATCH` after an earlier technical matching failure, the explicit verification command invokes the idempotent matching service again; ordinary status GETs never trigger matching.
+
+`PAYSTACK_PATIENT_CALLBACK_URL` optionally supplies the registered-patient browser-return base. The application appends the encoded booking reference and passes the complete callback through the provider-neutral initialization input. If unset it falls back to the existing `PAYSTACK_CALLBACK_URL`, preserving guest behavior. Redirect query parameters are navigation hints only and never prove payment.
 
 ## Checkout funding options
 

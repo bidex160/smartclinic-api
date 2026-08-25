@@ -11,7 +11,7 @@ describe('PaymentFlowService public payment status', () => {
   const booking: any = { id: 'booking-id', bookingReference: 'SC-2026-ABCDEF123456', status: BookingStatus.AWAITING_FUNDING, quotedAmount: '12500.00', currency: 'NGN' };
   const funding: any = { id: 'funding-id', bookingId: booking.id, status: BookingFundingStatus.PENDING, checkoutOption: CheckoutFundingOption.PAY_LATER, amount: '12500.00', currency: 'NGN' };
 
-  function setup(attempt: any = null, transaction: any = null) {
+  function setup(attempt: any = null, transaction: any = null, matching?: any) {
     const fundingRepository = { findOne: jest.fn().mockResolvedValue(funding) };
     const transactionRepository = { findOne: jest.fn().mockResolvedValue(transaction) };
     const lockedAttempts = { findOne: jest.fn().mockResolvedValue(attempt), save: jest.fn(async (value: any) => value) };
@@ -20,7 +20,7 @@ describe('PaymentFlowService public payment status', () => {
     const bookings: any = { findOne: jest.fn().mockResolvedValue(booking), manager };
     const attempts: any = { findOne: jest.fn().mockResolvedValue(attempt) };
     const provider: any = { verifyPayment: jest.fn() };
-    const subject = new PaymentFlowService(bookings, attempts, provider, { payments: { verificationMinIntervalSeconds: 30 } } as never);
+    const subject = new PaymentFlowService(bookings, attempts, provider, { payments: { verificationMinIntervalSeconds: 30 } } as never, matching);
     return { subject, provider, lockedAttempts };
   }
 
@@ -60,5 +60,20 @@ describe('PaymentFlowService public payment status', () => {
     const context = setup(attempt);
     await expect(context.subject.verifyLatestBookingPayment(booking.bookingReference)).rejects.toMatchObject({ status: 429 });
     expect(context.provider.verifyPayment).not.toHaveBeenCalled();
+  });
+
+  it('uses deliberate verification to recover matching for an already-settled pending-match booking', async () => {
+    const previousBookingStatus = booking.status;
+    const previousFundingStatus = funding.status;
+    booking.status = BookingStatus.PENDING_PROVIDER_MATCH;
+    funding.status = BookingFundingStatus.SETTLED;
+    const attempt = { id: 'attempt', bookingFundingId: funding.id, status: PaymentAttemptStatus.SUCCEEDED, providerReference: 'SC-PAY-safe', createdAt: new Date() };
+    const matching = { startMatching: jest.fn().mockResolvedValue({}) };
+    const context = setup(attempt, { occurredAt: new Date() }, matching);
+    await context.subject.verifyLatestBookingPayment(booking.bookingReference, 'patient-user');
+    expect(context.provider.verifyPayment).not.toHaveBeenCalled();
+    expect(matching.startMatching).toHaveBeenCalledWith(booking.bookingReference, null);
+    booking.status = previousBookingStatus;
+    funding.status = previousFundingStatus;
   });
 });

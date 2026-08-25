@@ -78,6 +78,7 @@ class EnvironmentVariables {
   @IsOptional() @IsString() PAYSTACK_SECRET_KEY?: string;
   @IsOptional() @IsString() PAYSTACK_PUBLIC_KEY?: string;
   @IsOptional() @IsString() PAYSTACK_CALLBACK_URL?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) PAYSTACK_PATIENT_CALLBACK_URL?: string;
   @IsOptional() @IsIn(['true', 'false']) PAYSTACK_WEBHOOK_ENABLED?: string;
 }
 

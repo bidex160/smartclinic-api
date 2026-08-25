@@ -7,6 +7,7 @@ export interface InitializePaymentInput {
   bookingReference: string;
   customerEmail: string;
   paymentReference: string;
+  callbackUrl?: string;
 }
 export interface InitializePaymentResult {
   providerCode: string;

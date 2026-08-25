@@ -727,13 +727,36 @@ private addMinutesToTime(
     });
   }
 
-  private locationForOffer(booking: Booking, eligibleLocationIds: string[]): string | null {
-    if (booking.fulfilmentMode.code !== "PROVIDER_LOCATION") return null;
-    const selected = eligibleLocationIds[0];
-    if (!selected)
-      throw new ConflictException("Provider has no geographically eligible location for this booking");
-    return selected;
+ private locationForOffer(
+  booking: Booking,
+  providerLocationIds: string[],
+): string | null {
+  const fulfilmentMode =
+    booking.fulfilmentMode?.code;
+
+  if (fulfilmentMode === 'HOME_VISIT') {
+    return null;
   }
+
+  if (fulfilmentMode === 'PROVIDER_LOCATION') {
+    if (!providerLocationIds.length) {
+      throw new ConflictException(
+        'Provider-location matching returned no eligible physical location',
+      );
+    }
+
+    /**
+     * findEligibleProviders() already orders matching locations
+     * deterministically by:
+     *
+     * createdAt ASC
+     * id ASC
+     */
+    return providerLocationIds[0];
+  }
+
+  return null;
+}
 
   private requireAvailabilityContext(booking: Booking) {
     const context = bookingToAvailabilityWindow(booking);

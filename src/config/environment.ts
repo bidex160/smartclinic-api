@@ -35,6 +35,7 @@ export interface AppConfiguration {
       secretKey?: string;
       publicKey?: string;
       callbackUrl?: string;
+      patientCallbackUrl?: string;
       webhookEnabled: boolean;
     };
   };
@@ -148,6 +149,7 @@ export function createAppConfiguration(
         secretKey: environment.PAYSTACK_SECRET_KEY,
         publicKey: environment.PAYSTACK_PUBLIC_KEY,
         callbackUrl: environment.PAYSTACK_CALLBACK_URL,
+        patientCallbackUrl: environment.PAYSTACK_PATIENT_CALLBACK_URL,
         webhookEnabled: environment.PAYSTACK_WEBHOOK_ENABLED !== "false",
       },
     },

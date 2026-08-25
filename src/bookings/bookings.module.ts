@@ -29,6 +29,7 @@ import { MePatientLinkingController } from './me-patient-linking.controller';
 import { PatientAccountLinkingService } from './patient-account-linking.service';
 import { BookingVisitAddress } from './entities/booking-visit-address.entity';
 import { MeHealthCheckBookingsController } from './me-health-check-bookings.controller';
+import { MeHealthCheckPaymentsController } from './me-health-check-payments.controller';
 
 @Module({
   imports: [
@@ -53,7 +54,7 @@ import { MeHealthCheckBookingsController } from './me-health-check-bookings.cont
       HealthResultAccessGrant,
     ]),
   ],
-  controllers: [BookingsController, PublicBookingsController, AdminBookingLifecycleController, MePatientLinkingController, MeHealthCheckBookingsController],
+  controllers: [BookingsController, PublicBookingsController, AdminBookingLifecycleController, MePatientLinkingController, MeHealthCheckBookingsController, MeHealthCheckPaymentsController],
   providers: [BookingsService, PublicBookingsService, BookingLifecycleService, PublicBookingSessionService, PatientAccountLinkingService],
 })
 export class BookingsModule {}

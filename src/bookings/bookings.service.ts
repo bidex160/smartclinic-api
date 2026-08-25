@@ -22,6 +22,7 @@ import {
 import { validateBookingSchedulingPreference } from './booking-scheduling';
 import { CreateSelfBookingDto } from './dto/create-self-booking.dto';
 import { PatientStatus } from '../patients/enums/patient-status.enum';
+import { UserStatus } from '../users/enums/user-status.enum';
 
 
 @Injectable()
@@ -46,6 +47,21 @@ export class BookingsService {
     const patient = await this.patientRepository.findOne({ where: { userId: user.id }, withDeleted: true });
     if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE) throw new NotFoundException('SELF Patient identity was not found for the authenticated user');
     return this.create({ ...dto, bookerUserId: user.id, participantPatientId: patient.id });
+  }
+
+  async requireSelfBooking(user: User, bookingReference: string): Promise<Booking> {
+    if (user.deletedAt || user.status !== UserStatus.ACTIVE) this.selfBookingNotFound();
+    const patient = await this.patientRepository.findOne({
+      where: { userId: user.id },
+      withDeleted: true,
+    });
+    if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE)
+      this.selfBookingNotFound();
+    const booking = await this.bookingRepository.findOne({
+      where: { bookingReference, participantPatientId: patient.id },
+    });
+    if (!booking) this.selfBookingNotFound();
+    return booking;
   }
 
   async create(createBookingDto: CreateBookingDto): Promise<BookingResponseDto> {
@@ -145,6 +161,10 @@ export class BookingsService {
     if (!bookerExists || !participantExists || !healthCheckPackageExists || !fulfilmentModeExists || !organisationExists) {
       throw new BadRequestException('One or more booking references are invalid or unavailable');
     }
+  }
+
+  private selfBookingNotFound(): never {
+    throw new NotFoundException('Health Check was not found for the authenticated patient');
   }
 
 }

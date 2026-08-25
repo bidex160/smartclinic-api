@@ -7,6 +7,8 @@ import * as bookingReference from './booking-reference';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { BookingStatus } from './enums/booking-status.enum';
+import { PatientStatus } from '../patients/enums/patient-status.enum';
+import { UserStatus } from '../users/enums/user-status.enum';
 
 describe('BookingsService', () => {
   const createBookingDto: CreateBookingDto = {
@@ -174,6 +176,22 @@ describe('BookingsService', () => {
     bookingRepository.findOne.mockResolvedValueOnce(null);
 
     await expect(service.findByReference('SC-2026-FFFFFFFFFFFF')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('resolves payment ownership only through active User to active SELF Patient to participant booking', async () => {
+    const { service, bookingRepository, referenceRepository } = createService();
+    const user = { id: createBookingDto.bookerUserId, status: UserStatus.ACTIVE, deletedAt: null } as any;
+    referenceRepository.findOne.mockResolvedValueOnce({ id: createBookingDto.participantPatientId, userId: user.id, status: PatientStatus.ACTIVE, deletedAt: null });
+    await expect(service.requireSelfBooking(user, 'SC-2026-ABCDEFGHIJKL')).resolves.toBeDefined();
+    expect(bookingRepository.findOne).toHaveBeenCalledWith({ where: { bookingReference: 'SC-2026-ABCDEFGHIJKL', participantPatientId: createBookingDto.participantPatientId } });
+  });
+
+  it('returns the same narrow not-found response for another Patient booking', async () => {
+    const { service, bookingRepository, referenceRepository } = createService();
+    const user = { id: createBookingDto.bookerUserId, status: UserStatus.ACTIVE, deletedAt: null } as any;
+    referenceRepository.findOne.mockResolvedValueOnce({ id: createBookingDto.participantPatientId, userId: user.id, status: PatientStatus.ACTIVE, deletedAt: null });
+    bookingRepository.findOne.mockResolvedValueOnce(null);
+    await expect(service.requireSelfBooking(user, 'SC-2026-111111111111')).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('always snapshots the server-resolved quote, even when a caller bypasses DTO validation', async () => {

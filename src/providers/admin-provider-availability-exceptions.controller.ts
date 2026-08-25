@@ -1,13 +1,90 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiBearerAuth, ApiConflictResponse, ApiCreatedResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard'; import { Roles } from '../auth/roles.decorator'; import { RolesGuard } from '../auth/roles.guard'; import { UserRole } from '../users/enums/user-role.enum';
-import { CreateProviderAvailabilityExceptionDto } from './dto/create-provider-availability-exception.dto'; import { ProviderAvailabilityExceptionResponseDto } from './dto/provider-availability-exception-response.dto'; import { ProviderIdParamsDto, ResourceIdParamsDto } from './dto/provider-params.dto'; import { UpdateProviderAvailabilityExceptionDto } from './dto/update-provider-availability-exception.dto'; import { ProviderAvailabilityExceptionsService } from './provider-availability-exceptions.service';
-@ApiTags('Admin provider availability exceptions') @ApiBearerAuth() @UseGuards(JwtAuthGuard, RolesGuard) @Roles(UserRole.ADMIN, UserRole.OPERATIONS) @ApiUnauthorizedResponse() @ApiForbiddenResponse() @ApiBadRequestResponse() @ApiNotFoundResponse() @ApiConflictResponse() @Controller('admin')
-export class AdminProviderAvailabilityExceptionsController { constructor(private readonly service: ProviderAvailabilityExceptionsService) {}
-  @Get('providers/:providerId/availability-exceptions') @ApiOperation({ summary: 'List provider scheduling exceptions (ADMIN or OPERATIONS)' }) @ApiOkResponse({ type: ProviderAvailabilityExceptionResponseDto, isArray: true }) list(@Param() p: ProviderIdParamsDto) { return this.service.list(p.providerId); }
-  @Post('providers/:providerId/availability-exceptions') @ApiCreatedResponse({ type: ProviderAvailabilityExceptionResponseDto }) create(@Param() p: ProviderIdParamsDto, @Body() dto: CreateProviderAvailabilityExceptionDto) { return this.service.create(p.providerId, dto); }
-  @Get('provider-availability-exceptions/:id') @ApiOkResponse({ type: ProviderAvailabilityExceptionResponseDto }) get(@Param() p: ResourceIdParamsDto) { return this.service.get(p.id); }
-  @Patch('provider-availability-exceptions/:id') @ApiOkResponse({ type: ProviderAvailabilityExceptionResponseDto }) update(@Param() p: ResourceIdParamsDto, @Body() dto: UpdateProviderAvailabilityExceptionDto) { return this.service.update(p.id, dto); }
-  @Patch('provider-availability-exceptions/:id/activate') @ApiOkResponse({ type: ProviderAvailabilityExceptionResponseDto }) activate(@Param() p: ResourceIdParamsDto) { return this.service.activate(p.id); }
-  @Patch('provider-availability-exceptions/:id/deactivate') @ApiOkResponse({ type: ProviderAvailabilityExceptionResponseDto }) deactivate(@Param() p: ResourceIdParamsDto) { return this.service.deactivate(p.id); }
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from "@nestjs/swagger";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { Roles } from "../auth/roles.decorator";
+import { RolesGuard } from "../auth/roles.guard";
+import { UserRole } from "../users/enums/user-role.enum";
+import { CreateProviderAvailabilityExceptionDto } from "./dto/create-provider-availability-exception.dto";
+import { ProviderAvailabilityExceptionResponseDto } from "./dto/provider-availability-exception-response.dto";
+import {
+  ProviderIdParamsDto,
+  ResourceIdParamsDto,
+} from "./dto/provider-params.dto";
+import { UpdateProviderAvailabilityExceptionDto } from "./dto/update-provider-availability-exception.dto";
+import { ProviderAvailabilityExceptionsService } from "./provider-availability-exceptions.service";
+@ApiTags("Admin provider availability exceptions")
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.OPERATIONS)
+@ApiUnauthorizedResponse()
+@ApiForbiddenResponse()
+@ApiBadRequestResponse()
+@ApiNotFoundResponse()
+@ApiConflictResponse()
+@Controller("admin")
+export class AdminProviderAvailabilityExceptionsController {
+  constructor(
+    private readonly service: ProviderAvailabilityExceptionsService,
+  ) {}
+  @Get("providers/:providerId/availability-exceptions")
+  @ApiOperation({
+    summary: "List provider scheduling exceptions (ADMIN or OPERATIONS)",
+  })
+  @ApiOkResponse({
+    type: ProviderAvailabilityExceptionResponseDto,
+    isArray: true,
+  })
+  list(@Param() p: ProviderIdParamsDto) {
+    return this.service.list(p.providerId);
+  }
+  @Post("providers/:providerId/availability-exceptions")
+  @ApiCreatedResponse({ type: ProviderAvailabilityExceptionResponseDto })
+  create(
+    @Param() p: ProviderIdParamsDto,
+    @Body() dto: CreateProviderAvailabilityExceptionDto,
+  ) {
+    return this.service.create(p.providerId, dto);
+  }
+  @Get("provider-availability-exceptions/:id")
+  @ApiOkResponse({ type: ProviderAvailabilityExceptionResponseDto })
+  get(@Param() p: ResourceIdParamsDto) {
+    return this.service.get(p.id);
+  }
+  @Patch("provider-availability-exceptions/:id")
+  @ApiOkResponse({ type: ProviderAvailabilityExceptionResponseDto })
+  update(
+    @Param() p: ResourceIdParamsDto,
+    @Body() dto: UpdateProviderAvailabilityExceptionDto,
+  ) {
+    return this.service.update(p.id, dto);
+  }
+  @Patch("provider-availability-exceptions/:id/activate")
+  @ApiOkResponse({ type: ProviderAvailabilityExceptionResponseDto })
+  activate(@Param() p: ResourceIdParamsDto) {
+    return this.service.activate(p.id);
+  }
+  @Patch("provider-availability-exceptions/:id/deactivate")
+  @ApiOkResponse({ type: ProviderAvailabilityExceptionResponseDto })
+  deactivate(@Param() p: ResourceIdParamsDto) {
+    return this.service.deactivate(p.id);
+  }
 }

@@ -146,6 +146,7 @@ export class PaymentFlowService {
   async initiatePayment(
     reference: string,
     idempotencyKey: string,
+    callbackUrl?: string,
   ): Promise<PaymentOperationResponseDto> {
     const existing = await this.attempts.findOne({
       where: { idempotencyKey },
@@ -177,6 +178,7 @@ export class PaymentFlowService {
       bookingReference: reference,
       customerEmail,
       paymentReference,
+      callbackUrl: callbackUrl ?? this.callbackUrl(reference, false),
     });
     return this.bookings.manager.transaction(async (manager) => {
       const attemptRepository = manager.getRepository(PaymentAttempt);
@@ -219,9 +221,32 @@ export class PaymentFlowService {
       order: { createdAt: 'DESC' },
     });
     if (active) return this.response(funding.booking, funding, active);
+    return this.initiatePayment(reference, `PUBLIC-${randomBytes(16).toString("hex")}`, this.callbackUrl(reference, false));
+  }
+
+  async initiatePatientPayment(
+    reference: string,
+    option: CheckoutFundingOption = CheckoutFundingOption.PAY_NOW,
+  ): Promise<PaymentOperationResponseDto> {
+    if (option === CheckoutFundingOption.PAY_LATER)
+      throw new BadRequestException("PAY_LATER does not initialize a payment provider");
+    const funding = await this.requireFunding(reference);
+    const active = await this.attempts.findOne({
+      where: {
+        bookingFundingId: funding.id,
+        status: In([
+          PaymentAttemptStatus.CREATED,
+          PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION,
+          PaymentAttemptStatus.PENDING_CONFIRMATION,
+        ]),
+      },
+      order: { createdAt: "DESC" },
+    });
+    if (active) return this.response(funding.booking, funding, active);
     return this.initiatePayment(
       reference,
-      `PUBLIC-${randomBytes(16).toString("hex")}`,
+      `PATIENT-${randomBytes(16).toString("hex")}`,
+      this.callbackUrl(reference, true),
     );
   }
 
@@ -234,12 +259,14 @@ export class PaymentFlowService {
       relations: { bookingFunding: { booking: true } },
     });
     if (!current) throw new NotFoundException("Payment attempt not found");
-    if (current.status === PaymentAttemptStatus.SUCCEEDED)
+    if (current.status === PaymentAttemptStatus.SUCCEEDED) {
+      await this.ensureMatchingStarted(current.bookingFunding.booking);
       return this.response(
         current.bookingFunding.booking,
         current.bookingFunding,
         current,
       );
+    }
     if (!current.providerReference)
       throw new ConflictException("Payment attempt has no provider reference");
     const verified = await this.provider.verifyPayment(
@@ -283,26 +310,32 @@ export class PaymentFlowService {
     );
   }
 
+
+  private async ensureMatchingStarted(booking: Booking): Promise<void> {
+    if (!this.matching || booking.status !== BookingStatus.PENDING_PROVIDER_MATCH) return;
+    try {
+      await this.matching.startMatching(booking.bookingReference, null);
+    } catch {
+      this.logger.error(`Provider matching recovery failed for booking ${booking.bookingReference}`);
+    }
+  }
+
   async verifyLatestBookingPayment(
     reference: string,
+    actorUserId: string | null = null,
   ): Promise<PublicPaymentStatusResponseDto> {
     const context = await this.latestPaymentContext(reference);
     if (!context.attempt)
       throw new ConflictException("No payment attempt is available to verify");
-    if (context.attempt.status === PaymentAttemptStatus.SUCCEEDED)
-      return this.publicStatus(
-        context.booking,
-        context.funding,
-        context.attempt,
-        context.paidAt,
-      );
+    if (context.attempt.status === PaymentAttemptStatus.SUCCEEDED) {
+      await this.ensureMatchingStarted(context.booking);
+      return this.getPublicPaymentStatus(reference);
+    }
     if (!context.attempt.providerReference)
       throw new ConflictException("Payment attempt has no provider reference");
     await this.claimVerification(context.attempt.id);
-    const verified = await this.provider.verifyPayment(
-      context.attempt.providerReference,
-    );
-    await this.applyVerification(context.attempt.id, null, verified);
+    const verified = await this.provider.verifyPayment(context.attempt.providerReference);
+    await this.applyVerification(context.attempt.id, actorUserId, verified);
     return this.getPublicPaymentStatus(reference);
   }
 
@@ -347,7 +380,10 @@ private async applyVerification(
       throw new NotFoundException("Booking not found");
     }
 
+
     if (attempt.status === PaymentAttemptStatus.SUCCEEDED) {
+      if (booking.status === BookingStatus.PENDING_PROVIDER_MATCH)
+        settledBookingReference = booking.bookingReference;
       return this.response(booking, funding, attempt);
     }
 
@@ -560,5 +596,12 @@ private async applyVerification(
       checkoutUrl: attempt?.checkoutUrl ?? null,
       accessCode: attempt?.accessCode ?? null,
     };
+  }
+
+  private callbackUrl(reference: string, patient: boolean): string | undefined {
+    const base = patient
+      ? this.config?.payments.paystack.patientCallbackUrl ?? this.config?.payments.paystack.callbackUrl
+      : this.config?.payments.paystack.callbackUrl;
+    return base ? `${base}${encodeURIComponent(reference)}` : undefined;
   }
 }

@@ -46,6 +46,8 @@ Paystack secrets are backend-only configuration and never appear in responses, l
 
 Public payment-status reads and refreshes require the same booking-bound session and cannot select a payment attempt or provider reference. Status responses expose only operational booking/funding/attempt state, amount, currency, and paid time. Manual provider verification is throttled per attempt and shares the webhook's locked, idempotent settlement path; redirect parameters grant no authority.
 
+Registered payment routes under `/api/v1/me/health-checks/:reference/payment` require JWT plus the USER role and resolve ownership only through the active User's active SELF Patient and the booking participant. A booking reference, booker identity, payer identity, Patient reference, or another role alone is insufficient. Cross-Patient access returns the same narrow not-found response and payment responses expose no internal IDs or provider secrets.
+
 Checkout option selection also requires the booking-bound session. `PAYMENT_LINK` exposes only Paystack's hosted navigation URL and no SmartClinic private booking data or authority; the external payer does not need a SmartClinic session merely to open Paystack. `PAY_LATER` remains outstanding and cannot trigger matching or reserve capacity. All collection options use server-owned amount, currency, reference, and backend-authoritative settlement.
 
 The admin matching queue requires JWT authentication plus ADMIN or OPERATIONS role. USER and PROVIDER-only identities are denied. Its response is limited to scheduling, catalogue, minimal participant name, funding status, and latest assignment/provider display context; it excludes contacts, date of birth, payment-provider data, raw histories, and candidate sets.

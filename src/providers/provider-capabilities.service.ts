@@ -281,111 +281,464 @@ export class ProviderCapabilitiesService {
       throw new NotFoundException("Provider service location link not found");
   }
 
-  async findEligibleProviders(
-    healthCheckPackageId: string,
-    fulfilmentModeId: string,
-    window?: AvailabilityWindow,
-    excludeProviderAssignmentId?: string,
-  ): Promise<ProviderServiceResponseDto[]> {
-    const dayOfWeek = window ? this.validateAvailabilityWindow(window) : null;
-    const locationAvailability = window
-      ? ` AND ((EXISTS (SELECT 1 FROM provider_availability location_scope WHERE location_scope.provider_id = provider.id AND location_scope.is_active = true AND location_scope.day_of_week = :dayOfWeek AND location_scope.timezone = :requestedTimezone AND location_scope.start_time <= :requestedStartTime AND :requestedStartTime < COALESCE(location_scope.booking_stop_time, location_scope.end_time) AND (location_scope.provider_service_id IS NULL OR location_scope.provider_service_id = service.id) AND (location_scope.provider_location_id IS NULL OR location_scope.provider_location_id = location.id)) OR EXISTS (SELECT 1 FROM provider_availability_exceptions location_scope WHERE location_scope.provider_id = provider.id AND location_scope.is_active = true AND location_scope.type = 'AVAILABLE' AND location_scope.date = :requestedDate AND location_scope.timezone = :requestedTimezone AND (location_scope.start_time IS NULL OR (location_scope.start_time <= :requestedStartTime AND location_scope.end_time >= :requestedEndTime)) AND (location_scope.provider_service_id IS NULL OR location_scope.provider_service_id = service.id) AND (location_scope.provider_location_id IS NULL OR location_scope.provider_location_id = location.id))) AND NOT EXISTS (SELECT 1 FROM provider_availability_exceptions location_scope WHERE location_scope.provider_id = provider.id AND location_scope.is_active = true AND location_scope.type = 'UNAVAILABLE' AND location_scope.date = :requestedDate AND location_scope.timezone = :requestedTimezone AND (location_scope.start_time IS NULL OR (location_scope.start_time < :requestedEndTime AND location_scope.end_time > :requestedStartTime)) AND (location_scope.provider_service_id IS NULL OR location_scope.provider_service_id = service.id) AND (location_scope.provider_location_id IS NULL OR location_scope.provider_location_id = location.id)))`
-      : '';
-    const locationGeography = window?.visitAddress
-      ? `location.isActive = true AND location.countryCode = :locationCountry AND LOWER(location.state) = LOWER(:locationState) AND LOWER(location.city) = LOWER(:locationCity) AND (:locationPostal = '' OR location.postalCode IS NULL OR LOWER(location.postalCode) = LOWER(:locationPostal))${locationAvailability}`
-      : `location.isActive = true${locationAvailability}`;
-    const locationGeographyParams = window?.visitAddress ? { locationCountry: window.visitAddress.countryCode, locationState: window.visitAddress.stateOrRegion, locationCity: window.visitAddress.city, locationPostal: window.visitAddress.postalCode ?? "" } : undefined;
-    const query = this.services
-      .createQueryBuilder("service")
-      .distinct(true)
-      .innerJoinAndSelect("service.provider", "provider")
-      .innerJoinAndSelect("service.healthCheckPackage", "package")
-      .innerJoinAndSelect("service.fulfilmentMode", "mode")
-      .leftJoinAndSelect("service.locationLinks", "locationLinks")
-      .leftJoinAndSelect(
-        "locationLinks.providerLocation",
-        "location",
-        locationGeography,
-        locationGeographyParams,
+ async findEligibleProviders(
+  healthCheckPackageId: string,
+  fulfilmentModeId: string,
+  window?: AvailabilityWindow,
+  excludeProviderAssignmentId?: string,
+): Promise<ProviderServiceResponseDto[]> {
+  const dayOfWeek = window
+    ? this.validateAvailabilityWindow(window)
+    : null;
+
+  const locationAvailability = window
+    ? `
+      AND (
+        (
+          EXISTS (
+            SELECT 1
+            FROM provider_availability location_scope
+            WHERE location_scope.provider_id = provider.id
+              AND location_scope.is_active = true
+              AND location_scope.day_of_week = :dayOfWeek
+              AND location_scope.timezone = :requestedTimezone
+              AND location_scope.start_time <= :requestedStartTime
+              AND :requestedStartTime <
+                COALESCE(
+                  location_scope.booking_stop_time,
+                  location_scope.end_time
+                )
+              AND (
+                location_scope.provider_service_id IS NULL
+                OR location_scope.provider_service_id = service.id
+              )
+              AND (
+                location_scope.provider_location_id IS NULL
+                OR location_scope.provider_location_id = location.id
+              )
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM provider_availability_exceptions location_scope
+            WHERE location_scope.provider_id = provider.id
+              AND location_scope.is_active = true
+              AND location_scope.type = 'AVAILABLE'
+              AND location_scope.date = :requestedDate
+              AND location_scope.timezone = :requestedTimezone
+              AND (
+                location_scope.start_time IS NULL
+                OR (
+                  location_scope.start_time <= :requestedStartTime
+                  AND location_scope.end_time >= :requestedEndTime
+                )
+              )
+              AND (
+                location_scope.provider_service_id IS NULL
+                OR location_scope.provider_service_id = service.id
+              )
+              AND (
+                location_scope.provider_location_id IS NULL
+                OR location_scope.provider_location_id = location.id
+              )
+          )
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM provider_availability_exceptions location_scope
+          WHERE location_scope.provider_id = provider.id
+            AND location_scope.is_active = true
+            AND location_scope.type = 'UNAVAILABLE'
+            AND location_scope.date = :requestedDate
+            AND location_scope.timezone = :requestedTimezone
+            AND (
+              location_scope.start_time IS NULL
+              OR (
+                location_scope.start_time < :requestedEndTime
+                AND location_scope.end_time > :requestedStartTime
+              )
+            )
+            AND (
+              location_scope.provider_service_id IS NULL
+              OR location_scope.provider_service_id = service.id
+            )
+            AND (
+              location_scope.provider_location_id IS NULL
+              OR location_scope.provider_location_id = location.id
+            )
+        )
       )
-      .where("service.healthCheckPackageId = :healthCheckPackageId", {
+    `
+    : '';
+
+  const locationGeography = window?.visitAddress
+    ? `
+      location.isActive = true
+      AND location.countryCode = :locationCountry
+      AND LOWER(location.state) = LOWER(:locationState)
+      AND LOWER(location.city) = LOWER(:locationCity)
+      AND (
+        :locationPostal = ''
+        OR location.postalCode IS NULL
+        OR LOWER(location.postalCode) = LOWER(:locationPostal)
+      )
+      ${locationAvailability}
+    `
+    : `
+      location.isActive = true
+      ${locationAvailability}
+    `;
+
+  const locationGeographyParams = window?.visitAddress
+    ? {
+        locationCountry: window.visitAddress.countryCode,
+        locationState: window.visitAddress.stateOrRegion,
+        locationCity: window.visitAddress.city,
+        locationPostal: window.visitAddress.postalCode ?? '',
+      }
+    : undefined;
+
+  const query = this.services
+    .createQueryBuilder('service')
+    .distinct(true)
+    .innerJoinAndSelect('service.provider', 'provider')
+    .innerJoinAndSelect(
+      'service.healthCheckPackage',
+      'package',
+    )
+    .innerJoinAndSelect(
+      'service.fulfilmentMode',
+      'mode',
+    )
+    .leftJoinAndSelect(
+      'service.locationLinks',
+      'locationLinks',
+    )
+    .leftJoinAndSelect(
+      'locationLinks.providerLocation',
+      'location',
+      locationGeography,
+      locationGeographyParams,
+    )
+    .where(
+      'service.healthCheckPackageId = :healthCheckPackageId',
+      {
         healthCheckPackageId,
-      })
-      .andWhere("service.fulfilmentModeId = :fulfilmentModeId", {
+      },
+    )
+    .andWhere(
+      'service.fulfilmentModeId = :fulfilmentModeId',
+      {
         fulfilmentModeId,
-      })
-      .andWhere("service.isActive = true")
-      .andWhere("provider.status = :status", { status: ProviderStatus.ACTIVE })
-      .andWhere("provider.deletedAt IS NULL")
-      .andWhere("package.isActive = true")
-      .andWhere("mode.isActive = true");
-    if (window) {
-      const scopedLocationGeography = window.visitAddress ? ` AND scoped_location.country_code = :locationCountry AND LOWER(scoped_location.state) = LOWER(:locationState) AND LOWER(scoped_location.city) = LOWER(:locationCity) AND (:locationPostal = '' OR scoped_location.postal_code IS NULL OR LOWER(scoped_location.postal_code) = LOWER(:locationPostal))` : '';
-      const applicableLocation = `(scope.provider_location_id IS NULL OR EXISTS (SELECT 1 FROM provider_locations scoped_location INNER JOIN provider_service_locations scoped_link ON scoped_link.provider_location_id = scoped_location.id WHERE scoped_location.id = scope.provider_location_id AND scoped_location.is_active = true AND scoped_link.provider_service_id = service.id${scopedLocationGeography}))`;
+      },
+    )
+    .andWhere('service.isActive = true')
+    .andWhere('provider.status = :status', {
+      status: ProviderStatus.ACTIVE,
+    })
+    .andWhere('provider.deletedAt IS NULL')
+    .andWhere('package.isActive = true')
+    .andWhere('mode.isActive = true')
+
+    /**
+     * IMPORTANT:
+     *
+     * PROVIDER_LOCATION is only eligible if at least one linked
+     * ProviderLocation survived:
+     *
+     * - active-location filtering
+     * - country/state/city matching
+     * - postal-code matching
+     * - availability
+     * - availability exceptions
+     *
+     * HOME_VISIT is allowed to have no physical ProviderLocation.
+     */
+    .andWhere(
+      `(
+        mode.code <> 'PROVIDER_LOCATION'
+        OR location.id IS NOT NULL
+      )`,
+    );
+
+  if (window) {
+    const scopedLocationGeography = window.visitAddress
+      ? `
+        AND scoped_location.country_code = :locationCountry
+        AND LOWER(scoped_location.state) = LOWER(:locationState)
+        AND LOWER(scoped_location.city) = LOWER(:locationCity)
+        AND (
+          :locationPostal = ''
+          OR scoped_location.postal_code IS NULL
+          OR LOWER(scoped_location.postal_code) =
+            LOWER(:locationPostal)
+        )
+      `
+      : '';
+
+    const applicableLocation = `
+      (
+        scope.provider_location_id IS NULL
+
+        OR EXISTS (
+          SELECT 1
+          FROM provider_locations scoped_location
+
+          INNER JOIN provider_service_locations scoped_link
+            ON scoped_link.provider_location_id =
+              scoped_location.id
+
+          WHERE scoped_location.id =
+            scope.provider_location_id
+
+            AND scoped_location.is_active = true
+
+            AND scoped_link.provider_service_id =
+              service.id
+
+            ${scopedLocationGeography}
+        )
+      )
+    `;
+
+    /**
+     * Weekly availability OR explicit AVAILABLE exception.
+     */
+    query.andWhere(
+      `
+      (
+        EXISTS (
+          SELECT 1
+          FROM provider_availability scope
+
+          WHERE scope.provider_id = provider.id
+            AND scope.is_active = true
+            AND scope.day_of_week = :dayOfWeek
+            AND scope.timezone = :requestedTimezone
+            AND scope.start_time <= :requestedStartTime
+            AND :requestedStartTime <
+              COALESCE(
+                scope.booking_stop_time,
+                scope.end_time
+              )
+
+            AND (
+              scope.provider_service_id IS NULL
+              OR scope.provider_service_id = service.id
+            )
+
+            AND ${applicableLocation}
+        )
+
+        OR EXISTS (
+          SELECT 1
+          FROM provider_availability_exceptions scope
+
+          WHERE scope.provider_id = provider.id
+            AND scope.is_active = true
+            AND scope.type = 'AVAILABLE'
+            AND scope.date = :requestedDate
+            AND scope.timezone = :requestedTimezone
+
+            AND (
+              scope.start_time IS NULL
+              OR (
+                scope.start_time <= :requestedStartTime
+                AND scope.end_time >= :requestedEndTime
+              )
+            )
+
+            AND (
+              scope.provider_service_id IS NULL
+              OR scope.provider_service_id = service.id
+            )
+
+            AND ${applicableLocation}
+        )
+      )
+      `,
+      {
+        dayOfWeek,
+        requestedDate: window.requestedDate,
+        requestedTimezone: window.requestedTimezone,
+        requestedStartTime: window.requestedStartTime,
+        requestedEndTime: window.requestedEndTime,
+      },
+    );
+
+    /**
+     * Explicit UNAVAILABLE exception blocks eligibility.
+     */
+    query.andWhere(
+      `
+      NOT EXISTS (
+        SELECT 1
+        FROM provider_availability_exceptions scope
+
+        WHERE scope.provider_id = provider.id
+          AND scope.is_active = true
+          AND scope.type = 'UNAVAILABLE'
+          AND scope.date = :requestedDate
+          AND scope.timezone = :requestedTimezone
+
+          AND (
+            scope.start_time IS NULL
+            OR (
+              scope.start_time < :requestedEndTime
+              AND scope.end_time > :requestedStartTime
+            )
+          )
+
+          AND (
+            scope.provider_service_id IS NULL
+            OR scope.provider_service_id = service.id
+          )
+
+          AND ${applicableLocation}
+      )
+      `,
+    );
+
+    /**
+     * HOME_VISIT geography is based on ProviderServiceArea.
+     *
+     * PROVIDER_LOCATION geography is already enforced through
+     * the filtered ProviderLocation join above.
+     */
+    if (window.visitAddress) {
       query.andWhere(
-        `(EXISTS (SELECT 1 FROM provider_availability scope WHERE scope.provider_id = provider.id AND scope.is_active = true AND scope.day_of_week = :dayOfWeek AND scope.timezone = :requestedTimezone AND scope.start_time <= :requestedStartTime AND :requestedStartTime < COALESCE(scope.booking_stop_time, scope.end_time) AND (scope.provider_service_id IS NULL OR scope.provider_service_id = service.id) AND ${applicableLocation}) OR EXISTS (SELECT 1 FROM provider_availability_exceptions scope WHERE scope.provider_id = provider.id AND scope.is_active = true AND scope.type = 'AVAILABLE' AND scope.date = :requestedDate AND scope.timezone = :requestedTimezone AND (scope.start_time IS NULL OR (scope.start_time <= :requestedStartTime AND scope.end_time >= :requestedEndTime)) AND (scope.provider_service_id IS NULL OR scope.provider_service_id = service.id) AND ${applicableLocation}))`,
+        `
+        (
+          mode.code <> 'HOME_VISIT'
+
+          OR EXISTS (
+            SELECT 1
+            FROM provider_service_areas area
+
+            WHERE area.provider_id = provider.id
+              AND area.provider_service_id = service.id
+              AND area.is_active = true
+
+              AND area.country_code = :visitCountry
+
+              AND LOWER(area.state_or_region) =
+                LOWER(:visitState)
+
+              AND (
+                area.city IS NULL
+                OR LOWER(area.city) =
+                  LOWER(:visitCity)
+              )
+
+              AND (
+                area.postal_code IS NULL
+                OR LOWER(area.postal_code) =
+                  LOWER(:visitPostal)
+              )
+          )
+        )
+        `,
         {
-          dayOfWeek,
-          requestedDate: window.requestedDate,
-          requestedTimezone: window.requestedTimezone,
-          requestedStartTime: window.requestedStartTime,
-          requestedEndTime: window.requestedEndTime,
+          visitCountry:
+            window.visitAddress.countryCode,
+
+          visitState:
+            window.visitAddress.stateOrRegion,
+
+          visitCity:
+            window.visitAddress.city,
+
+          visitPostal:
+            window.visitAddress.postalCode ?? '',
         },
       );
+    } else {
+      /**
+       * HOME_VISIT can never match without a structured address.
+       */
       query.andWhere(
-        `NOT EXISTS (SELECT 1 FROM provider_availability_exceptions scope WHERE scope.provider_id = provider.id AND scope.is_active = true AND scope.type = 'UNAVAILABLE' AND scope.date = :requestedDate AND scope.timezone = :requestedTimezone AND (scope.start_time IS NULL OR (scope.start_time < :requestedEndTime AND scope.end_time > :requestedStartTime)) AND (scope.provider_service_id IS NULL OR scope.provider_service_id = service.id) AND ${applicableLocation})`,
-      );
-      if (window.visitAddress) {
-        query.andWhere(
-          `(
-      mode.code <> 'HOME_VISIT'
-      OR EXISTS (
-        SELECT 1
-        FROM provider_service_areas area
-        WHERE area.provider_id = provider.id
-          AND area.provider_service_id = service.id
-          AND area.is_active = true
-          AND area.country_code = :visitCountry
-          AND LOWER(area.state_or_region) = LOWER(:visitState)
-          AND (
-            area.city IS NULL
-            OR LOWER(area.city) = LOWER(:visitCity)
-          )
-          AND (
-            area.postal_code IS NULL
-            OR LOWER(area.postal_code) = LOWER(:visitPostal)
-          )
-      )
-    )`,
-          {
-            visitCountry: window.visitAddress.countryCode,
-            visitState: window.visitAddress.stateOrRegion,
-            visitCity: window.visitAddress.city,
-            visitPostal: window.visitAddress.postalCode ?? "",
-          },
-        );
-      } else {
-        // HOME_VISIT cannot match without a structured visit address.
-        query.andWhere("mode.code <> 'HOME_VISIT'");
-      }
-      // query.andWhere(`(mode.code <> 'HOME_VISIT' OR (:visitCountry IS NOT NULL AND EXISTS (SELECT 1 FROM provider_service_areas area WHERE area.provider_id = provider.id AND area.provider_service_id = service.id AND area.is_active = true AND area.country_code = :visitCountry AND LOWER(area.state_or_region) = LOWER(:visitState) AND (area.city IS NULL OR LOWER(area.city) = LOWER(:visitCity)) AND (area.postal_code IS NULL OR LOWER(area.postal_code) = LOWER(:visitPostal)))))`, { visitCountry: window.visitAddress?.countryCode ?? null, visitState: window.visitAddress?.stateOrRegion ?? '', visitCity: window.visitAddress?.city ?? '', visitPostal: window.visitAddress?.postalCode ?? '' });
-      query.andWhere(
-        `NOT EXISTS (SELECT 1 FROM provider_booking_reservations reservation WHERE reservation.provider_id = provider.id AND reservation.scheduled_date = :requestedDate AND reservation.status IN ('HELD', 'CONFIRMED') AND reservation.start_time < :requestedEndTime AND reservation.end_time > :requestedStartTime${excludeProviderAssignmentId ? " AND reservation.provider_assignment_id <> :excludeProviderAssignmentId" : ""})`,
-        excludeProviderAssignmentId
-          ? { excludeProviderAssignmentId }
-          : undefined,
+        "mode.code <> 'HOME_VISIT'",
       );
     }
-    const rows = await query.orderBy({ "service.createdAt": "ASC", "service.id": "ASC", "location.createdAt": "ASC", "location.id": "ASC" }).getMany();
-    return rows.map((service) => ({
-      ...ProviderServiceResponseDto.fromEntity(service),
-      providerLocationIds: service.locationLinks
-        ?.filter((link) => link.providerLocation?.isActive)
-        .sort((left, right) => left.providerLocation.createdAt.getTime() - right.providerLocation.createdAt.getTime() || left.providerLocationId.localeCompare(right.providerLocationId))
-        .map((link) => link.providerLocationId) ?? [],
-    }));
+
+    /**
+     * Prevent overlapping HELD/CONFIRMED capacity.
+     *
+     * When revalidating an already-created assignment,
+     * exclude its own reservation.
+     */
+    query.andWhere(
+      `
+      NOT EXISTS (
+        SELECT 1
+        FROM provider_booking_reservations reservation
+
+        WHERE reservation.provider_id = provider.id
+          AND reservation.scheduled_date = :requestedDate
+
+          AND reservation.status IN (
+            'HELD',
+            'CONFIRMED'
+          )
+
+          AND reservation.start_time < :requestedEndTime
+          AND reservation.end_time > :requestedStartTime
+
+          ${
+            excludeProviderAssignmentId
+              ? `
+                AND reservation.provider_assignment_id
+                  <> :excludeProviderAssignmentId
+              `
+              : ''
+          }
+      )
+      `,
+      excludeProviderAssignmentId
+        ? {
+            excludeProviderAssignmentId,
+          }
+        : undefined,
+    );
   }
 
+  const rows = await query
+    .orderBy({
+      'service.createdAt': 'ASC',
+      'service.id': 'ASC',
+      'location.createdAt': 'ASC',
+      'location.id': 'ASC',
+    })
+    .getMany();
+
+  return rows.map((service) => {
+    const providerLocationIds =
+      service.locationLinks
+        ?.filter(
+          (link) =>
+            link.providerLocation?.isActive,
+        )
+        .sort(
+          (left, right) =>
+            left.providerLocation.createdAt.getTime() -
+              right.providerLocation.createdAt.getTime() ||
+            left.providerLocationId.localeCompare(
+              right.providerLocationId,
+            ),
+        )
+        .map(
+          (link) =>
+            link.providerLocationId,
+        ) ?? [];
+
+    return {
+      ...ProviderServiceResponseDto.fromEntity(
+        service,
+      ),
+
+      providerLocationIds,
+    };
+  });
+}
   private validateAvailabilityWindow(window: AvailabilityWindow): DayOfWeek {
     const parsedDate = new Date(`${window.requestedDate}T00:00:00Z`);
     if (
