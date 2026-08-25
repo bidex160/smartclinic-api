@@ -54,6 +54,11 @@ import { ProviderSelfServiceConfigurationService } from "./provider-self-service
 import { ProviderServiceArea } from "./entities/provider-service-area.entity";
 import { ProviderServiceAreasService } from "./provider-service-areas.service";
 import { BookingVisitAddress } from "../bookings/entities/booking-visit-address.entity";
+import { HealthCheckEncounter } from "../health-checks/entities/health-check-encounter.entity";
+import { ProviderDashboardController } from "./provider-dashboard.controller";
+import { AdminDashboardController } from "./admin-dashboard.controller";
+import { ProviderDashboardService } from "./provider-dashboard.service";
+import { AdminDashboardService } from "./admin-dashboard.service";
 @Module({
   imports: [
     AuthModule,
@@ -74,6 +79,7 @@ import { BookingVisitAddress } from "../bookings/entities/booking-visit-address.
       FulfilmentMode,
       Booking,
       BookingVisitAddress,
+      HealthCheckEncounter,
       BookingFunding,
       BookingStatusHistory,
       PaymentAttempt,
@@ -96,6 +102,8 @@ import { BookingVisitAddress } from "../bookings/entities/booking-visit-address.
     AdminProviderMatchingController,
     AdminBookingSchedulingController,
     ProviderOffersController,
+    ProviderDashboardController,
+    AdminDashboardController,
   ],
   providers: [
     ProviderCapabilitiesService,
@@ -115,6 +123,8 @@ import { BookingVisitAddress } from "../bookings/entities/booking-visit-address.
     AdminProvidersService,
     ProviderInvitationsService,
     ProviderOnboardingService,
+    ProviderDashboardService,
+    AdminDashboardService,
   ],
   exports: [
     ProviderCapabilitiesService,

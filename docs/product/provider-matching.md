@@ -136,6 +136,14 @@ Eligible physical locations are ordered by `ProviderLocation.createdAt ASC`, the
 
 Normal manual eligible assignment uses the same deterministic branch selection. The existing override request has no provider-location input, so PROVIDER_LOCATION override is rejected before creating an offer rather than producing an unlocated or arbitrarily located override. Adding a separately audited explicit override-location contract remains future work.
 
+## Dashboard summary metrics
+
+`GET /api/v1/provider/dashboard/summary` returns operational counts for the authenticated active Provider. `offers.new` counts unexpired `OFFERED` assignments only. `appointments.today` counts provider-owned `CONFIRMED` assignments whose booking is currently `SCHEDULED` and whose `scheduledDate` equals the current date in that appointment's `scheduledTimezone`. `appointments.upcoming` uses the same ownership/lifecycle rules but requires a strictly later appointment-local date, so today is not double-counted. `healthChecks.inProgress` and `healthChecks.completed` count authoritative encounter statuses, not booking/payment proxies.
+
+`GET /api/v1/admin/dashboard/summary` counts booking `AWAITING_FUNDING`, `PENDING_PROVIDER_MATCH`, and `SCHEDULED` states directly; `needsAttention` is deliberately only `UNFULFILLABLE`. `matching.activeOffers` counts unexpired `OFFERED` assignments. Admin in-progress/completed counts use authoritative encounter status. `providers.pendingReview` is a non-deleted Provider with operational status `PENDING` and onboarding status `SUBMITTED`; `providers.active` is a non-deleted `ACTIVE` Provider.
+
+Dashboard list sections can reuse `/api/v1/provider/offers` for offers and confirmed provider work, `/api/v1/admin/bookings/matching-queue` for matching/attention work, and `/api/v1/admin/providers` for broad provider operations. There is not yet a dedicated provider appointment list with today/upcoming date filters, nor an admin provider-list filter for onboarding `SUBMITTED`; those are explicit read-contract gaps rather than reasons to overload the count response.
+
 ## History and auditability
 
 Matching needs relational records, not only a booking enum: a single booking can have multiple matching cycles, provider candidates, offers, declines, expiries, and reassignment actions. Each offer and assignment should preserve actor, timestamps, reason, relevant eligibility snapshot, and state-transition history. Sensitive provider and participant information must be visible only to authorised users and only at the point it is necessary.
