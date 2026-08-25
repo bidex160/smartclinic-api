@@ -36,7 +36,22 @@ describe("Public payment boundary (e2e)", () => {
       cookieOptions: jest.fn(),
     };
     const payments = {
-      initializeFunding: jest.fn().mockImplementation((_reference, _actor, option = 'PAY_NOW') => Promise.resolve({ bookingReference: reference, fundingStatus: 'PENDING', checkoutOption: option, attemptId: null, attemptStatus: null, amount: '12500.00', currency: 'NGN', paymentReference: null, checkoutUrl: null, accessCode: null })),
+      initializeFunding: jest
+        .fn()
+        .mockImplementation((_reference, _actor, option = "PAY_NOW") =>
+          Promise.resolve({
+            bookingReference: reference,
+            fundingStatus: "PENDING",
+            checkoutOption: option,
+            attemptId: null,
+            attemptStatus: null,
+            amount: "12500.00",
+            currency: "NGN",
+            paymentReference: null,
+            checkoutUrl: null,
+            accessCode: null,
+          }),
+        ),
       initiatePublicPayment: jest.fn().mockResolvedValue({
         bookingReference: reference,
         fundingStatus: "PENDING",
@@ -98,16 +113,36 @@ describe("Public payment boundary (e2e)", () => {
         });
         expect(response.body).not.toHaveProperty("attemptId");
       }));
-  it('returns a shareable hosted URL without Popup credentials for PAYMENT_LINK', () =>
-    request(app.getHttpServer()).post(`/api/v1/public/bookings/${reference}/payment/initiate`).set('Cookie', cookie).send({ option: 'PAYMENT_LINK' }).expect(200).expect((response) => {
-      expect(response.body).toMatchObject({ checkoutOption: 'PAYMENT_LINK', checkoutUrl: 'https://checkout.paystack.test/safe' });
-      expect(response.body.accessCode).toBeNull();
-      expect(response.body.fundingStatus).toBe('PENDING');
-    }));
-  it('keeps PAY_LATER outstanding without initializing Paystack', () =>
-    request(app.getHttpServer()).post(`/api/v1/public/bookings/${reference}/payment/initiate`).set('Cookie', cookie).send({ option: 'PAY_LATER' }).expect(200).expect((response) => {
-      expect(response.body).toMatchObject({ checkoutOption: 'PAY_LATER', fundingStatus: 'PENDING', paymentAttemptReference: null, status: null, checkoutUrl: null, accessCode: null });
-    }));
+  it("returns a shareable hosted URL without Popup credentials for PAYMENT_LINK", () =>
+    request(app.getHttpServer())
+      .post(`/api/v1/public/bookings/${reference}/payment/initiate`)
+      .set("Cookie", cookie)
+      .send({ option: "PAYMENT_LINK" })
+      .expect(200)
+      .expect((response) => {
+        expect(response.body).toMatchObject({
+          checkoutOption: "PAYMENT_LINK",
+          checkoutUrl: "https://checkout.paystack.test/safe",
+        });
+        expect(response.body.accessCode).toBeNull();
+        expect(response.body.fundingStatus).toBe("PENDING");
+      }));
+  it("keeps PAY_LATER outstanding without initializing Paystack", () =>
+    request(app.getHttpServer())
+      .post(`/api/v1/public/bookings/${reference}/payment/initiate`)
+      .set("Cookie", cookie)
+      .send({ option: "PAY_LATER" })
+      .expect(200)
+      .expect((response) => {
+        expect(response.body).toMatchObject({
+          checkoutOption: "PAY_LATER",
+          fundingStatus: "PENDING",
+          paymentAttemptReference: null,
+          status: null,
+          checkoutUrl: null,
+          accessCode: null,
+        });
+      }));
   it("denies status lookup without a session", () =>
     request(app.getHttpServer())
       .get(`/api/v1/public/bookings/${reference}/payment-status`)

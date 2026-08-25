@@ -65,7 +65,7 @@ export class PaystackPaymentProviderAdapter implements PaymentProviderAdapter {
       metadata: { booking_reference: input.bookingReference },
     };
     if (this.config.payments.paystack.callbackUrl)
-      body.callback_url = this.config.payments.paystack.callbackUrl;
+      body.callback_url = this.config.payments.paystack.callbackUrl + input.bookingReference;
 
     const envelope = await this.request<PaystackInitializeData>(
       "/transaction/initialize",
