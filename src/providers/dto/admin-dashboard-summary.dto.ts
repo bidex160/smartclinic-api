@@ -25,9 +25,18 @@ class AdminDashboardReferralsDto {
   @ApiProperty() pointsIssued!: number;
 }
 
+class AdminDashboardWithdrawalsDto {
+  @ApiProperty() requested!: number;
+  @ApiProperty() processing!: number;
+  @ApiProperty() paid!: number;
+  @ApiProperty() failed!: number;
+  @ApiProperty() pointsReserved!: number;
+}
+
 export class AdminDashboardSummaryDto {
   @ApiProperty({ type: AdminDashboardBookingsDto }) bookings!: AdminDashboardBookingsDto;
   @ApiProperty({ type: AdminDashboardMatchingDto }) matching!: AdminDashboardMatchingDto;
   @ApiProperty({ type: AdminDashboardProvidersDto }) providers!: AdminDashboardProvidersDto;
   @ApiProperty({ type: AdminDashboardReferralsDto }) referrals!: AdminDashboardReferralsDto;
+  @ApiProperty({ type: AdminDashboardWithdrawalsDto }) withdrawals!: AdminDashboardWithdrawalsDto;
 }

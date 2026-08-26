@@ -26,4 +26,12 @@ Reward amounts come from active `reward_rules`, while the awarded amount is snap
 
 `GET /api/v1/me/referrals` returns the member's code, relative links, ledger-derived balance, direct-referral totals, and aggregate Level 1 progress. `GET /api/v1/me/referrals/history` returns only target/status/timestamps/points and no referred Patient health information. Provider dashboards include the same safe reward summary through their linked User. Admin/Operations use `GET /api/v1/admin/referrals` and aggregate dashboard metrics.
 
-`reward_conversion_rates` provides a configurable points-to-currency concept without assuming points equal Naira. No rate is seeded until the business approves one. Cash withdrawals, point reservation, bank/Paystack transfers, reward-funded booking credits, mixed reward/Paystack funding, Level 2/downlines, fraud reversals, and retroactive referral claiming are deferred. A future withdrawal domain must use `REQUESTED → PROCESSING → PAID/FAILED/CANCELLED`, reserve points while outstanding, and snapshot the conversion rate. A future Health Check redemption must integrate with `BookingFunding` without mutating historical ledger entries.
+`reward_conversion_rates` provides configurable points-to-currency conversion without assuming points equal Naira. No rate is seeded until the business approves one.
+
+## Manual cash withdrawal V1
+
+An authenticated `USER` may create and read only their own requests through `/api/v1/me/rewards/withdrawals`. The request snapshots the active conversion rate and submitted bank details. Account numbers are masked in user responses; authorized Admin/Operations detail responses contain the snapshot required for manual transfer.
+
+`REQUESTED` and `PROCESSING` requests reserve points and reduce `availablePoints` without a permanent ledger debit. `PAID` consumes the reservation and appends one immutable `WITHDRAWAL_PAID` debit. `FAILED` and `CANCELLED` release the reservation without compensating entries. Users may cancel only `REQUESTED` requests. Admin/Operations manage manual settlement through `/api/v1/admin/reward-withdrawals`.
+
+Conversion uses integer minor-unit arithmetic. There is no hard-coded rate or additional V1 minimum beyond a positive point amount; withdrawal creation is unavailable until an active rate is configured. SmartClinic does not verify accounts or send funds. An operator transfers outside SmartClinic, records the external reference, and marks the request paid. Automated payouts, payout retries, reward-funded booking credits, mixed reward/Paystack funding, Level 2/downlines, fraud reversals, and retroactive claiming remain deferred.

@@ -20,7 +20,9 @@ export class ReferralSummaryDto {
   @ApiProperty() referralCode!: string;
   @ApiProperty({ type: Object }) links!: Record<ReferralTargetType, string>;
   @ApiProperty() availablePoints!: number;
+  @ApiProperty() reservedPoints!: number;
   @ApiProperty() lifetimeEarnedPoints!: number;
+  @ApiProperty() lifetimeRedeemedPoints!: number;
   @ApiPropertyOptional({ nullable: true }) currentLevel!: { code: string; name: string } | null;
   @ApiPropertyOptional({ nullable: true }) nextLevel!: { code: string; name: string } | null;
   @ApiProperty({ type: ReferralLevelProgressDto }) progress!: ReferralLevelProgressDto;

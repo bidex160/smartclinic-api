@@ -7,6 +7,8 @@ import { RolesGuard } from '../src/auth/roles.guard';
 import { AdminReferralsController, MeReferralsController } from '../src/rewards/referrals.controller';
 import { ReferralsService } from '../src/rewards/referrals.service';
 import { UserRole } from '../src/users/enums/user-role.enum';
+import { AdminRewardWithdrawalsController, MeRewardWithdrawalsController } from '../src/rewards/reward-withdrawals.controller';
+import { RewardWithdrawalsService } from '../src/rewards/reward-withdrawals.service';
 
 describe('Referral read authorization (e2e)', () => {
   let app: INestApplication;
@@ -15,8 +17,9 @@ describe('Referral read authorization (e2e)', () => {
     history: jest.fn().mockResolvedValue({ items: [], page: 1, limit: 20, total: 0, totalPages: 0 }),
     adminHistory: jest.fn().mockResolvedValue({ items: [], page: 1, limit: 20, total: 0, totalPages: 0 }),
   };
+  const withdrawals = { listMine: jest.fn().mockResolvedValue({ items: [], page: 1, limit: 20, total: 0, totalPages: 0 }), getMine: jest.fn(), create: jest.fn().mockResolvedValue({ withdrawalReference: 'SCW-2026-ABCDEF12', status: 'REQUESTED' }), cancelMine: jest.fn(), adminList: jest.fn().mockResolvedValue({ items: [], page: 1, limit: 20, total: 0, totalPages: 0 }), adminDetail: jest.fn(), processing: jest.fn(), paid: jest.fn(), failed: jest.fn(), adminCancel: jest.fn() };
   beforeAll(async () => {
-    const module = await Test.createTestingModule({ controllers: [MeReferralsController, AdminReferralsController], providers: [RolesGuard, Reflector, { provide: ReferralsService, useValue: referrals }] })
+    const module = await Test.createTestingModule({ controllers: [MeReferralsController, AdminReferralsController, MeRewardWithdrawalsController, AdminRewardWithdrawalsController], providers: [RolesGuard, Reflector, { provide: ReferralsService, useValue: referrals }, { provide: RewardWithdrawalsService, useValue: withdrawals }] })
       .overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); const token = req.headers.authorization?.replace('Bearer ', ''); if (!token) throw new UnauthorizedException(); const role = token === 'admin' ? UserRole.ADMIN : token === 'operations' ? UserRole.OPERATIONS : token === 'provider' ? UserRole.PROVIDER : UserRole.USER; req.user = { id: `${token}-user`, roles: [role] }; return true; } }).compile();
     app = module.createNestApplication(); app.setGlobalPrefix('api/v1'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true })); await app.init();
   });
@@ -32,5 +35,19 @@ describe('Referral read authorization (e2e)', () => {
   it('allows ADMIN and OPERATIONS to use filtered operational reads', async () => {
     for (const token of ['admin', 'operations']) await request(app.getHttpServer()).get('/api/v1/admin/referrals?targetType=PATIENT&status=QUALIFIED').set('Authorization', `Bearer ${token}`).expect(200);
     await request(app.getHttpServer()).get('/api/v1/admin/referrals').set('Authorization', 'Bearer user').expect(403);
+  });
+
+  it('protects user withdrawal creation and derives the owner from JWT', async () => {
+    const body = { points: 500, bankName: 'Example Bank', accountNumber: '0123456789', accountName: 'Ada Okafor' };
+    await request(app.getHttpServer()).post('/api/v1/me/rewards/withdrawals').send(body).expect(401);
+    await request(app.getHttpServer()).post('/api/v1/me/rewards/withdrawals').set('Authorization', 'Bearer provider').send(body).expect(403);
+    await request(app.getHttpServer()).post('/api/v1/me/rewards/withdrawals').set('Authorization', 'Bearer user').send({ ...body, amount: '999999.00', userId: 'spoofed' }).expect(201);
+    expect(withdrawals.create).toHaveBeenCalledWith('user-user', body);
+  });
+
+  it('limits withdrawal settlement commands to ADMIN and OPERATIONS', async () => {
+    const body = { externalReference: 'BANK-123' };
+    await request(app.getHttpServer()).post('/api/v1/admin/reward-withdrawals/SCW-2026-ABCDEF12/paid').set('Authorization', 'Bearer user').send(body).expect(403);
+    for (const token of ['admin', 'operations']) await request(app.getHttpServer()).post('/api/v1/admin/reward-withdrawals/SCW-2026-ABCDEF12/paid').set('Authorization', `Bearer ${token}`).send(body).expect(201);
   });
 });

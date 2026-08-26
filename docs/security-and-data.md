@@ -94,6 +94,8 @@ Roles are `USER`, `ADMIN`, `OPERATIONS`, and `PROVIDER`. Public registration ass
 
 ## Data handling
 
+Reward withdrawals are private financial records. Only the owning authenticated `USER` and authorized `ADMIN`/`OPERATIONS` roles may read them. User responses mask account numbers, broad summaries contain no bank data, and bank payloads are not sent to a transfer provider. Referral codes and withdrawal references remain identifiers rather than credentials.
+
 - Keep database entities distinct from API DTOs.
 - Use PostgreSQL and TypeORM migrations for durable schema changes.
 - Do not enable TypeORM schema synchronisation in production.

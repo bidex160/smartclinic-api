@@ -29,6 +29,7 @@ import { ReferralStatus } from "./enums/referral-status.enum";
 import { ReferralTargetType } from "./enums/referral-target-type.enum";
 import { RewardLedgerDirection } from "./enums/reward-ledger-direction.enum";
 import { User } from "../users/entities/user.entity";
+import { RewardWithdrawalsService } from "./reward-withdrawals.service";
 
 const QUALIFIED_RULE: Record<ReferralTargetType, string> = {
   [ReferralTargetType.PATIENT]: "PATIENT_QUALIFIED",
@@ -49,6 +50,7 @@ export class ReferralsService {
     private readonly ledger: Repository<RewardPointsLedger>,
     @InjectRepository(RewardLevelDefinition)
     private readonly levels: Repository<RewardLevelDefinition>,
+    private readonly withdrawals: RewardWithdrawalsService,
   ) {}
 
   async ensureReferralCode(
@@ -169,7 +171,7 @@ export class ReferralsService {
     const code = await this.ensureReferralCode(userId);
     const [counts, balance, level, achievement, totals] = await Promise.all([
       this.qualifiedCounts(userId),
-      this.pointBalance(userId),
+      this.withdrawals.balance(userId),
       this.levels.findOne({
         where: { code: "LEVEL_1", isActive: true },
         relations: { requirements: true },
@@ -350,6 +352,10 @@ export class ReferralsService {
     };
   }
 
+  adminWithdrawalMetrics() {
+    return this.withdrawals.metrics();
+  }
+
   private async capture(
     manager: EntityManager,
     rawCode: string,
@@ -509,26 +515,6 @@ export class ReferralsService {
       .groupBy("referral.targetType")
       .getRawMany<{ targetType: ReferralTargetType; count: string }>();
     return new Map(rows.map((row) => [row.targetType, Number(row.count)]));
-  }
-
-  private async pointBalance(userId: string) {
-    const row = await this.ledger
-      .createQueryBuilder("entry")
-      .select(
-        `COALESCE(SUM(CASE WHEN entry.direction = :credit THEN entry.points ELSE -entry.points END), 0)`,
-        "available",
-      )
-      .addSelect(
-        `COALESCE(SUM(CASE WHEN entry.direction = :credit THEN entry.points ELSE 0 END), 0)`,
-        "earned",
-      )
-      .where("entry.userId = :userId", { userId })
-      .setParameter("credit", RewardLedgerDirection.CREDIT)
-      .getRawOne<{ available: string; earned: string }>();
-    return {
-      availablePoints: Number(row?.available ?? 0),
-      lifetimeEarnedPoints: Number(row?.earned ?? 0),
-    };
   }
 
   private progress(

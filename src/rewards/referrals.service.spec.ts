@@ -9,6 +9,7 @@ import { Referral } from './entities/referral.entity';
 import { RewardLevelAchievement } from './entities/reward-level-achievement.entity';
 import { RewardLevelDefinition } from './entities/reward-level-definition.entity';
 import { RewardPointsLedger } from './entities/reward-points-ledger.entity';
+import { RewardLedgerDirection } from './enums/reward-ledger-direction.enum';
 import { RewardRule } from './entities/reward-rule.entity';
 import { ReferralStatus } from './enums/referral-status.enum';
 import { ReferralTargetType } from './enums/referral-target-type.enum';
@@ -41,7 +42,12 @@ describe('ReferralsService', () => {
     };
     const qualifiedCountsBuilder = () => ({ select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(), getRawMany: jest.fn(async () => Object.values(ReferralTargetType).map((targetType) => ({ targetType, count: String(referrals.filter((row) => row.referrerUserId === referrerUserId && row.targetType === targetType && row.status === ReferralStatus.QUALIFIED).length) }))) });
     manager = { getRepository: jest.fn(repo), transaction: jest.fn(async (work: any) => work(manager)) };
-    subject = new ReferralsService(repo(ReferralCode), repo(Referral), repo(RewardPointsLedger), repo(RewardLevelDefinition));
+    subject = new ReferralsService(repo(ReferralCode), repo(Referral), repo(RewardPointsLedger), repo(RewardLevelDefinition), { balance: jest.fn(async (userId: string) => {
+      const entries = ledger.filter((entry) => entry.userId === userId);
+      const earned = entries.filter((entry) => entry.direction === RewardLedgerDirection.CREDIT).reduce((sum, entry) => sum + entry.points, 0);
+      const redeemed = entries.filter((entry) => entry.direction === RewardLedgerDirection.DEBIT).reduce((sum, entry) => sum + entry.points, 0);
+      return { availablePoints: earned - redeemed, reservedPoints: 0, lifetimeEarnedPoints: earned, lifetimeRedeemedPoints: redeemed };
+    }), metrics: jest.fn() } as never);
   });
 
   it('captures a valid patient registration but awards no points until qualification', async () => {
@@ -109,6 +115,7 @@ describe('ReferralsService', () => {
     for (const method of ['select', 'addSelect', 'where', 'setParameter']) ledgerBuilder[method] = jest.fn().mockReturnValue(ledgerBuilder);
     ledgerBuilder.getRawOne = jest.fn().mockResolvedValue({ available: '270', earned: '300' });
     (subject as any).ledger.createQueryBuilder = jest.fn().mockReturnValue(ledgerBuilder);
+    (subject as any).withdrawals.balance.mockResolvedValue({ availablePoints: 270, reservedPoints: 30, lifetimeEarnedPoints: 300, lifetimeRedeemedPoints: 0 });
     const level = { id: 'level-1', code: 'LEVEL_1', name: 'Level 1', isActive: true, requirements: [{ targetType: ReferralTargetType.PATIENT, requiredCount: 10 }, { targetType: ReferralTargetType.CLINIC, requiredCount: 2 }, { targetType: ReferralTargetType.LABORATORY, requiredCount: 2 }, { targetType: ReferralTargetType.PHARMACY, requiredCount: 2 }] };
     (subject as any).levels.findOne = jest.fn().mockResolvedValue(level);
     const originalGetRepository = manager.getRepository.getMockImplementation();

@@ -24,19 +24,21 @@ export class AdminDashboardService {
   ) {}
 
   async summary(now = new Date()): Promise<AdminDashboardSummaryDto> {
-    const [bookingCounts, activeOffers, inProgress, completed, providerCounts, referrals] = await Promise.all([
+    const [bookingCounts, activeOffers, inProgress, completed, providerCounts, referrals, withdrawals] = await Promise.all([
       this.bookingCounts(),
       this.assignments.count({ where: { status: ProviderAssignmentStatus.OFFERED, expiresAt: MoreThan(now) } }),
       this.encounters.count({ where: { status: HealthCheckEncounterStatus.IN_PROGRESS } }),
       this.encounters.count({ where: { status: HealthCheckEncounterStatus.COMPLETED } }),
       this.providerCounts(),
       this.referrals.adminMetrics(),
+      this.referrals.adminWithdrawalMetrics(),
     ]);
     return {
       bookings: { ...bookingCounts, inProgress, completed },
       matching: { activeOffers },
       providers: providerCounts,
       referrals,
+      withdrawals,
     };
   }
 
