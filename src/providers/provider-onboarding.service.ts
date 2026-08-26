@@ -12,6 +12,7 @@ import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enu
 import { ProviderStatus } from './enums/provider-status.enum';
 import { ProviderConfigurationContextService } from './provider-configuration-context.service';
 import { ProviderOnboardingReadinessService } from './provider-onboarding-readiness.service';
+import { ReferralsService } from '../rewards/referrals.service';
 
 @Injectable()
 export class ProviderOnboardingService {
@@ -21,6 +22,7 @@ export class ProviderOnboardingService {
     @InjectRepository(UserCredential) private readonly credentials: Repository<UserCredential>,
     private readonly context: ProviderConfigurationContextService,
     private readonly readiness: ProviderOnboardingReadinessService,
+    private readonly referrals: ReferralsService,
   ) {}
 
   async register(dto: RegisterProviderDto): Promise<ProviderOnboardingProfileResponseDto> {
@@ -34,7 +36,10 @@ export class ProviderOnboardingService {
         const providerRepository = manager.getRepository(Provider);
         const user = await userRepository.save(userRepository.create({ email, emailNormalized: email, displayName: dto.displayName.trim(), status: UserStatus.ACTIVE, roles: [UserRole.PROVIDER] }));
         await manager.getRepository(UserCredential).save(manager.getRepository(UserCredential).create({ userId: user.id, passwordHash }));
-        return providerRepository.save(providerRepository.create({ userId: user.id, displayName: dto.displayName.trim(), email, phone: dto.phone.trim(), professionalReference: dto.professionalReference?.trim() || null, providerType: dto.providerType, countryCode: dto.countryCode.toUpperCase(), stateOrRegion: dto.stateOrRegion.trim(), city: dto.city.trim(), status: ProviderStatus.PENDING, onboardingStatus: ProviderOnboardingStatus.DRAFT, submittedAt: null, reviewedAt: null, reviewedByUserId: null, reviewNote: null }));
+        const provider = await providerRepository.save(providerRepository.create({ userId: user.id, displayName: dto.displayName.trim(), email, phone: dto.phone.trim(), professionalReference: dto.professionalReference?.trim() || null, providerType: dto.providerType, countryCode: dto.countryCode.toUpperCase(), stateOrRegion: dto.stateOrRegion.trim(), city: dto.city.trim(), status: ProviderStatus.PENDING, onboardingStatus: ProviderOnboardingStatus.DRAFT, submittedAt: null, reviewedAt: null, reviewedByUserId: null, reviewNote: null }));
+        await this.referrals.ensureReferralCode(user.id, manager);
+        if (dto.referralCode) await this.referrals.captureProvider(manager, dto.referralCode, provider, dto.intendedReferralType);
+        return provider;
       });
       return this.map(provider);
     } catch (error) {

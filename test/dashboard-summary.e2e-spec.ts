@@ -13,8 +13,8 @@ import { UserRole } from '../src/users/enums/user-role.enum';
 describe('Dashboard summary authorization (e2e)', () => {
   let app: INestApplication;
   beforeAll(async () => {
-    const providerSummary = { offers: { new: 1 }, appointments: { today: 2, upcoming: 3 }, healthChecks: { inProgress: 4, completed: 5 } };
-    const adminSummary = { bookings: { awaitingFunding: 1, pendingProviderMatch: 2, scheduled: 3, inProgress: 4, completed: 5, needsAttention: 6 }, matching: { activeOffers: 7 }, providers: { pendingReview: 8, active: 9 } };
+    const providerSummary = { offers: { new: 1 }, appointments: { today: 2, upcoming: 3 }, healthChecks: { inProgress: 4, completed: 5 }, referrals: { availablePoints: 10, currentLevel: null, nextLevel: { code: 'LEVEL_1', name: 'Level 1' }, qualifiedPatients: 1, qualifiedClinics: 0, qualifiedLaboratories: 0, qualifiedPharmacies: 0 } };
+    const adminSummary = { bookings: { awaitingFunding: 1, pendingProviderMatch: 2, scheduled: 3, inProgress: 4, completed: 5, needsAttention: 6 }, matching: { activeOffers: 7 }, providers: { pendingReview: 8, active: 9 }, referrals: { registered: 10, qualified: 4, level1Achieved: 1, pointsIssued: 220 } };
     const module = await Test.createTestingModule({ controllers: [ProviderDashboardController, AdminDashboardController], providers: [RolesGuard, Reflector, { provide: ProviderDashboardService, useValue: { summary: jest.fn().mockResolvedValue(providerSummary) } }, { provide: AdminDashboardService, useValue: { summary: jest.fn().mockResolvedValue(adminSummary) } }] })
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); const token = req.headers.authorization?.replace('Bearer ', ''); if (!token) throw new UnauthorizedException(); const role = token === 'admin' ? UserRole.ADMIN : token === 'operations' ? UserRole.OPERATIONS : token === 'provider' ? UserRole.PROVIDER : UserRole.USER; req.user = { id: `${token}-user`, roles: [role] }; return true; } })

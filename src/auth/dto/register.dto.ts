@@ -31,4 +31,10 @@ export class RegisterDto {
   @IsString()
   @MaxLength(30)
   phone?: string;
+
+  @ApiPropertyOptional({ description: 'Server-issued SmartClinic referral code' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  referralCode?: string;
 }

@@ -14,6 +14,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { ProvidersModule } from './providers/providers.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { RewardsModule } from './rewards/rewards.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -26,6 +27,7 @@ const persistenceDomainModules = configuration.database.enabled
       PaymentsModule,
       ProvidersModule,
       AuthModule,
+      RewardsModule,
     ]
   : [];
 

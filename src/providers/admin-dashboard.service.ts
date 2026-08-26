@@ -11,6 +11,7 @@ import { Provider } from './entities/provider.entity';
 import { ProviderAssignmentStatus } from './enums/provider-assignment-status.enum';
 import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 import { ProviderStatus } from './enums/provider-status.enum';
+import { ReferralsService } from '../rewards/referrals.service';
 
 @Injectable()
 export class AdminDashboardService {
@@ -19,20 +20,23 @@ export class AdminDashboardService {
     @InjectRepository(ProviderAssignment) private readonly assignments: Repository<ProviderAssignment>,
     @InjectRepository(HealthCheckEncounter) private readonly encounters: Repository<HealthCheckEncounter>,
     @InjectRepository(Provider) private readonly providers: Repository<Provider>,
+    private readonly referrals: ReferralsService,
   ) {}
 
   async summary(now = new Date()): Promise<AdminDashboardSummaryDto> {
-    const [bookingCounts, activeOffers, inProgress, completed, providerCounts] = await Promise.all([
+    const [bookingCounts, activeOffers, inProgress, completed, providerCounts, referrals] = await Promise.all([
       this.bookingCounts(),
       this.assignments.count({ where: { status: ProviderAssignmentStatus.OFFERED, expiresAt: MoreThan(now) } }),
       this.encounters.count({ where: { status: HealthCheckEncounterStatus.IN_PROGRESS } }),
       this.encounters.count({ where: { status: HealthCheckEncounterStatus.COMPLETED } }),
       this.providerCounts(),
+      this.referrals.adminMetrics(),
     ]);
     return {
       bookings: { ...bookingCounts, inProgress, completed },
       matching: { activeOffers },
       providers: providerCounts,
+      referrals,
     };
   }
 

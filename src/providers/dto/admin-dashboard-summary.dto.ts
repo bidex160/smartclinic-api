@@ -18,8 +18,16 @@ class AdminDashboardProvidersDto {
   @ApiProperty({ minimum: 0 }) active!: number;
 }
 
+class AdminDashboardReferralsDto {
+  @ApiProperty() registered!: number;
+  @ApiProperty() qualified!: number;
+  @ApiProperty() level1Achieved!: number;
+  @ApiProperty() pointsIssued!: number;
+}
+
 export class AdminDashboardSummaryDto {
   @ApiProperty({ type: AdminDashboardBookingsDto }) bookings!: AdminDashboardBookingsDto;
   @ApiProperty({ type: AdminDashboardMatchingDto }) matching!: AdminDashboardMatchingDto;
   @ApiProperty({ type: AdminDashboardProvidersDto }) providers!: AdminDashboardProvidersDto;
+  @ApiProperty({ type: AdminDashboardReferralsDto }) referrals!: AdminDashboardReferralsDto;
 }

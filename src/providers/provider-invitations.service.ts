@@ -18,11 +18,12 @@ import { CreateAdminProviderDto, AdminCreatedProviderResponseDto } from './dto/a
 import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 import { ProviderStatus } from './enums/provider-status.enum';
 import { ProviderOnboardingBlocker } from './dto/provider-onboarding-readiness.dto';
+import { ReferralsService } from '../rewards/referrals.service';
 
 @Injectable()
 export class ProviderInvitationsService {
   private readonly logger = new Logger(ProviderInvitationsService.name);
-  constructor(@InjectRepository(ProviderInvitation) private readonly invitations: Repository<ProviderInvitation>, @InjectRepository(Provider) private readonly providers: Repository<Provider>, @InjectRepository(User) private readonly users: Repository<User>, @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>, @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider) {}
+  constructor(@InjectRepository(ProviderInvitation) private readonly invitations: Repository<ProviderInvitation>, @InjectRepository(Provider) private readonly providers: Repository<Provider>, @InjectRepository(User) private readonly users: Repository<User>, @Inject(appConfig.KEY) private readonly config: ConfigType<typeof appConfig>, @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider, private readonly referrals: ReferralsService) {}
 
   async createProvider(dto: CreateAdminProviderDto, creatorId: string): Promise<AdminCreatedProviderResponseDto> {
     const email = dto.email.trim().toLowerCase(); const rawToken = randomBytes(32).toString('base64url'); const now = new Date();
@@ -80,6 +81,7 @@ export class ProviderInvitationsService {
         if (await userRepository.exists({ where: { emailNormalized: invitation.emailNormalized }, withDeleted: true })) throw new ConflictException('An account already exists for this email; sign in and ask operations to link it');
         const user = await userRepository.save(userRepository.create({ email: invitation.emailNormalized, emailNormalized: invitation.emailNormalized, displayName: dto.displayName.trim(), status: UserStatus.ACTIVE, roles: [UserRole.PROVIDER] }));
         await credentialRepository.save(credentialRepository.create({ userId: user.id, passwordHash }));
+        await this.referrals.ensureReferralCode(user.id, manager);
         provider.userId = user.id; provider.email = provider.email ?? invitation.emailNormalized;
         if (provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED) {
           provider.status = ProviderStatus.PENDING;

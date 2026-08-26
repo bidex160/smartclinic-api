@@ -17,10 +17,11 @@ import { UserResponseDto } from './dto/user-response.dto';
 import { Patient } from '../patients/entities/patient.entity';
 import { PatientStatus } from '../patients/enums/patient-status.enum';
 import { generatePatientReference, isPatientReferenceCollision, MAX_PATIENT_REFERENCE_GENERATION_ATTEMPTS } from '../patients/patient-reference';
+import { ReferralsService } from '../rewards/referrals.service';
 
 @Injectable()
 export class AuthService {
-  constructor(@InjectRepository(User) private readonly users: Repository<User>, @InjectRepository(UserCredential) private readonly credentials: Repository<UserCredential>, @InjectRepository(AuthSession) private readonly sessions: Repository<AuthSession>, private readonly jwt: JwtService) {}
+  constructor(@InjectRepository(User) private readonly users: Repository<User>, @InjectRepository(UserCredential) private readonly credentials: Repository<UserCredential>, @InjectRepository(AuthSession) private readonly sessions: Repository<AuthSession>, private readonly jwt: JwtService, private readonly referrals: ReferralsService) {}
   async register(dto: RegisterDto): Promise<UserResponseDto> {
     const email = dto.email.trim().toLowerCase();
     if (await this.users.exists({ where: { emailNormalized: email } })) throw new ConflictException('An account already exists for this email');
@@ -30,7 +31,9 @@ export class AuthService {
         const user = await this.users.manager.transaction(async manager => {
           const saved = await manager.getRepository(User).save(manager.getRepository(User).create({ email, emailNormalized: email, displayName: `${dto.givenName.trim()} ${dto.familyName.trim()}`, status: UserStatus.ACTIVE, roles: [UserRole.USER] }));
           await manager.getRepository(UserCredential).save(manager.getRepository(UserCredential).create({ userId: saved.id, passwordHash }));
-          await manager.getRepository(Patient).save(manager.getRepository(Patient).create({ patientReference: generatePatientReference(), userId: saved.id, givenName: dto.givenName.trim(), familyName: dto.familyName.trim(), dateOfBirth: null, phone: dto.phone?.trim() || null, email, status: PatientStatus.ACTIVE }));
+          const patient = await manager.getRepository(Patient).save(manager.getRepository(Patient).create({ patientReference: generatePatientReference(), userId: saved.id, givenName: dto.givenName.trim(), familyName: dto.familyName.trim(), dateOfBirth: null, phone: dto.phone?.trim() || null, email, status: PatientStatus.ACTIVE }));
+          await this.referrals.ensureReferralCode(saved.id, manager);
+          if (dto.referralCode) await this.referrals.capturePatient(manager, dto.referralCode, saved.id, patient.id);
           return saved;
         });
         return UserResponseDto.fromEntity(user);

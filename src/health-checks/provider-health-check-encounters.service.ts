@@ -17,12 +17,13 @@ import { HealthCheckMeasurement } from './entities/health-check-measurement.enti
 import { HealthCheckEncounterStatus } from './enums/health-check-encounter-status.enum';
 import { HealthCheckMeasurementAction } from './enums/health-check-measurement-action.enum';
 import { HEALTH_CHECK_MEASUREMENT_UNITS, HealthCheckMeasurementCode } from './enums/health-check-measurement-code.enum';
+import { ReferralsService } from '../rewards/referrals.service';
 
 interface MeasurementInput { code: HealthCheckMeasurementCode; primary: number; secondary: number | null }
 
 @Injectable()
 export class ProviderHealthCheckEncountersService {
-  constructor(@InjectRepository(HealthCheckEncounter) private readonly encounters: Repository<HealthCheckEncounter>, private readonly currentProvider: CurrentProviderService) {}
+  constructor(@InjectRepository(HealthCheckEncounter) private readonly encounters: Repository<HealthCheckEncounter>, private readonly currentProvider: CurrentProviderService, private readonly referrals: ReferralsService) {}
 
   async start(user: User, reference: string): Promise<ProviderHealthCheckEncounterResponseDto> {
     const provider = await this.currentProvider.resolve(user);
@@ -76,6 +77,7 @@ export class ProviderHealthCheckEncountersService {
 
   async complete(user: User, reference: string): Promise<ProviderHealthCheckEncounterResponseDto> {
     const provider = await this.currentProvider.resolve(user);
+    let completedPatientId: string | null = null;
     await this.encounters.manager.transaction(async (manager) => {
       const encounter = await this.requireOwnedEncounter(manager, reference, provider.id);
       if (encounter.status !== HealthCheckEncounterStatus.IN_PROGRESS) throw new ConflictException('Only an in-progress encounter can be completed');
@@ -87,7 +89,9 @@ export class ProviderHealthCheckEncountersService {
       await manager.getRepository(HealthCheckEncounterHistory).save({ encounterId: encounter.id, fromStatus: HealthCheckEncounterStatus.IN_PROGRESS, toStatus: HealthCheckEncounterStatus.COMPLETED, actorUserId: user.id });
       encounter.booking.status = BookingStatus.COMPLETED; await manager.getRepository(Booking).save(encounter.booking);
       await manager.getRepository(BookingStatusHistory).save({ bookingId: encounter.bookingId, fromStatus: BookingStatus.IN_PROGRESS, toStatus: BookingStatus.COMPLETED, actorUserId: user.id, reasonCode: 'HEALTH_CHECK_ENCOUNTER_COMPLETED', reasonNote: null });
+      completedPatientId = encounter.booking.participantPatientId;
     });
+    if (completedPatientId) await this.referrals.qualifyPatient(completedPatientId).catch(() => this.referrals.logQualificationFailure('encounter completion', reference));
     return this.get(user, reference);
   }
 

@@ -59,10 +59,12 @@ import { ProviderDashboardController } from "./provider-dashboard.controller";
 import { AdminDashboardController } from "./admin-dashboard.controller";
 import { ProviderDashboardService } from "./provider-dashboard.service";
 import { AdminDashboardService } from "./admin-dashboard.service";
+import { RewardsModule } from '../rewards/rewards.module';
 @Module({
   imports: [
     AuthModule,
     EmailModule,
+    RewardsModule,
     TypeOrmModule.forFeature([
       Provider,
       ProviderAssignment,

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -11,10 +11,12 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { RolesGuard } from './roles.guard';
 import { AuthSession } from './entities/auth-session.entity';
 import { Patient } from '../patients/entities/patient.entity';
+import { RewardsModule } from '../rewards/rewards.module';
 
 @Module({
   imports: [
     ConfigModule,
+    forwardRef(() => RewardsModule),
 
     TypeOrmModule.forFeature([
       User,

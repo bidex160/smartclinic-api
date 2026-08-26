@@ -11,7 +11,8 @@ describe('ProviderDashboardService', () => {
     const bookings = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
     const encounters = { count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(42) };
     const currentProvider = { resolve: jest.fn().mockResolvedValue({ id: 'provider-a' }) };
-    const subject = new ProviderDashboardService(assignments as never, bookings as never, encounters as never, currentProvider as never);
+    const referrals = { summary: jest.fn().mockResolvedValue({ availablePoints: 220, currentLevel: null, nextLevel: { code: 'LEVEL_1', name: 'Level 1' }, progress: { patients: { qualified: 3 }, clinics: { qualified: 1 }, laboratories: { qualified: 0 }, pharmacies: { qualified: 0 } } }) };
+    const subject = new ProviderDashboardService(assignments as never, bookings as never, encounters as never, currentProvider as never, referrals as never);
     const result = await subject.summary({ id: 'user-a' } as never, new Date('2026-08-25T08:00:00Z'));
     expect(currentProvider.resolve).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-a' }));
     expect(assignments.count).toHaveBeenCalledWith({ where: expect.objectContaining({ providerId: 'provider-a', status: ProviderAssignmentStatus.OFFERED }) });
@@ -19,7 +20,7 @@ describe('ProviderDashboardService', () => {
     expect(qb.select).toHaveBeenCalledWith(expect.stringContaining('AT TIME ZONE booking.scheduledTimezone'), 'today');
     expect(encounters.count).toHaveBeenNthCalledWith(1, { where: { providerId: 'provider-a', status: HealthCheckEncounterStatus.IN_PROGRESS } });
     expect(encounters.count).toHaveBeenNthCalledWith(2, { where: { providerId: 'provider-a', status: HealthCheckEncounterStatus.COMPLETED } });
-    expect(result).toEqual({ offers: { new: 3 }, appointments: { today: 2, upcoming: 7 }, healthChecks: { inProgress: 1, completed: 42 } });
+    expect(result).toEqual({ offers: { new: 3 }, appointments: { today: 2, upcoming: 7 }, healthChecks: { inProgress: 1, completed: 42 }, referrals: { availablePoints: 220, currentLevel: null, nextLevel: { code: 'LEVEL_1', name: 'Level 1' }, qualifiedPatients: 3, qualifiedClinics: 1, qualifiedLaboratories: 0, qualifiedPharmacies: 0 } });
     expect(result).not.toHaveProperty('earnings');
     expect(JSON.stringify(result)).not.toContain('provider-a');
   });

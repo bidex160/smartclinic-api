@@ -1,0 +1,6 @@
+export enum ReferralStatus {
+  REGISTERED = 'REGISTERED',
+  QUALIFIED = 'QUALIFIED',
+  REJECTED = 'REJECTED',
+  CANCELLED = 'CANCELLED',
+}

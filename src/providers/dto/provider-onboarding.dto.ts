@@ -5,6 +5,7 @@ import { ProviderOnboardingStatus } from '../enums/provider-onboarding-status.en
 import { ProviderStatus } from '../enums/provider-status.enum';
 import { ProviderType } from '../enums/provider-type.enum';
 import { ProviderOnboardingReadinessDto } from './provider-onboarding-readiness.dto';
+import { ReferralTargetType } from '../../rewards/enums/referral-target-type.enum';
 
 export class ProviderProfileFieldsDto {
   @ApiProperty() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @MinLength(1) @MaxLength(200) displayName!: string;
@@ -19,6 +20,8 @@ export class ProviderProfileFieldsDto {
 export class RegisterProviderDto extends ProviderProfileFieldsDto {
   @ApiProperty() @Transform(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value) @IsEmail() @MaxLength(254) email!: string;
   @ApiProperty({ minLength: 12, maxLength: 128, format: 'password' }) @IsString() @MinLength(12) @MaxLength(128) password!: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(20) referralCode?: string;
+  @ApiPropertyOptional({ enum: ReferralTargetType }) @IsOptional() @IsEnum(ReferralTargetType) intendedReferralType?: ReferralTargetType;
 }
 
 export class UpdateProviderProfileDto extends PartialType(ProviderProfileFieldsDto) {}

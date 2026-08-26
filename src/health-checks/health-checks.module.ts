@@ -34,11 +34,13 @@ import { BookingFunding } from '../bookings/entities/booking-funding.entity';
 import { PaymentAttempt } from '../payments/entities/payment-attempt.entity';
 import { MePatientProfileController } from './me-patient-profile.controller';
 import { PatientPortalProfileService } from './patient-portal-profile.service';
+import { RewardsModule } from '../rewards/rewards.module';
 
 @Module({
   imports: [
     AuthModule,
     ProvidersModule,
+    RewardsModule,
     TypeOrmModule.forFeature([
       HealthCheckPackage,
       FulfilmentMode,

@@ -10,6 +10,7 @@ import { CurrentProviderService } from './current-provider.service';
 import { ProviderDashboardSummaryDto } from './dto/provider-dashboard-summary.dto';
 import { ProviderAssignment } from './entities/provider-assignment.entity';
 import { ProviderAssignmentStatus } from './enums/provider-assignment-status.enum';
+import { ReferralsService } from '../rewards/referrals.service';
 
 @Injectable()
 export class ProviderDashboardService {
@@ -18,20 +19,31 @@ export class ProviderDashboardService {
     @InjectRepository(Booking) private readonly bookings: Repository<Booking>,
     @InjectRepository(HealthCheckEncounter) private readonly encounters: Repository<HealthCheckEncounter>,
     private readonly currentProvider: CurrentProviderService,
+    private readonly referrals: ReferralsService,
   ) {}
 
   async summary(user: User, now = new Date()): Promise<ProviderDashboardSummaryDto> {
     const provider = await this.currentProvider.resolve(user);
-    const [newOffers, appointmentCounts, inProgress, completed] = await Promise.all([
+    const [newOffers, appointmentCounts, inProgress, completed, referralSummary] = await Promise.all([
       this.assignments.count({ where: { providerId: provider.id, status: ProviderAssignmentStatus.OFFERED, expiresAt: MoreThan(now) } }),
       this.appointmentCounts(provider.id),
       this.encounters.count({ where: { providerId: provider.id, status: HealthCheckEncounterStatus.IN_PROGRESS } }),
       this.encounters.count({ where: { providerId: provider.id, status: HealthCheckEncounterStatus.COMPLETED } }),
+      this.referrals.summary(user.id),
     ]);
     return {
       offers: { new: newOffers },
       appointments: appointmentCounts,
       healthChecks: { inProgress, completed },
+      referrals: {
+        availablePoints: referralSummary.availablePoints,
+        currentLevel: referralSummary.currentLevel,
+        nextLevel: referralSummary.nextLevel,
+        qualifiedPatients: referralSummary.progress.patients.qualified,
+        qualifiedClinics: referralSummary.progress.clinics.qualified,
+        qualifiedLaboratories: referralSummary.progress.laboratories.qualified,
+        qualifiedPharmacies: referralSummary.progress.pharmacies.qualified,
+      },
     };
   }
 

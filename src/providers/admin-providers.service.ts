@@ -25,6 +25,7 @@ import { ProviderBookingReservationStatus } from "./enums/provider-booking-reser
 import { ProviderStatus } from "./enums/provider-status.enum";
 import { ProviderOnboardingStatus } from "./enums/provider-onboarding-status.enum";
 import { ProviderOnboardingReadinessService } from "./provider-onboarding-readiness.service";
+import { ReferralsService } from '../rewards/referrals.service';
 
 @Injectable()
 export class AdminProvidersService {
@@ -41,6 +42,7 @@ export class AdminProvidersService {
     @InjectRepository(ProviderLocation)
     private readonly locations: Repository<ProviderLocation>,
     private readonly readiness: ProviderOnboardingReadinessService,
+    private readonly referrals: ReferralsService,
   ) {}
 
  async list(
@@ -156,6 +158,7 @@ export class AdminProvidersService {
       provider.reviewedByUserId = actorUserId;
       provider.reviewNote = null;
       await providerRepository.save(provider);
+      await this.referrals.qualifyProvider(id, manager);
     });
     return this.get(id);
   }

@@ -22,7 +22,8 @@ describe('AuthService', () => {
     const credentialRepo: any = {};
     const jwt = { signAsync: jest.fn().mockResolvedValue('token') };
     const sessionRepo: any = { create: jest.fn((value: any) => value), save: jest.fn(), findOne: jest.fn(), createQueryBuilder: jest.fn() };
-    return { service: new AuthService(userRepo, credentialRepo, sessionRepo, jwt as never), userRepo, jwt, savedUser, userTransactions, credentialTransactions, patientTransactions };
+    const referrals = { ensureReferralCode: jest.fn(), capturePatient: jest.fn() };
+    return { service: new AuthService(userRepo, credentialRepo, sessionRepo, jwt as never, referrals as never), userRepo, jwt, savedUser, userTransactions, credentialTransactions, patientTransactions, referrals };
   }
   it('registers a normalized USER with a bcrypt credential and safe response', async () => {
     const { service, savedUser, patientTransactions, credentialTransactions } = setup();
@@ -33,6 +34,7 @@ describe('AuthService', () => {
     expect(credentialTransactions.create.mock.calls[0][0].passwordHash).not.toBe(dto.password);
   });
   it('rejects duplicate normalized email', async () => { const { service, userRepo } = setup(); userRepo.exists.mockResolvedValue(true); await expect(service.register(dto)).rejects.toBeInstanceOf(ConflictException); });
+  it('captures an explicit referral transactionally without awarding registration points', async () => { const context = setup(); await context.service.register({ ...dto, referralCode: 'sc-ab12cd' }); expect(context.referrals.ensureReferralCode).toHaveBeenCalledWith('a1', expect.anything()); expect(context.referrals.capturePatient).toHaveBeenCalledWith(expect.anything(), 'sc-ab12cd', 'a1', 'patient-a'); });
   it('logs in only active accounts with a valid password', async () => {
     const hash = await bcrypt.hash(dto.password, 4);
     const user = { id: 'a1', email: 'ada@example.com', displayName: 'Ada', status: UserStatus.ACTIVE, roles: [UserRole.USER], deletedAt: null, credential: { passwordHash: hash } };

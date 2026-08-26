@@ -34,7 +34,7 @@ describe('ProviderInvitationsService', () => {
     const manager: any = { getRepository: jest.fn((entity) => entity === ProviderInvitation ? invitations : entity === Provider ? providers : entity === User ? users : entity === UserCredential ? credentials : {}) };
     manager.transaction = jest.fn(async (work) => work(manager)); invitations.manager = manager;
     emailProvider = { sendTransactionalEmail: jest.fn().mockResolvedValue({ outcome: EmailSendOutcome.UNAVAILABLE }) };
-    subject = new ProviderInvitationsService(invitations, providers, users, { providerInvitations: { ttlSeconds: 3600, frontendUrl: 'https://app.example.test/provider/setup' }, email: { provider: 'none', fromAddress: 'hello@example.test', fromName: 'SmartClinic' } } as never, emailProvider);
+    subject = new ProviderInvitationsService(invitations, providers, users, { providerInvitations: { ttlSeconds: 3600, frontendUrl: 'https://app.example.test/provider/setup' }, email: { provider: 'none', fromAddress: 'hello@example.test', fromName: 'SmartClinic' } } as never, emailProvider, { ensureReferralCode: jest.fn() } as never);
   });
 
   async function created() { return subject.create(provider.id, 'Provider@Example.COM', creator.id); }
