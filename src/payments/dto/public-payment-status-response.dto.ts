@@ -3,6 +3,7 @@ import { BookingFundingStatus } from '../../bookings/enums/booking-funding-statu
 import { BookingStatus } from '../../bookings/enums/booking-status.enum';
 import { PaymentAttemptStatus } from '../enums/payment-attempt-status.enum';
 import { CheckoutFundingOption } from '../../bookings/enums/checkout-funding-option.enum';
+import { RewardBookingRedemptionStatus } from '../../rewards/enums/reward-booking-redemption-status.enum';
 
 export class PublicPaymentStatusResponseDto {
   @ApiProperty() bookingReference!: string;
@@ -14,4 +15,9 @@ export class PublicPaymentStatusResponseDto {
   @ApiPropertyOptional({ nullable: true }) amount!: string | null;
   @ApiPropertyOptional({ nullable: true }) currency!: string | null;
   @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true }) paidAt!: Date | null;
+  @ApiPropertyOptional({ nullable: true }) bookingTotal!: string | null;
+  @ApiProperty() pointsReserved!: number;
+  @ApiProperty() pointsAmount!: string;
+  @ApiPropertyOptional({ nullable: true }) remainingExternalAmount!: string | null;
+  @ApiPropertyOptional({ enum: RewardBookingRedemptionStatus, nullable: true }) redemptionStatus!: RewardBookingRedemptionStatus | null;
 }

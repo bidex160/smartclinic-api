@@ -6,6 +6,7 @@ import { RewardWithdrawalStatusHistory } from "./entities/reward-withdrawal-stat
 import { RewardWithdrawalStatus } from "./enums/reward-withdrawal-status.enum";
 import { RewardWithdrawalsService } from "./reward-withdrawals.service";
 import { User } from "../users/entities/user.entity";
+import { RewardBookingRedemption } from "./entities/reward-booking-redemption.entity";
 
 describe("RewardWithdrawalsService", () => {
   const userId = "10000000-0000-4000-8000-000000000001";
@@ -29,11 +30,12 @@ describe("RewardWithdrawalsService", () => {
     const ledgerRepo: any = { create: jest.fn((value) => ({ id: `l-${ledger.length + 1}`, ...value })), save: jest.fn(async (value) => { ledger.push(value); return value; }), exists: jest.fn(async ({ where }) => ledger.some((row) => row.eventKey === where.eventKey)) };
     const rateRepo: any = { findOne: jest.fn(async () => ({ id: "rate", points: 100, amount: "1000.00", currency: "NGN", isActive: true, effectiveFrom: new Date() })) };
     const userRepo: any = { findOne: jest.fn(async () => ({ id: userId })) };
-    manager = { getRepository: jest.fn((entity) => entity === RewardWithdrawalRequest ? withdrawalRepo : entity === RewardWithdrawalStatusHistory ? historyRepo : entity === RewardPointsLedger ? ledgerRepo : entity === RewardConversionRate ? rateRepo : entity === User ? userRepo : null) };
+    const redemptionRepo: any = { createQueryBuilder: jest.fn(() => ({ select: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), getRawOne: jest.fn().mockResolvedValue({ reserved: '0' }) })) };
+    manager = { getRepository: jest.fn((entity) => entity === RewardWithdrawalRequest ? withdrawalRepo : entity === RewardWithdrawalStatusHistory ? historyRepo : entity === RewardPointsLedger ? ledgerRepo : entity === RewardConversionRate ? rateRepo : entity === RewardBookingRedemption ? redemptionRepo : entity === User ? userRepo : null) };
     manager.transaction = jest.fn(async (callback) => callback(manager));
     withdrawalRepo.manager = manager;
-    subject = new RewardWithdrawalsService(withdrawalRepo, rateRepo);
-    jest.spyOn(subject, "balance").mockResolvedValue({ availablePoints: 1000, reservedPoints: 0, lifetimeEarnedPoints: 1000, lifetimeRedeemedPoints: 0 });
+    subject = new RewardWithdrawalsService(withdrawalRepo, rateRepo, redemptionRepo);
+    jest.spyOn(subject, "balance").mockResolvedValue({ availablePoints: 1000, reservedPoints: 0, withdrawalReservedPoints: 0, healthCheckReservedPoints: 0, lifetimeEarnedPoints: 1000, lifetimeRedeemedPoints: 0 });
   });
 
   it("creates a REQUESTED reservation using the configured integer-safe conversion snapshot", async () => {
@@ -45,7 +47,7 @@ describe("RewardWithdrawalsService", () => {
   });
 
   it("rejects over-reservation", async () => {
-    jest.spyOn(subject, "balance").mockResolvedValue({ availablePoints: 300, reservedPoints: 700, lifetimeEarnedPoints: 1000, lifetimeRedeemedPoints: 0 });
+    jest.spyOn(subject, "balance").mockResolvedValue({ availablePoints: 300, reservedPoints: 700, withdrawalReservedPoints: 700, healthCheckReservedPoints: 0, lifetimeEarnedPoints: 1000, lifetimeRedeemedPoints: 0 });
     await expect(subject.create(userId, { points: 400, bankName: "Bank", accountNumber: "0123456789", accountName: "Ada" })).rejects.toBeInstanceOf(ConflictException);
   });
 

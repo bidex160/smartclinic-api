@@ -5,7 +5,7 @@ import * as request from 'supertest';
 import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
 import { RolesGuard } from '../src/auth/roles.guard';
 import { BookingsService } from '../src/bookings/bookings.service';
-import { MeHealthCheckPaymentsController } from '../src/bookings/me-health-check-payments.controller';
+import { MeHealthCheckPaymentsController, MeHealthCheckRewardsController } from '../src/bookings/me-health-check-payments.controller';
 import { PaymentFlowService } from '../src/payments/payment-flow.service';
 import { UserRole } from '../src/users/enums/user-role.enum';
 
@@ -18,6 +18,9 @@ describe('Registered patient payment boundary (e2e)', () => {
     initiatePatientPayment: jest.fn().mockResolvedValue({ bookingReference: reference, fundingStatus: 'PENDING', checkoutOption: 'PAY_NOW', attemptStatus: 'AWAITING_CUSTOMER_ACTION', amount: '12500.00', currency: 'NGN', paymentReference: 'SC-PAY-safe', checkoutUrl: 'https://checkout.test/safe', accessCode: 'access' }),
     getPublicPaymentStatus: jest.fn().mockResolvedValue({ bookingReference: reference, bookingStatus: 'AWAITING_FUNDING', fundingStatus: 'PENDING', checkoutOption: 'PAY_NOW', paymentStatus: 'AWAITING_CUSTOMER_ACTION', paymentAttemptReference: 'SC-PAY-safe', amount: '12500.00', currency: 'NGN', paidAt: null }),
     verifyLatestBookingPayment: jest.fn().mockResolvedValue({ bookingReference: reference, bookingStatus: 'PENDING_PROVIDER_MATCH', fundingStatus: 'SETTLED', checkoutOption: 'PAY_NOW', paymentStatus: 'SUCCEEDED', paymentAttemptReference: 'SC-PAY-safe', amount: '12500.00', currency: 'NGN', paidAt: new Date().toISOString() }),
+    previewRewardRedemption: jest.fn().mockResolvedValue({ availablePoints: 900, maximumRedeemablePoints: 500, bookingOutstandingAmount: '5000.00', currency: 'NGN' }),
+    applyRewardPoints: jest.fn().mockResolvedValue({ bookingReference: reference, pointsReserved: 400, pointsAmount: '4000.00', remainingExternalAmount: '1000.00', currency: 'NGN', redemptionStatus: 'RESERVED' }),
+    releaseRewardPoints: jest.fn().mockResolvedValue({ bookingReference: reference, redemptionStatus: 'RELEASED', releasedPoints: 400 }),
   };
 
   beforeAll(async () => {
@@ -26,7 +29,7 @@ describe('Registered patient payment boundary (e2e)', () => {
       return Promise.resolve({ bookingReference: requested });
     });
     const module = await Test.createTestingModule({
-      controllers: [MeHealthCheckPaymentsController],
+      controllers: [MeHealthCheckPaymentsController, MeHealthCheckRewardsController],
       providers: [RolesGuard, Reflector, { provide: BookingsService, useValue: bookings }, { provide: PaymentFlowService, useValue: payments }],
     }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => {
       const req = context.switchToHttp().getRequest();
@@ -68,4 +71,13 @@ describe('Registered patient payment boundary (e2e)', () => {
 
   it('rejects client-controlled payment fields', () =>
     request(app.getHttpServer()).post(`/api/v1/me/health-checks/${reference}/payment`).set('Authorization', 'Bearer user').send({ option: 'PAY_NOW', amount: '0.01', currency: 'USD', providerReference: 'attacker' }).expect(400));
+
+  it('protects preview/apply/release through SELF Patient ownership and accepts points only', async () => {
+    await request(app.getHttpServer()).get(`/api/v1/me/health-checks/${reference}/rewards/preview`).expect(401);
+    await request(app.getHttpServer()).get(`/api/v1/me/health-checks/${reference}/rewards/preview`).set('Authorization', 'Bearer user').expect(200).expect((response) => expect(response.body.maximumRedeemablePoints).toBe(500));
+    await request(app.getHttpServer()).post(`/api/v1/me/health-checks/${reference}/rewards/apply`).set('Authorization', 'Bearer user').send({ points: 400, amount: '1.00', currency: 'USD' }).expect(400);
+    await request(app.getHttpServer()).post(`/api/v1/me/health-checks/${reference}/rewards/apply`).set('Authorization', 'Bearer user').send({ points: 400 }).expect(200).expect((response) => expect(response.body.remainingExternalAmount).toBe('1000.00'));
+    await request(app.getHttpServer()).delete(`/api/v1/me/health-checks/${reference}/rewards`).set('Authorization', 'Bearer user').expect(200);
+    expect(payments.applyRewardPoints).toHaveBeenCalledWith(reference, 'user-a', 400);
+  });
 });

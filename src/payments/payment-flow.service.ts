@@ -36,6 +36,13 @@ import {
 import { PaymentOperationResponseDto } from "./dto/payment-operation-response.dto";
 import { PublicPaymentStatusResponseDto } from "./dto/public-payment-status-response.dto";
 import { ProviderMatchingService } from "../providers/provider-matching.service";
+import { RewardBookingRedemption } from "../rewards/entities/reward-booking-redemption.entity";
+import { RewardConversionRate } from "../rewards/entities/reward-conversion-rate.entity";
+import { RewardPointsLedger } from "../rewards/entities/reward-points-ledger.entity";
+import { RewardBookingRedemptionStatus } from "../rewards/enums/reward-booking-redemption-status.enum";
+import { RewardLedgerDirection } from "../rewards/enums/reward-ledger-direction.enum";
+import { RewardWithdrawalsService } from "../rewards/reward-withdrawals.service";
+import { User } from "../users/entities/user.entity";
 
 @Injectable()
 export class PaymentFlowService {
@@ -51,7 +58,81 @@ export class PaymentFlowService {
     private readonly config?: ConfigType<typeof appConfig>,
     @Optional()
     private readonly matching?: ProviderMatchingService,
+    @Optional()
+    private readonly rewards?: RewardWithdrawalsService,
   ) {}
+
+  async previewRewardRedemption(reference: string, userId: string) {
+    const booking = await this.bookings.findOne({ where: { bookingReference: reference } });
+    if (!booking || !booking.quotedAmount || !booking.currency) throw new NotFoundException("Booking not found");
+    const rate = await this.bookings.manager.getRepository(RewardConversionRate).findOne({ where: { isActive: true }, order: { effectiveFrom: "DESC" } });
+    if (!rate || !this.rewards) throw new ConflictException("Reward redemption is not currently configured");
+    const balance = await this.rewards.balance(userId);
+    const totalMinor = this.toMinor(booking.quotedAmount);
+    const rateMinor = this.toMinor(rate.amount);
+    const maximumRedeemablePoints = Number((totalMinor * BigInt(rate.points)) / rateMinor);
+    const active = await this.bookings.manager.getRepository(RewardBookingRedemption).findOne({ where: { bookingId: booking.id, status: RewardBookingRedemptionStatus.RESERVED } });
+    return { availablePoints: balance.availablePoints, maximumRedeemablePoints, bookingOutstandingAmount: this.fromMinor(totalMinor), currency: booking.currency, activeRedemption: active ? this.redemptionView(active, totalMinor) : null };
+  }
+
+  async applyRewardPoints(reference: string, userId: string, points: number) {
+    if (!this.rewards) throw new ConflictException("Reward redemption is not currently configured");
+    const rewards = this.rewards;
+    let settledReference: string | null = null;
+    const result = await this.bookings.manager.transaction(async (manager) => {
+      const booking = await manager.getRepository(Booking).findOne({ where: { bookingReference: reference }, lock: { mode: "pessimistic_write" } });
+      if (!booking || !booking.quotedAmount || !booking.currency) throw new NotFoundException("Booking not found");
+      if (booking.status !== BookingStatus.AWAITING_FUNDING) throw new ConflictException("Booking is not eligible for reward redemption");
+      const redemptionRepository = manager.getRepository(RewardBookingRedemption);
+      if (await redemptionRepository.findOne({ where: { bookingId: booking.id, status: RewardBookingRedemptionStatus.RESERVED }, lock: { mode: "pessimistic_write" } })) throw new ConflictException("Booking already has an active reward redemption");
+      const user = await manager.getRepository(User).findOne({ where: { id: userId }, lock: { mode: "pessimistic_write" } });
+      if (!user) throw new NotFoundException("User not found");
+      const fundingRepository = manager.getRepository(BookingFunding);
+      let funding = await fundingRepository.findOne({ where: { bookingId: booking.id, sourceType: BookingFundingSourceType.SELF }, lock: { mode: "pessimistic_write" } });
+      if (funding?.status === BookingFundingStatus.SETTLED) throw new ConflictException("Booking funding is already settled");
+      if (funding && await this.hasActiveAttempt(manager, funding.id)) throw new ConflictException("Reward points cannot change while an external payment attempt is active");
+      const rate = await manager.getRepository(RewardConversionRate).findOne({ where: { isActive: true }, order: { effectiveFrom: "DESC" } });
+      if (!rate) throw new ConflictException("Reward redemption conversion is not configured");
+      const balance = await rewards.balance(userId, manager);
+      if (points > balance.availablePoints) throw new ConflictException("Insufficient available reward points");
+      const totalMinor = this.toMinor(booking.quotedAmount);
+      const rateMinor = this.toMinor(rate.amount);
+      const amountMinor = (BigInt(points) * rateMinor) / BigInt(rate.points);
+      if (amountMinor <= 0n) throw new BadRequestException("Requested points do not convert to a usable amount");
+      if (amountMinor > totalMinor) throw new ConflictException("Requested points exceed the maximum useful redemption for this booking");
+      const redemption = await redemptionRepository.save(redemptionRepository.create({ bookingId: booking.id, userId, pointsReserved: points, ratePoints: rate.points, rateAmountMinor: rateMinor.toString(), amountMinor: amountMinor.toString(), currency: rate.currency.toUpperCase(), status: RewardBookingRedemptionStatus.RESERVED, settledAt: null, releasedAt: null }));
+      const remainingMinor = totalMinor - amountMinor;
+      if (!funding) funding = fundingRepository.create({ bookingId: booking.id, sourceType: BookingFundingSourceType.SELF, responsibleUserId: userId, responsibleOrganisationId: null, payerContactId: null, amount: this.fromMinor(remainingMinor), percentage: null, currency: booking.currency, status: BookingFundingStatus.PENDING, checkoutOption: CheckoutFundingOption.PAY_NOW });
+      funding.amount = this.fromMinor(remainingMinor);
+      if (remainingMinor === 0n) {
+        await this.settleRedemption(manager, redemption);
+        funding.status = BookingFundingStatus.SETTLED;
+        const fromStatus = booking.status; booking.status = BookingStatus.PENDING_PROVIDER_MATCH;
+        await manager.getRepository(Booking).save(booking);
+        const history = manager.getRepository(BookingStatusHistory); await history.save(history.create({ bookingId: booking.id, fromStatus, toStatus: booking.status, actorUserId: userId, reasonCode: "REWARD_POINTS_FUNDING_CONFIRMED", reasonNote: null }));
+        settledReference = booking.bookingReference;
+      }
+      await fundingRepository.save(funding);
+      return { bookingReference: booking.bookingReference, bookingTotal: booking.quotedAmount, pointsReserved: redemption.pointsReserved, pointsAmount: this.fromMinor(amountMinor), remainingExternalAmount: this.fromMinor(remainingMinor), currency: booking.currency, redemptionStatus: redemption.status, fundingStatus: funding.status, requiresExternalPayment: remainingMinor > 0n };
+    });
+    if (settledReference) await this.startMatchingAfterSettlement(settledReference);
+    return result;
+  }
+
+  async releaseRewardPoints(reference: string, userId: string) {
+    return this.bookings.manager.transaction(async (manager) => {
+      const booking = await manager.getRepository(Booking).findOne({ where: { bookingReference: reference }, lock: { mode: "pessimistic_write" } });
+      if (!booking || !booking.quotedAmount) throw new NotFoundException("Booking not found");
+      const redemption = await manager.getRepository(RewardBookingRedemption).findOne({ where: { bookingId: booking.id, userId, status: RewardBookingRedemptionStatus.RESERVED }, lock: { mode: "pessimistic_write" } });
+      if (!redemption) throw new NotFoundException("Active reward redemption not found");
+      await manager.getRepository(User).findOne({ where: { id: userId }, lock: { mode: "pessimistic_write" } });
+      const funding = await manager.getRepository(BookingFunding).findOne({ where: { bookingId: booking.id, sourceType: BookingFundingSourceType.SELF }, lock: { mode: "pessimistic_write" } });
+      if (funding && await this.hasActiveAttempt(manager, funding.id)) throw new ConflictException("Reward points cannot be released while an external payment attempt is active");
+      redemption.status = RewardBookingRedemptionStatus.RELEASED; redemption.releasedAt = new Date(); await manager.getRepository(RewardBookingRedemption).save(redemption);
+      if (funding) { funding.amount = booking.quotedAmount; await manager.getRepository(BookingFunding).save(funding); }
+      return { bookingReference: reference, redemptionStatus: redemption.status, releasedPoints: redemption.pointsReserved };
+    });
+  }
 
   async initializeFunding(
     reference: string,
@@ -88,6 +169,10 @@ export class PaymentFlowService {
           "Guest booking does not have a payer contact snapshot",
         );
       const fundingRepository = manager.getRepository(BookingFunding);
+      const activeRedemption = await this.findRedemption(manager, booking.id, false);
+      const expectedFundingAmount = activeRedemption
+        ? this.fromMinor(this.toMinor(booking.quotedAmount) - BigInt(activeRedemption.amountMinor))
+        : booking.quotedAmount;
       let funding = await fundingRepository.findOne({
         where: {
           bookingId: booking.id,
@@ -97,7 +182,7 @@ export class PaymentFlowService {
       });
       if (
         funding &&
-        (funding.amount !== booking.quotedAmount ||
+        (funding.amount !== expectedFundingAmount ||
           funding.currency !== booking.currency)
       )
         throw new ConflictException(
@@ -111,7 +196,7 @@ export class PaymentFlowService {
             responsibleUserId: booking.bookerUserId,
             responsibleOrganisationId: null,
             payerContactId: payerContact?.id ?? null,
-            amount: booking.quotedAmount,
+            amount: expectedFundingAmount,
             percentage: null,
             currency: booking.currency,
             status: BookingFundingStatus.PENDING,
@@ -164,6 +249,7 @@ export class PaymentFlowService {
       );
     }
     const funding = await this.requireFunding(reference);
+    if (this.toMinor(funding.amount!) === 0n) throw new ConflictException("Booking has no external amount remaining");
     const customerEmail =
       funding.responsibleUser?.email ?? funding.payerContact?.email;
     if (!customerEmail || !isEmail(customerEmail))
@@ -209,6 +295,7 @@ export class PaymentFlowService {
     if (option === CheckoutFundingOption.PAY_LATER)
       throw new BadRequestException('PAY_LATER does not initialize a payment provider');
     const funding = await this.requireFunding(reference);
+    if (this.toMinor(funding.amount!) === 0n) throw new ConflictException("Booking has no external amount remaining");
     const active = await this.attempts.findOne({
       where: {
         bookingFundingId: funding.id,
@@ -231,6 +318,7 @@ export class PaymentFlowService {
     if (option === CheckoutFundingOption.PAY_LATER)
       throw new BadRequestException("PAY_LATER does not initialize a payment provider");
     const funding = await this.requireFunding(reference);
+    if (this.toMinor(funding.amount!) === 0n) throw new ConflictException("Booking has no external amount remaining");
     const active = await this.attempts.findOne({
       where: {
         bookingFundingId: funding.id,
@@ -307,6 +395,7 @@ export class PaymentFlowService {
       context.funding,
       context.attempt,
       context.paidAt,
+      context.redemption,
     );
   }
 
@@ -379,6 +468,7 @@ private async applyVerification(
     if (!booking) {
       throw new NotFoundException("Booking not found");
     }
+    const redemption = await this.findRedemption(manager, booking.id, true);
 
 
     if (attempt.status === PaymentAttemptStatus.SUCCEEDED) {
@@ -398,7 +488,8 @@ private async applyVerification(
       verified.amount !== attempt.amount ||
       verified.currency !== attempt.currency ||
       attempt.amount !== funding.amount ||
-      attempt.currency !== funding.currency
+      attempt.currency !== funding.currency ||
+      (redemption && (!booking.quotedAmount || redemption.currency !== funding.currency || this.toMinor(booking.quotedAmount) !== this.toMinor(funding.amount!) + BigInt(redemption.amountMinor)))
     ) {
       attempt.status = PaymentAttemptStatus.FAILED;
       await attemptRepository.save(attempt);
@@ -447,6 +538,11 @@ private async applyVerification(
 
     attempt.status = PaymentAttemptStatus.SUCCEEDED;
     await attemptRepository.save(attempt);
+
+    if (redemption) {
+      await manager.getRepository(User).findOne({ where: { id: redemption.userId }, lock: { mode: "pessimistic_write" } });
+      await this.settleRedemption(manager, redemption);
+    }
 
     funding.status = BookingFundingStatus.SETTLED;
     await fundingRepository.save(funding);
@@ -532,11 +628,14 @@ private async applyVerification(
               order: { createdAt: "DESC" },
             })
         : null;
+    const redemptionRepository = this.bookings.manager.getRepository(RewardBookingRedemption);
+    const redemption = typeof redemptionRepository.findOne === "function" ? await redemptionRepository.findOne({ where: { bookingId: booking.id }, order: { createdAt: "DESC" } }) : null;
     return {
       booking,
       funding,
       attempt,
       paidAt: transaction?.occurredAt ?? null,
+      redemption,
     };
   }
   private async claimVerification(attemptId: string): Promise<void> {
@@ -566,6 +665,7 @@ private async applyVerification(
     funding: BookingFunding | null,
     attempt: PaymentAttempt | null,
     paidAt: Date | null,
+    redemption: RewardBookingRedemption | null,
   ): PublicPaymentStatusResponseDto {
     return {
       bookingReference: booking.bookingReference,
@@ -577,6 +677,11 @@ private async applyVerification(
       amount: funding?.amount ?? booking.quotedAmount ?? null,
       currency: funding?.currency ?? booking.currency ?? null,
       paidAt,
+      bookingTotal: booking.quotedAmount ?? null,
+      pointsReserved: redemption?.pointsReserved ?? 0,
+      pointsAmount: redemption ? this.fromMinor(BigInt(redemption.amountMinor)) : "0.00",
+      remainingExternalAmount: funding?.amount ?? booking.quotedAmount ?? null,
+      redemptionStatus: redemption?.status ?? null,
     };
   }
   private response(
@@ -604,4 +709,32 @@ private async applyVerification(
       : this.config?.payments.paystack.callbackUrl;
     return base ? `${base}${encodeURIComponent(reference)}` : undefined;
   }
+
+  private async settleRedemption(manager: import("typeorm").EntityManager, redemption: RewardBookingRedemption) {
+    const eventKey = `HEALTH_CHECK_REDEMPTION:${redemption.bookingId}`;
+    const ledger = manager.getRepository(RewardPointsLedger);
+    if (!(await ledger.exists({ where: { eventKey } }))) await ledger.save(ledger.create({ userId: redemption.userId, referralId: null, eventKey, eventType: "HEALTH_CHECK_REDEMPTION", direction: RewardLedgerDirection.DEBIT, points: redemption.pointsReserved, reasonCode: "HEALTH_CHECK_REDEMPTION" }));
+    redemption.status = RewardBookingRedemptionStatus.SETTLED; redemption.settledAt = new Date();
+    await manager.getRepository(RewardBookingRedemption).save(redemption);
+  }
+
+  private async hasActiveAttempt(manager: import("typeorm").EntityManager, fundingId: string) {
+    return manager.getRepository(PaymentAttempt).exists({ where: { bookingFundingId: fundingId, status: In([PaymentAttemptStatus.CREATED, PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION, PaymentAttemptStatus.PENDING_CONFIRMATION]) } });
+  }
+
+  private async findRedemption(manager: import("typeorm").EntityManager, bookingId: string, lock: boolean) {
+    const repository = manager.getRepository(RewardBookingRedemption);
+    if (typeof repository.findOne !== "function") return null;
+    return repository.findOne({ where: { bookingId, status: RewardBookingRedemptionStatus.RESERVED }, ...(lock ? { lock: { mode: "pessimistic_write" as const } } : {}) });
+  }
+
+  private async startMatchingAfterSettlement(reference: string) {
+    if (!this.matching) return;
+    try { await this.matching.startMatching(reference, null); }
+    catch { this.logger.error(`Automatic provider matching failed after combined funding settlement for booking ${reference}`); }
+  }
+
+  private toMinor(value: string) { const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value); if (!match) throw new ConflictException("Configured monetary amount is invalid"); return BigInt(match[1]) * 100n + BigInt((match[2] ?? "").padEnd(2, "0")); }
+  private fromMinor(value: bigint) { return `${value / 100n}.${(value % 100n).toString().padStart(2, "0")}`; }
+  private redemptionView(redemption: RewardBookingRedemption, totalMinor: bigint) { return { pointsReserved: redemption.pointsReserved, pointsAmount: this.fromMinor(BigInt(redemption.amountMinor)), remainingExternalAmount: this.fromMinor(totalMinor - BigInt(redemption.amountMinor)), currency: redemption.currency, status: redemption.status }; }
 }

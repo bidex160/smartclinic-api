@@ -10,6 +10,8 @@ import { RewardWithdrawalRequest } from "./entities/reward-withdrawal-request.en
 import { RewardWithdrawalStatusHistory } from "./entities/reward-withdrawal-status-history.entity";
 import { RewardLedgerDirection } from "./enums/reward-ledger-direction.enum";
 import { RewardWithdrawalStatus } from "./enums/reward-withdrawal-status.enum";
+import { RewardBookingRedemption } from "./entities/reward-booking-redemption.entity";
+import { RewardBookingRedemptionStatus } from "./enums/reward-booking-redemption-status.enum";
 
 const RESERVED = [RewardWithdrawalStatus.REQUESTED, RewardWithdrawalStatus.PROCESSING];
 
@@ -18,6 +20,7 @@ export class RewardWithdrawalsService {
   constructor(
     @InjectRepository(RewardWithdrawalRequest) private readonly withdrawals: Repository<RewardWithdrawalRequest>,
     @InjectRepository(RewardConversionRate) private readonly rates: Repository<RewardConversionRate>,
+    @InjectRepository(RewardBookingRedemption) private readonly redemptions: Repository<RewardBookingRedemption>,
   ) {}
 
   async create(userId: string, input: CreateRewardWithdrawalDto) {
@@ -105,7 +108,7 @@ export class RewardWithdrawalsService {
   }
 
   async balance(userId: string, manager: EntityManager = this.withdrawals.manager) {
-    const [ledger, reservations] = await Promise.all([
+    const [ledger, withdrawals, healthChecks] = await Promise.all([
       manager.getRepository(RewardPointsLedger).createQueryBuilder("entry")
         .select(`COALESCE(SUM(CASE WHEN entry.direction = :credit THEN entry.points ELSE -entry.points END), 0)`, "net")
         .addSelect(`COALESCE(SUM(CASE WHEN entry.direction = :credit THEN entry.points ELSE 0 END), 0)`, "earned")
@@ -114,9 +117,13 @@ export class RewardWithdrawalsService {
         .getRawOne<{ net: string; earned: string; redeemed: string }>(),
       manager.getRepository(RewardWithdrawalRequest).createQueryBuilder("withdrawal").select("COALESCE(SUM(withdrawal.pointsRequested), 0)", "reserved")
         .where("withdrawal.userId = :userId", { userId }).andWhere("withdrawal.status IN (:...statuses)", { statuses: RESERVED }).getRawOne<{ reserved: string }>(),
+      manager.getRepository(RewardBookingRedemption).createQueryBuilder("redemption").select("COALESCE(SUM(redemption.pointsReserved), 0)", "reserved")
+        .where("redemption.userId = :userId", { userId }).andWhere("redemption.status = :status", { status: RewardBookingRedemptionStatus.RESERVED }).getRawOne<{ reserved: string }>(),
     ]);
-    const reservedPoints = Number(reservations?.reserved ?? 0);
-    return { availablePoints: Number(ledger?.net ?? 0) - reservedPoints, reservedPoints, lifetimeEarnedPoints: Number(ledger?.earned ?? 0), lifetimeRedeemedPoints: Number(ledger?.redeemed ?? 0) };
+    const withdrawalReservedPoints = Number(withdrawals?.reserved ?? 0);
+    const healthCheckReservedPoints = Number(healthChecks?.reserved ?? 0);
+    const reservedPoints = withdrawalReservedPoints + healthCheckReservedPoints;
+    return { availablePoints: Number(ledger?.net ?? 0) - reservedPoints, reservedPoints, withdrawalReservedPoints, healthCheckReservedPoints, lifetimeEarnedPoints: Number(ledger?.earned ?? 0), lifetimeRedeemedPoints: Number(ledger?.redeemed ?? 0) };
   }
 
   async metrics() {

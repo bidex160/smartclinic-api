@@ -96,6 +96,8 @@ Roles are `USER`, `ADMIN`, `OPERATIONS`, and `PROVIDER`. Public registration ass
 
 Reward withdrawals are private financial records. Only the owning authenticated `USER` and authorized `ADMIN`/`OPERATIONS` roles may read them. User responses mask account numbers, broad summaries contain no bank data, and bank payloads are not sent to a transfer provider. Referral codes and withdrawal references remain identifiers rather than credentials.
 
+Health Check reward redemption uses authenticated User → SELF Patient → Booking ownership. Booking references and guest sessions do not grant reward authority. The server owns rate, currency, booking amount, maximum points, and Paystack remainder; client-supplied monetary or funding-source fields are rejected.
+
 - Keep database entities distinct from API DTOs.
 - Use PostgreSQL and TypeORM migrations for durable schema changes.
 - Do not enable TypeORM schema synchronisation in production.

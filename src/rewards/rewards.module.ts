@@ -18,11 +18,12 @@ import { RewardWithdrawalRequest } from './entities/reward-withdrawal-request.en
 import { RewardWithdrawalStatusHistory } from './entities/reward-withdrawal-status-history.entity';
 import { AdminRewardWithdrawalsController, MeRewardWithdrawalsController } from './reward-withdrawals.controller';
 import { RewardWithdrawalsService } from './reward-withdrawals.service';
+import { RewardBookingRedemption } from './entities/reward-booking-redemption.entity';
 
 @Module({
   imports: [
     forwardRef(() => AuthModule),
-    TypeOrmModule.forFeature([ReferralCode, Referral, RewardPointsLedger, RewardRule, RewardLevelDefinition, RewardLevelRequirement, RewardLevelAchievement, RewardConversionRate, RewardWithdrawalRequest, RewardWithdrawalStatusHistory, Provider, HealthCheckEncounter, User]),
+    TypeOrmModule.forFeature([ReferralCode, Referral, RewardPointsLedger, RewardRule, RewardLevelDefinition, RewardLevelRequirement, RewardLevelAchievement, RewardConversionRate, RewardWithdrawalRequest, RewardWithdrawalStatusHistory, RewardBookingRedemption, Provider, HealthCheckEncounter, User]),
   ],
   controllers: [MeReferralsController, AdminReferralsController, MeRewardWithdrawalsController, AdminRewardWithdrawalsController],
   providers: [ReferralsService, RewardWithdrawalsService],

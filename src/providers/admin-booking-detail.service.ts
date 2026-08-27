@@ -10,6 +10,7 @@ import { PaymentTransactionStatus } from '../payments/enums/payment-transaction-
 import { AdminBookingDetailResponseDto } from './dto/admin-booking-detail-response.dto';
 import { ProviderAssignment } from './entities/provider-assignment.entity';
 import { deriveMatchingReadiness } from './matching-readiness';
+import { RewardBookingRedemption } from '../rewards/entities/reward-booking-redemption.entity';
 
 @Injectable()
 export class AdminBookingDetailService {
@@ -19,6 +20,8 @@ export class AdminBookingDetailService {
     const booking = await this.bookings.findOne({ where: { bookingReference: reference }, relations: { healthCheckPackage: true, fulfilmentMode: true, participant: true, contact: true, booker: true, providerLocation: true, visitAddress: true } });
     if (!booking) throw new NotFoundException('Booking not found');
     const funding = await this.funding.findOne({ where: { bookingId: booking.id, sourceType: BookingFundingSourceType.SELF } });
+    const redemptionRepository = this.bookings.manager?.getRepository(RewardBookingRedemption);
+    const redemption = redemptionRepository && typeof redemptionRepository.findOne === 'function' ? await redemptionRepository.findOne({ where: { bookingId: booking.id }, order: { createdAt: 'DESC' } }) : null;
     const attempt = funding ? await this.attempts.findOne({ where: { bookingFundingId: funding.id }, order: { createdAt: 'DESC', id: 'DESC' } }) : null;
     const transaction = attempt ? await this.transactions.findOne({ where: { paymentAttemptId: attempt.id, status: PaymentTransactionStatus.SUCCEEDED }, order: { createdAt: 'DESC', id: 'DESC' } }) : null;
     const assignment = await this.assignments.findOne({ where: { bookingId: booking.id }, relations: { provider: true }, order: { createdAt: 'DESC', id: 'DESC' } });
@@ -30,7 +33,7 @@ export class AdminBookingDetailService {
       preferredDate: booking.preferredDate, preferredTimeFrom: booking.preferredTimeWindowStart, preferredTimeTo: booking.preferredTimeWindowEnd, preferredTimezone: booking.preferredTimezone, locationNote: booking.preferredLocationNote, visitAddress: booking.visitAddress ? { addressLine1: booking.visitAddress.addressLine1, addressLine2: booking.visitAddress.addressLine2, city: booking.visitAddress.city, stateOrRegion: booking.visitAddress.stateOrRegion, postalCode: booking.visitAddress.postalCode, countryCode: booking.visitAddress.countryCode } : null,
       confirmedSchedule: booking.scheduledDate ? { date: booking.scheduledDate, timeFrom: booking.scheduledTimeFrom!, timeTo: booking.scheduledTimeTo!, timezone: booking.scheduledTimezone!, scheduledAt: booking.scheduledAt!, providerLocation: booking.providerLocation ? { id: booking.providerLocation.id, name: booking.providerLocation.name, addressLine1: booking.providerLocation.addressLine1, addressLine2: booking.providerLocation.addressLine2, city: booking.providerLocation.city, state: booking.providerLocation.state, postalCode: booking.providerLocation.postalCode, countryCode: booking.providerLocation.countryCode } : null } : null,
       quotedAmount: booking.quotedAmount, quotedCurrency: booking.currency,
-      funding: { fundingStatus: funding?.status ?? null, fundingType: funding?.sourceType ?? null, checkoutOption: funding?.checkoutOption ?? null, amount: funding?.amount ?? null, currency: funding?.currency ?? null },
+      funding: { fundingStatus: funding?.status ?? null, fundingType: funding?.sourceType ?? null, checkoutOption: funding?.checkoutOption ?? null, amount: funding?.amount ?? null, currency: funding?.currency ?? null, rewardPoints: redemption?.pointsReserved ?? 0, rewardAmount: redemption ? `${BigInt(redemption.amountMinor) / 100n}.${(BigInt(redemption.amountMinor) % 100n).toString().padStart(2, '0')}` : '0.00', rewardStatus: redemption?.status ?? null, bookingTotal: booking.quotedAmount },
       payment: { status: attempt?.status ?? null, paymentReference: attempt?.providerReference ?? null, paidAt: transaction?.occurredAt ?? null },
       assignment: { assignmentId: assignment?.id ?? null, assignmentStatus: assignment?.status ?? null, providerId: assignment?.providerId ?? null, providerName: assignment?.provider?.displayName ?? null, offeredAt: assignment?.offeredAt ?? null, acceptedAt: assignment?.acceptedAt ?? null, confirmedAt: assignment?.confirmedAt ?? null, expiresAt: assignment?.expiresAt ?? null },
       readiness: deriveMatchingReadiness(booking, funding, assignment),

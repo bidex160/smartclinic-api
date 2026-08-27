@@ -18,10 +18,15 @@ import { PAYMENT_PROVIDER_ADAPTER } from "./payment-provider.adapter";
 import { PaystackWebhookController } from "./paystack-webhook.controller";
 import { User } from "../users/entities/user.entity";
 import { ProvidersModule } from "../providers/providers.module";
+import { RewardsModule } from "../rewards/rewards.module";
+import { RewardBookingRedemption } from "../rewards/entities/reward-booking-redemption.entity";
+import { RewardConversionRate } from "../rewards/entities/reward-conversion-rate.entity";
+import { RewardPointsLedger } from "../rewards/entities/reward-points-ledger.entity";
 @Module({
   imports: [
     AuthModule,
     ProvidersModule,
+    RewardsModule,
     TypeOrmModule.forFeature([
       PaymentAttempt,
       PaymentTransaction,
@@ -30,6 +35,9 @@ import { ProvidersModule } from "../providers/providers.module";
       BookingFunding,
       BookingStatusHistory,
       User
+      ,RewardBookingRedemption,
+      RewardConversionRate,
+      RewardPointsLedger
     ]),
   ],
   controllers: [AdminPaymentFlowController, PaystackWebhookController],

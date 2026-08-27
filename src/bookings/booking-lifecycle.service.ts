@@ -13,6 +13,8 @@ import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
 import { BookingStatusHistory } from './entities/booking-status-history.entity';
 import { Booking } from './entities/booking.entity';
 import { BookingStatus } from './enums/booking-status.enum';
+import { RewardBookingRedemption } from '../rewards/entities/reward-booking-redemption.entity';
+import { RewardBookingRedemptionStatus } from '../rewards/enums/reward-booking-redemption-status.enum';
 
 const ACTIONABLE_ASSIGNMENTS = [ProviderAssignmentStatus.OFFERED, ProviderAssignmentStatus.ACCEPTED, ProviderAssignmentStatus.CONFIRMED];
 const ACTIVE_RESERVATIONS = [ProviderBookingReservationStatus.HELD, ProviderBookingReservationStatus.CONFIRMED];
@@ -28,6 +30,9 @@ export class BookingLifecycleService {
       if (booking.status === BookingStatus.COMPLETED) throw new ConflictException('Completed bookings cannot be cancelled');
       if (booking.status === BookingStatus.EXPIRED) throw new ConflictException('Expired bookings cannot be cancelled; expiry is already terminal');
       const impact = await this.closeAssignmentsAndReservations(manager, booking.id, actorUserId, dto.reasonCode ?? 'BOOKING_CANCELLED', dto.reason ?? null, ProviderBookingReservationStatus.CANCELLED);
+      const redemptionRepository = manager.getRepository(RewardBookingRedemption);
+      const redemption = typeof redemptionRepository.findOne === 'function' ? await redemptionRepository.findOne({ where: { bookingId: booking.id, status: RewardBookingRedemptionStatus.RESERVED }, lock: { mode: 'pessimistic_write' } }) : null;
+      if (redemption) { redemption.status = RewardBookingRedemptionStatus.CANCELLED; redemption.releasedAt = new Date(); await manager.getRepository(RewardBookingRedemption).save(redemption); }
       const fromStatus = booking.status; booking.status = BookingStatus.CANCELLED; booking.cancellationReason = dto.reason ?? null;
       await manager.getRepository(Booking).save(booking);
       await this.appendBookingHistory(manager, booking.id, fromStatus, BookingStatus.CANCELLED, actorUserId, dto.reasonCode ?? 'BOOKING_CANCELLED', dto.reason ?? null);

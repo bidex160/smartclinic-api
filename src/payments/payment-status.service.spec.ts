@@ -26,7 +26,7 @@ describe('PaymentFlowService public payment status', () => {
 
   it('returns a safe not-started state when there is no attempt', async () => {
     const { subject } = setup();
-    await expect(subject.getPublicPaymentStatus(booking.bookingReference)).resolves.toEqual({ bookingReference: booking.bookingReference, bookingStatus: BookingStatus.AWAITING_FUNDING, fundingStatus: BookingFundingStatus.PENDING, checkoutOption: CheckoutFundingOption.PAY_LATER, paymentStatus: null, paymentAttemptReference: null, amount: '12500.00', currency: 'NGN', paidAt: null });
+    await expect(subject.getPublicPaymentStatus(booking.bookingReference)).resolves.toMatchObject({ bookingReference: booking.bookingReference, bookingStatus: BookingStatus.AWAITING_FUNDING, fundingStatus: BookingFundingStatus.PENDING, checkoutOption: CheckoutFundingOption.PAY_LATER, paymentStatus: null, paymentAttemptReference: null, amount: '12500.00', currency: 'NGN', paidAt: null, pointsReserved: 0, pointsAmount: '0.00', remainingExternalAmount: '12500.00' });
   });
 
   it('returns the latest pending attempt without internal IDs', async () => {

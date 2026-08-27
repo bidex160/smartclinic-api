@@ -44,6 +44,8 @@ export class ReferralSummaryDto {
   @ApiProperty({ type: Object }) links!: Record<ReferralTargetType, string>;
   @ApiProperty() availablePoints!: number;
   @ApiProperty() reservedPoints!: number;
+  @ApiProperty() withdrawalReservedPoints!: number;
+  @ApiProperty() healthCheckReservedPoints!: number;
   @ApiProperty() lifetimeEarnedPoints!: number;
   @ApiProperty() lifetimeRedeemedPoints!: number;
   @ApiProperty({ type: MultiLevelReferralProgressDto }) levelProgress!: MultiLevelReferralProgressDto;
