@@ -65,6 +65,7 @@ import { ProviderCareService } from './entities/provider-care-service.entity';
 import { AdminCareServicesController, ProviderCareServicesController, PublicFindCareController } from './provider-care-services.controller';
 import { ProviderCareServicesService } from './provider-care-services.service';
 import { FindCareService } from './find-care.service';
+import { ProviderCareEligibilityService } from './provider-care-eligibility.service';
 @Module({
   imports: [
     AuthModule,
@@ -139,13 +140,15 @@ import { FindCareService } from './find-care.service';
     AdminDashboardService,
     ProviderCareServicesService,
     FindCareService,
+    ProviderCareEligibilityService,
   ],
   exports: [
     ProviderCapabilitiesService,
     ProviderAvailabilityService,
     ProviderMatchingService,
     CurrentProviderService,
-    AdminBookingSchedulingService
+    AdminBookingSchedulingService,
+    ProviderCareEligibilityService,
   ],
 })
 export class ProvidersModule {}

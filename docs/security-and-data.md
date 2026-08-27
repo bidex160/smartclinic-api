@@ -8,6 +8,8 @@ Public referral ranking is explicit opt-in and defaults to disabled. Opt-out rem
 
 Find Care publishes only active, approved, non-deleted Providers with active centrally defined care services. Provider self-management resolves ownership from the authenticated linked Provider and uses provider-scoped mutations; caller-supplied Provider identity is not accepted. Public DTOs omit contact details, professional references, internal IDs, review metadata, and operational records.
 
+Care Request authority is relationship-based. Patient APIs resolve JWT User to the active SELF Patient; a public Care Request reference is never sufficient authority. Provider access requires the linked active/approved Provider and a preferred/assigned relationship. Provider responses exclude Patient contact and account identifiers. Assignment and acceptance revalidate the exact ProviderCareService and use transactional row locks; Admin/Operations actions retain actor/reason history.
+
 - Authenticate callers before access to protected resources.
 - Authorise actions by role and relationship to the resource; a role alone may not always be sufficient for patient data access.
 - Use DTOs with `class-validator` and `class-transformer` at API boundaries.

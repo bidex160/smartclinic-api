@@ -456,6 +456,8 @@ Referral rewards use separate persistence boundaries. `referral_codes` provides 
 
 Find Care adds immutable `providers.provider_reference`, controlled `care_service_definitions`, and unique Provider-owned `provider_care_services`. General care services deliberately remain separate from the package/mode-specific Health Check `provider_services` capability table. Provider care prices use integer minor units and paired currency constraints; a null pair means price on request.
 
+`care_requests` links an authenticated User and SELF Patient to one care-service definition, optional preferred Provider/offering, and optional assigned Provider/offering. Composite offering foreign keys prevent cross-Provider or wrong-service assignment. Public references are independently generated and unique. Indexed status, Patient, service, and assigned-Provider columns support portal/provider/operations queues. `care_request_status_history` is append-only transition audit data.
+
 `patients.user_id` is the enforceable one-to-one SELF ownership relationship and remains nullable for guest Patients. `patients.patient_reference` is a unique immutable server-generated `SCP-XXXX-XXXX` identifier distinct from the internal UUID. Existing Patients are deterministically backfilled without merging records or inferring ownership from contact fields.
 
 Other planned extensions are a booking-group/order table, package-price table, address revisions, consent/authority records, matching cycles/eligibility snapshots, payment provider events, notification delivery, and clinical health-check/result records.

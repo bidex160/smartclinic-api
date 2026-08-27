@@ -24,6 +24,8 @@ export class FindCareProviderServices1789574400000 implements MigrationInterface
       "created_at" timestamptz NOT NULL DEFAULT now(), "updated_at" timestamptz NOT NULL DEFAULT now(),
       CONSTRAINT "PK_provider_care_services" PRIMARY KEY ("id"),
       CONSTRAINT "UQ_provider_care_services_provider_definition" UNIQUE ("provider_id", "care_service_definition_id"),
+      CONSTRAINT "UQ_provider_care_services_id_provider" UNIQUE ("id", "provider_id"),
+      CONSTRAINT "UQ_provider_care_services_id_definition" UNIQUE ("id", "care_service_definition_id"),
       CONSTRAINT "CHK_provider_care_services_price_minor" CHECK ("price_minor" IS NULL OR "price_minor" >= 0),
       CONSTRAINT "CHK_provider_care_services_price_currency" CHECK (("price_minor" IS NULL AND "currency" IS NULL) OR ("price_minor" IS NOT NULL AND "currency" IS NOT NULL)),
       CONSTRAINT "CHK_provider_care_services_currency" CHECK ("currency" IS NULL OR "currency" ~ '^[A-Z]{3}$'),

@@ -1,0 +1,42 @@
+import { INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Test } from '@nestjs/testing';
+import * as request from 'supertest';
+import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
+import { RolesGuard } from '../src/auth/roles.guard';
+import { AdminCareRequestsController, MeCareRequestsController, ProviderCareRequestsController } from '../src/care-requests/care-requests.controller';
+import { CareRequestsService } from '../src/care-requests/care-requests.service';
+import { UserRole } from '../src/users/enums/user-role.enum';
+
+describe('Care Request API authorization (e2e)', () => {
+  let app: INestApplication;
+  const reference = 'SC-CARE-ABCDEF123456';
+  const requestBody = { serviceCode: 'GENERAL_CONSULTATION', countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', contactMethod: 'WHATSAPP' };
+  const service = { create: jest.fn().mockResolvedValue({ reference, status: 'MATCHING' }), listMine: jest.fn().mockResolvedValue({ items: [] }), getMine: jest.fn().mockResolvedValue({ reference }), cancelMine: jest.fn().mockResolvedValue({ reference, status: 'CANCELLED' }), listForProvider: jest.fn().mockResolvedValue({ items: [] }), getForProvider: jest.fn().mockResolvedValue({ reference }), providerRespond: jest.fn().mockResolvedValue({ reference }), adminList: jest.fn().mockResolvedValue({ items: [] }), adminGet: jest.fn().mockResolvedValue({ reference }), assign: jest.fn().mockResolvedValue({ reference }), markUnfulfillable: jest.fn().mockResolvedValue({ reference }) };
+  beforeAll(async () => {
+    const module = await Test.createTestingModule({ controllers: [MeCareRequestsController, ProviderCareRequestsController, AdminCareRequestsController], providers: [RolesGuard, Reflector, { provide: CareRequestsService, useValue: service }] })
+      .overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); const token = req.headers.authorization?.replace('Bearer ', ''); if (!token) throw new UnauthorizedException(); const role = token === 'admin' ? UserRole.ADMIN : token === 'operations' ? UserRole.OPERATIONS : token === 'provider' ? UserRole.PROVIDER : UserRole.USER; req.user = { id: `${token}-user`, roles: [role] }; return true; } }).compile();
+    app = module.createNestApplication(); app.setGlobalPrefix('api/v1'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true })); await app.init();
+  });
+  afterAll(() => app.close());
+
+  it('requires USER and derives patient authority from JWT', async () => {
+    await request(app.getHttpServer()).post('/api/v1/me/care-requests').send(requestBody).expect(401);
+    await request(app.getHttpServer()).post('/api/v1/me/care-requests').set('Authorization', 'Bearer provider').send(requestBody).expect(403);
+    await request(app.getHttpServer()).post('/api/v1/me/care-requests').set('Authorization', 'Bearer user').send({ ...requestBody, userId: 'spoof', patientId: 'spoof', assignedProviderId: 'spoof' }).expect(201);
+    expect(service.create).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-user' }), requestBody);
+  });
+
+  it('limits provider response APIs to PROVIDER', async () => {
+    await request(app.getHttpServer()).post(`/api/v1/provider/care-requests/${reference}/accept`).set('Authorization', 'Bearer user').expect(403);
+    await request(app.getHttpServer()).post(`/api/v1/provider/care-requests/${reference}/accept`).set('Authorization', 'Bearer provider').expect(201);
+    expect(service.providerRespond).toHaveBeenCalledWith(expect.objectContaining({ id: 'provider-user' }), reference, true, null);
+  });
+
+  it('allows ADMIN/OPERATIONS assignment and filters but denies other roles', async () => {
+    const body = { providerReference: 'SCPR-ABCDEF0123456789' };
+    await request(app.getHttpServer()).post(`/api/v1/admin/care-requests/${reference}/assign`).set('Authorization', 'Bearer provider').send(body).expect(403);
+    for (const token of ['admin', 'operations']) await request(app.getHttpServer()).post(`/api/v1/admin/care-requests/${reference}/assign`).set('Authorization', `Bearer ${token}`).send(body).expect(201);
+    await request(app.getHttpServer()).get('/api/v1/admin/care-requests?status=MATCHING&serviceCode=GENERAL_CONSULTATION&city=Ikeja').set('Authorization', 'Bearer admin').expect(200);
+  });
+});

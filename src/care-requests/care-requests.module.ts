@@ -1,0 +1,18 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule } from '../auth/auth.module';
+import { Patient } from '../patients/entities/patient.entity';
+import { ProvidersModule } from '../providers/providers.module';
+import { CareRequest } from './entities/care-request.entity';
+import { CareRequestStatusHistory } from './entities/care-request-status-history.entity';
+import { AdminCareRequestsController, MeCareRequestsController, ProviderCareRequestsController } from './care-requests.controller';
+import { CareRequestsService } from './care-requests.service';
+import { User } from 'src/users/entities/user.entity';
+
+@Module({
+  imports: [AuthModule, ProvidersModule, TypeOrmModule.forFeature([CareRequest, CareRequestStatusHistory, Patient, User])],
+  controllers: [MeCareRequestsController, ProviderCareRequestsController, AdminCareRequestsController],
+  providers: [CareRequestsService],
+  exports: [CareRequestsService],
+})
+export class CareRequestsModule {}

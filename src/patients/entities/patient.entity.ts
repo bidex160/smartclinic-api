@@ -1,6 +1,6 @@
 import { Booking } from '../../bookings/entities/booking.entity';
 import { User } from '../../users/entities/user.entity';
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm';
 
 import { PatientStatus } from '../enums/patient-status.enum';
 
@@ -9,6 +9,7 @@ import { PatientStatus } from '../enums/patient-status.enum';
   unique: true,
   where: '"user_id" IS NOT NULL',
 })
+@Unique('UQ_patients_id_user', ['id', 'userId'])
 export class Patient {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

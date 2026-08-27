@@ -4,6 +4,8 @@ import { CareServiceDefinition } from './care-service-definition.entity';
 
 @Entity('provider_care_services')
 @Unique('UQ_provider_care_services_provider_definition', ['providerId', 'careServiceDefinitionId'])
+@Unique('UQ_provider_care_services_id_provider', ['id', 'providerId'])
+@Unique('UQ_provider_care_services_id_definition', ['id', 'careServiceDefinitionId'])
 @Index('IDX_provider_care_services_public', ['careServiceDefinitionId', 'isActive', 'providerId'])
 @Index('IDX_provider_care_services_provider_active', ['providerId', 'isActive'])
 @Check('CHK_provider_care_services_price_minor', '"price_minor" IS NULL OR "price_minor" >= 0')
