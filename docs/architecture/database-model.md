@@ -454,6 +454,8 @@ Referral rewards use separate persistence boundaries. `referral_codes` provides 
 
 `users.public_leaderboard` is a non-null, privacy-preserving opt-in flag defaulting to `false`. Leaderboard scores and ranks are calculated, not persisted: lifetime credit movements come from `reward_points_ledger`, qualified direct-referral counts from `referrals`, and levels from `reward_level_achievements`. A partial index supports opted-in user scans.
 
+Find Care adds immutable `providers.provider_reference`, controlled `care_service_definitions`, and unique Provider-owned `provider_care_services`. General care services deliberately remain separate from the package/mode-specific Health Check `provider_services` capability table. Provider care prices use integer minor units and paired currency constraints; a null pair means price on request.
+
 `patients.user_id` is the enforceable one-to-one SELF ownership relationship and remains nullable for guest Patients. `patients.patient_reference` is a unique immutable server-generated `SCP-XXXX-XXXX` identifier distinct from the internal UUID. Existing Patients are deterministically backfilled without merging records or inferring ownership from contact fields.
 
 Other planned extensions are a booking-group/order table, package-price table, address revisions, consent/authority records, matching cycles/eligibility snapshots, payment provider events, notification delivery, and clinical health-check/result records.

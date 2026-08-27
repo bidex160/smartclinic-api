@@ -60,6 +60,11 @@ import { AdminDashboardController } from "./admin-dashboard.controller";
 import { ProviderDashboardService } from "./provider-dashboard.service";
 import { AdminDashboardService } from "./admin-dashboard.service";
 import { RewardsModule } from '../rewards/rewards.module';
+import { CareServiceDefinition } from './entities/care-service-definition.entity';
+import { ProviderCareService } from './entities/provider-care-service.entity';
+import { AdminCareServicesController, ProviderCareServicesController, PublicFindCareController } from './provider-care-services.controller';
+import { ProviderCareServicesService } from './provider-care-services.service';
+import { FindCareService } from './find-care.service';
 @Module({
   imports: [
     AuthModule,
@@ -88,6 +93,8 @@ import { RewardsModule } from '../rewards/rewards.module';
       PaymentTransaction,
       User,
       UserCredential,
+      CareServiceDefinition,
+      ProviderCareService,
     ]),
   ],
   controllers: [
@@ -106,6 +113,9 @@ import { RewardsModule } from '../rewards/rewards.module';
     ProviderOffersController,
     ProviderDashboardController,
     AdminDashboardController,
+    PublicFindCareController,
+    ProviderCareServicesController,
+    AdminCareServicesController,
   ],
   providers: [
     ProviderCapabilitiesService,
@@ -127,6 +137,8 @@ import { RewardsModule } from '../rewards/rewards.module';
     ProviderOnboardingService,
     ProviderDashboardService,
     AdminDashboardService,
+    ProviderCareServicesService,
+    FindCareService,
   ],
   exports: [
     ProviderCapabilitiesService,

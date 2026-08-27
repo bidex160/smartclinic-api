@@ -6,6 +6,8 @@ SmartClinic handles sensitive health-related information. Features should be des
 
 Public referral ranking is explicit opt-in and defaults to disabled. Opt-out removes the member from people, city, and country results; no public snapshot is persisted. Public rows contain only a minimized display label, lifetime earned points, qualified direct-referral count, achieved level name, and optional provider-profile city/country code. Referral codes remain attribution identifiers, not credentials. Authenticated impact reads derive identity only from JWT `USER` authority and accept no identity lookup parameters.
 
+Find Care publishes only active, approved, non-deleted Providers with active centrally defined care services. Provider self-management resolves ownership from the authenticated linked Provider and uses provider-scoped mutations; caller-supplied Provider identity is not accepted. Public DTOs omit contact details, professional references, internal IDs, review metadata, and operational records.
+
 - Authenticate callers before access to protected resources.
 - Authorise actions by role and relationship to the resource; a role alone may not always be sufficient for patient data access.
 - Use DTOs with `class-validator` and `class-transformer` at API boundaries.

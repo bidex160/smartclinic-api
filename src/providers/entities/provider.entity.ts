@@ -1,4 +1,5 @@
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { randomBytes } from 'node:crypto';
 
 import { User } from '../../users/entities/user.entity';
 import { ProviderStatus } from '../enums/provider-status.enum';
@@ -11,13 +12,23 @@ import { ProviderBookingReservation } from './provider-booking-reservation.entit
 import { ProviderInvitation } from './provider-invitation.entity';
 import { ProviderOnboardingStatus } from '../enums/provider-onboarding-status.enum';
 import { ProviderType } from '../enums/provider-type.enum';
+import { ProviderCareService } from './provider-care-service.entity';
 
 @Entity('providers')
 @Index('UQ_providers_user_id', ['userId'], { unique: true, where: '"user_id" IS NOT NULL' })
 @Index('UQ_providers_email', ['email'], { unique: true, where: '"email" IS NOT NULL' })
+@Index('UQ_providers_provider_reference', ['providerReference'], { unique: true })
 export class Provider {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  @Column({ name: 'provider_reference', type: 'varchar', length: 45 })
+  providerReference!: string;
+
+  @BeforeInsert()
+  generateProviderReference(): void {
+    if (!this.providerReference) this.providerReference = `SCPR-${randomBytes(16).toString('hex').toUpperCase()}`;
+  }
 
   @Column({ name: 'user_id', type: 'uuid', nullable: true })
   userId!: string | null;
@@ -86,6 +97,9 @@ export class Provider {
 
   @OneToMany(() => ProviderService, (service) => service.provider)
   services!: ProviderService[];
+
+  @OneToMany(() => ProviderCareService, (service) => service.provider)
+  careServices!: ProviderCareService[];
 
   @OneToMany(() => ProviderLocation, (location) => location.provider)
   locations!: ProviderLocation[];
