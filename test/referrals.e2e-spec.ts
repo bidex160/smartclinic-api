@@ -13,7 +13,7 @@ import { RewardWithdrawalsService } from '../src/rewards/reward-withdrawals.serv
 describe('Referral read authorization (e2e)', () => {
   let app: INestApplication;
   const referrals = {
-    summary: jest.fn().mockResolvedValue({ referralCode: 'SC-AB12CD', links: { PATIENT: '/register?ref=SC-AB12CD' }, availablePoints: 10, lifetimeEarnedPoints: 10, currentLevel: null, nextLevel: { code: 'LEVEL_1', name: 'Level 1' }, progress: { patients: { qualified: 1, required: 10 }, clinics: { qualified: 0, required: 2 }, laboratories: { qualified: 0, required: 2 }, pharmacies: { qualified: 0, required: 2 } }, completed: false, registeredDirectReferrals: 1, qualifiedDirectReferrals: 1 }),
+    summary: jest.fn().mockResolvedValue({ referralCode: 'SC-AB12CD', links: { PATIENT: '/register?ref=SC-AB12CD' }, availablePoints: 10, reservedPoints: 0, lifetimeEarnedPoints: 10, lifetimeRedeemedPoints: 0, levelProgress: { currentLevel: null, nextLevel: { code: 'LEVEL_1', name: 'Level 1', ordinal: 1 }, highestLevelAchieved: 0, requirements: [{ targetType: 'PATIENT', qualified: 1, required: 10, remaining: 9, completed: false }], highestConfiguredLevelReached: false, qualifiedCounts: { PATIENT: 1, CLINIC: 0, LABORATORY: 0, PHARMACY: 0 } }, currentLevel: null, nextLevel: { code: 'LEVEL_1', name: 'Level 1' }, progress: { patients: { qualified: 1, required: 10 }, clinics: { qualified: 0, required: 2 }, laboratories: { qualified: 0, required: 2 }, pharmacies: { qualified: 0, required: 2 } }, completed: false, registeredDirectReferrals: 1, qualifiedDirectReferrals: 1 }),
     history: jest.fn().mockResolvedValue({ items: [], page: 1, limit: 20, total: 0, totalPages: 0 }),
     adminHistory: jest.fn().mockResolvedValue({ items: [], page: 1, limit: 20, total: 0, totalPages: 0 }),
   };
@@ -28,7 +28,7 @@ describe('Referral read authorization (e2e)', () => {
   it('allows USER to read only their own derived referral summary', async () => {
     await request(app.getHttpServer()).get('/api/v1/me/referrals').expect(401);
     await request(app.getHttpServer()).get('/api/v1/me/referrals').set('Authorization', 'Bearer provider').expect(403);
-    await request(app.getHttpServer()).get('/api/v1/me/referrals').set('Authorization', 'Bearer user').expect(200).expect((response) => expect(response.body.referralCode).toBe('SC-AB12CD'));
+    await request(app.getHttpServer()).get('/api/v1/me/referrals').set('Authorization', 'Bearer user').expect(200).expect((response) => { expect(response.body.referralCode).toBe('SC-AB12CD'); expect(response.body.levelProgress.nextLevel).toMatchObject({ code: 'LEVEL_1', ordinal: 1 }); });
     expect(referrals.summary).toHaveBeenCalledWith('user-user');
   });
 

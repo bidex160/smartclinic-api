@@ -17,7 +17,7 @@ import { ReferralsService } from './referrals.service';
 import { User } from '../users/entities/user.entity';
 
 describe('ReferralsService', () => {
-  let codes: any[]; let referrals: any[]; let ledger: any[]; let achievements: any[]; let providers: any[]; let completedPatients: Set<string>; let manager: any; let subject: ReferralsService;
+  let codes: any[]; let referrals: any[]; let ledger: any[]; let achievements: any[]; let providers: any[]; let levelDefinitions: any[]; let rewardRules: any[]; let completedPatients: Set<string>; let manager: any; let subject: ReferralsService;
   const referrerUserId = '10000000-0000-4000-8000-000000000001';
 
   beforeEach(() => {
@@ -26,15 +26,16 @@ describe('ReferralsService', () => {
     const requirements = [
       [ReferralTargetType.CLINIC, 2], [ReferralTargetType.LABORATORY, 2], [ReferralTargetType.PHARMACY, 2], [ReferralTargetType.PATIENT, 10],
     ].map(([targetType, requiredCount]) => ({ targetType, requiredCount }));
-    const level = { id: 'level-1', code: 'LEVEL_1', name: 'Level 1', isActive: true, requirements };
-    const rules = [ReferralTargetType.PATIENT, ReferralTargetType.CLINIC, ReferralTargetType.LABORATORY, ReferralTargetType.PHARMACY].map((target) => ({ code: `${target}_QUALIFIED`, points: target === ReferralTargetType.PATIENT ? 10 : 100, isActive: true })).concat([{ code: 'LEVEL_1_COMPLETED', points: 50, isActive: true } as any]);
+    const level = { id: 'level-1', code: 'LEVEL_1', name: 'Level 1', ordinal: 1, isActive: true, requirements };
+    levelDefinitions = [level];
+    rewardRules = [ReferralTargetType.PATIENT, ReferralTargetType.CLINIC, ReferralTargetType.LABORATORY, ReferralTargetType.PHARMACY].map((target) => ({ code: `${target}_QUALIFIED`, points: target === ReferralTargetType.PATIENT ? 10 : 100, isActive: true })).concat([{ code: 'LEVEL_1_COMPLETED', points: 50, isActive: true } as any]);
     const repo = (entity: any): any => {
       if (entity === ReferralCode) return { manager, findOne: jest.fn(async ({ where }: any) => codes.find((row) => (where.userId ? row.userId === where.userId : row.codeNormalized === where.codeNormalized && row.isActive === where.isActive)) ?? null), exists: jest.fn(async ({ where }: any) => codes.some((row) => row.codeNormalized === where.codeNormalized)), create: (value: any) => value, save: jest.fn(async (value) => { const row = { id: value.id ?? `code-${codes.length + 1}`, ...value }; codes.push(row); return row; }) };
       if (entity === Referral) return { manager, findOne: jest.fn(async ({ where }: any) => referrals.find((row) => Object.entries(where).every(([key, value]) => row[key] === value)) ?? null), exists: jest.fn(async ({ where }: any) => referrals.some((row) => row.referredUserId === where.referredUserId)), create: (value: any) => value, save: jest.fn(async (value) => { const row = { id: value.id ?? `referral-${referrals.length + 1}`, createdAt: value.createdAt ?? new Date(), ...value }; const index = referrals.findIndex((item) => item.id === row.id); if (index >= 0) referrals[index] = row; else referrals.push(row); return row; }), createQueryBuilder: () => qualifiedCountsBuilder() };
-      if (entity === RewardRule) return { findOne: jest.fn(async ({ where }: any) => rules.find((row) => row.code === where.code && row.isActive === where.isActive) ?? null) };
+      if (entity === RewardRule) return { findOne: jest.fn(async ({ where }: any) => rewardRules.find((row) => row.code === where.code && row.isActive === where.isActive) ?? null) };
       if (entity === RewardPointsLedger) return { manager, exists: jest.fn(async ({ where }: any) => ledger.some((row) => row.eventKey === where.eventKey)), create: (value: any) => value, save: jest.fn(async (value) => { ledger.push({ id: `entry-${ledger.length + 1}`, ...value }); return value; }), createQueryBuilder: jest.fn() };
-      if (entity === RewardLevelDefinition) return { manager, findOne: jest.fn(async ({ where }: any) => where.code === 'LEVEL_1' ? level : null) };
-      if (entity === RewardLevelAchievement) return { findOne: jest.fn(async ({ where }: any) => achievements.find((row) => row.userId === where.userId && row.levelId === where.levelId) ?? null), create: (value: any) => value, save: jest.fn(async (value) => { achievements.push({ id: `achievement-${achievements.length + 1}`, ...value }); return value; }) };
+      if (entity === RewardLevelDefinition) return { manager, find: jest.fn(async () => levelDefinitions), findOne: jest.fn(async ({ where }: any) => levelDefinitions.find((item) => item.code === where.code) ?? null) };
+      if (entity === RewardLevelAchievement) return { find: jest.fn(async ({ where }: any) => achievements.filter((row) => row.userId === where.userId)), findOne: jest.fn(async ({ where }: any) => achievements.find((row) => row.userId === where.userId && row.levelId === where.levelId) ?? null), create: (value: any) => value, save: jest.fn(async (value) => { const row = { id: `achievement-${achievements.length + 1}`, ...value }; achievements.push(row); return row; }) };
       if (entity === Provider) return { findOne: jest.fn(async ({ where }: any) => providers.find((row) => row.id === where.id) ?? null) };
       if (entity === HealthCheckEncounter) return { createQueryBuilder: () => ({ innerJoin: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), getCount: jest.fn(async () => completedPatients.size ? 1 : 0) }) };
       if (entity === User) return { findOne: jest.fn().mockResolvedValue({ id: referrerUserId }) };
@@ -116,10 +117,69 @@ describe('ReferralsService', () => {
     ledgerBuilder.getRawOne = jest.fn().mockResolvedValue({ available: '270', earned: '300' });
     (subject as any).ledger.createQueryBuilder = jest.fn().mockReturnValue(ledgerBuilder);
     (subject as any).withdrawals.balance.mockResolvedValue({ availablePoints: 270, reservedPoints: 30, lifetimeEarnedPoints: 300, lifetimeRedeemedPoints: 0 });
-    const level = { id: 'level-1', code: 'LEVEL_1', name: 'Level 1', isActive: true, requirements: [{ targetType: ReferralTargetType.PATIENT, requiredCount: 10 }, { targetType: ReferralTargetType.CLINIC, requiredCount: 2 }, { targetType: ReferralTargetType.LABORATORY, requiredCount: 2 }, { targetType: ReferralTargetType.PHARMACY, requiredCount: 2 }] };
-    (subject as any).levels.findOne = jest.fn().mockResolvedValue(level);
+    const level = { id: 'level-1', code: 'LEVEL_1', name: 'Level 1', ordinal: 1, isActive: true, requirements: [{ targetType: ReferralTargetType.PATIENT, requiredCount: 10 }, { targetType: ReferralTargetType.CLINIC, requiredCount: 2 }, { targetType: ReferralTargetType.LABORATORY, requiredCount: 2 }, { targetType: ReferralTargetType.PHARMACY, requiredCount: 2 }] };
+    (subject as any).levels.find = jest.fn().mockResolvedValue([level]);
     const originalGetRepository = manager.getRepository.getMockImplementation();
-    manager.getRepository = jest.fn((entity: any) => entity === RewardLevelAchievement ? { findOne: jest.fn().mockResolvedValue(null) } : entity === Referral ? (subject as any).referrals : originalGetRepository(entity));
+    manager.getRepository = jest.fn((entity: any) => entity === RewardLevelAchievement ? { find: jest.fn().mockResolvedValue([]) } : entity === Referral ? (subject as any).referrals : originalGetRepository(entity));
     await expect(subject.summary(referrerUserId)).resolves.toMatchObject({ referralCode: 'SC-AB12CD', availablePoints: 270, lifetimeEarnedPoints: 300, progress: { patients: { qualified: 7, required: 10 }, clinics: { qualified: 1, required: 2 }, laboratories: { qualified: 2, required: 2 }, pharmacies: { qualified: 0, required: 2 } }, completed: false, registeredDirectReferrals: 12, qualifiedDirectReferrals: 10 });
+  });
+
+  const configureFiveLevels = () => {
+    levelDefinitions = Array.from({ length: 5 }, (_, index) => {
+      const ordinal = index + 1;
+      return { id: `level-${ordinal}`, code: `LEVEL_${ordinal}`, name: `Level ${ordinal}`, ordinal, isActive: true, requirements: [
+        { targetType: ReferralTargetType.PATIENT, requiredCount: ordinal * 10 },
+        { targetType: ReferralTargetType.CLINIC, requiredCount: ordinal * 2 },
+        { targetType: ReferralTargetType.LABORATORY, requiredCount: ordinal * 2 },
+        { targetType: ReferralTargetType.PHARMACY, requiredCount: ordinal * 2 },
+      ] };
+    });
+  };
+
+  const addQualifiedCounts = (patients: number, providersPerType: number) => {
+    const targets = [
+      ...Array(patients).fill(ReferralTargetType.PATIENT),
+      ...Array(providersPerType).fill(ReferralTargetType.CLINIC),
+      ...Array(providersPerType).fill(ReferralTargetType.LABORATORY),
+      ...Array(providersPerType).fill(ReferralTargetType.PHARMACY),
+    ];
+    targets.forEach((targetType, index) => referrals.push({ id: `multi-${index}`, referrerUserId, targetType, status: ReferralStatus.QUALIFIED }));
+  };
+
+  it.each([[1, 10, 2], [2, 20, 4], [3, 30, 6], [4, 40, 8], [5, 50, 10]])('creates cumulative achievements through Level %s', async (expectedLevel, patients, providersPerType) => {
+    configureFiveLevels(); addQualifiedCounts(patients, providersPerType);
+    await subject.recalculateReferralAchievements(referrerUserId);
+    expect(achievements.map((value) => value.levelId)).toEqual(levelDefinitions.slice(0, expectedLevel).map((value) => value.id));
+    await subject.recalculateReferralAchievements(referrerUserId);
+    expect(achievements).toHaveLength(expectedLevel);
+  });
+
+  it('jump-level reconciliation creates every missing consecutive achievement and bonuses only once', async () => {
+    configureFiveLevels(); addQualifiedCounts(30, 6);
+    rewardRules.push({ code: 'LEVEL_3_COMPLETED', points: 75, isActive: true });
+    await subject.recalculateReferralAchievements(referrerUserId);
+    await subject.recalculateReferralAchievements(referrerUserId);
+    expect(achievements.map((value) => value.levelId)).toEqual(['level-1', 'level-2', 'level-3']);
+    expect(ledger.filter((value) => value.eventType === 'LEVEL_3_COMPLETED')).toHaveLength(1);
+    expect(ledger.find((value) => value.eventType === 'LEVEL_3_COMPLETED')).toMatchObject({ points: 75, eventKey: `LEVEL_ACHIEVED:${referrerUserId}:LEVEL_3` });
+  });
+
+  it('reports partial cumulative progress toward Level 3 after Level 2', () => {
+    configureFiveLevels();
+    const counts = new Map([[ReferralTargetType.PATIENT, 25], [ReferralTargetType.CLINIC, 5], [ReferralTargetType.LABORATORY, 4], [ReferralTargetType.PHARMACY, 4]]);
+    const progress = (subject as any).levelProgress(levelDefinitions, [{ levelId: 'level-1' }, { levelId: 'level-2' }], counts);
+    expect(progress).toMatchObject({ currentLevel: { code: 'LEVEL_2', ordinal: 2 }, nextLevel: { code: 'LEVEL_3', ordinal: 3 }, highestLevelAchieved: 2, highestConfiguredLevelReached: false });
+    expect(progress.requirements).toEqual(expect.arrayContaining([
+      { targetType: ReferralTargetType.PATIENT, qualified: 25, required: 30, remaining: 5, completed: false },
+      { targetType: ReferralTargetType.CLINIC, qualified: 5, required: 6, remaining: 1, completed: false },
+      { targetType: ReferralTargetType.LABORATORY, qualified: 4, required: 6, remaining: 2, completed: false },
+    ]));
+  });
+
+  it('reports Level 5 as the highest configured level with no next requirements', () => {
+    configureFiveLevels();
+    const counts = new Map(Object.values(ReferralTargetType).map((target) => [target, 50]));
+    const progress = (subject as any).levelProgress(levelDefinitions, levelDefinitions.map((level) => ({ levelId: level.id })), counts);
+    expect(progress).toMatchObject({ currentLevel: { code: 'LEVEL_5', ordinal: 5 }, nextLevel: null, highestLevelAchieved: 5, requirements: [], highestConfiguredLevelReached: true });
   });
 });

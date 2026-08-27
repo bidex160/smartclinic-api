@@ -2,12 +2,17 @@
 
 SmartClinic referral codes are stable, server-generated identifiers such as `SC-AB12CD`. They are case-normalized, non-sequential, and never authorize account, booking, payment, provider, or clinical-data access.
 
-Level 1 supports direct referrals only:
+Levels 1–5 support direct referrals only. Requirements are cumulative totals, not additional referrals per level:
 
-- 10 qualified patients
-- 2 qualified clinics
-- 2 qualified laboratories
-- 2 qualified pharmacies
+| Level | Patients | Clinics | Laboratories | Pharmacies |
+| --- | ---: | ---: | ---: | ---: |
+| Level 1 | 10 | 2 | 2 | 2 |
+| Level 2 | 20 | 4 | 4 | 4 |
+| Level 3 | 30 | 6 | 6 | 6 |
+| Level 4 | 40 | 8 | 8 | 8 |
+| Level 5 | 50 | 10 | 10 | 10 |
+
+Only referrals made directly by the member count at every level. There are no referral trees, generations, downline counts, inherited rewards, or network commissions.
 
 Referral destinations are represented by frontend-relative links:
 
@@ -22,9 +27,11 @@ An explicit malformed, unknown, inactive, self, or conflicting referral code rej
 
 A patient referral becomes `QUALIFIED` after that Patient's first completed Health Check encounter. Provider referrals qualify only after onboarding is approved and the non-deleted Provider is operationally `ACTIVE` with the authoritative matching provider type. Qualification is historical and happens once; later provider status changes do not automatically revoke it.
 
-Reward amounts come from active `reward_rules`, while the awarded amount is snapshotted as an append-only `reward_points_ledger` entry. Unique business event keys, referral locking, referrer locking, and database uniqueness prevent duplicate referral credits and Level 1 bonuses. Level requirements live in `reward_level_definitions` and `reward_level_requirements`; achievement is persisted once in `reward_level_achievements`.
+Reward amounts come from active `reward_rules`, while the awarded amount is snapshotted as an append-only `reward_points_ledger` entry. Unique business event keys, referral locking, referrer locking, and database uniqueness prevent duplicate referral credits and level bonuses. Level requirements live in `reward_level_definitions` and `reward_level_requirements`; each achievement is persisted once in `reward_level_achievements`. A member satisfying a higher threshold during reconciliation receives every missing consecutive achievement. Level-completion bonus rules exist independently and default to inactive/zero.
 
-`GET /api/v1/me/referrals` returns the member's code, relative links, ledger-derived balance, direct-referral totals, and aggregate Level 1 progress. `GET /api/v1/me/referrals/history` returns only target/status/timestamps/points and no referred Patient health information. Provider dashboards include the same safe reward summary through their linked User. Admin/Operations use `GET /api/v1/admin/referrals` and aggregate dashboard metrics.
+`GET /api/v1/me/referrals` returns the member's code, relative links, ledger-derived balance, direct-referral totals, and `levelProgress` containing the historical current level, next configured level, and next-level requirements. Legacy Level 1-shaped fields remain temporarily for additive compatibility. `GET /api/v1/me/referrals/history` returns only target/status/timestamps/points and no referred Patient health information. Provider dashboards include current/next level and next requirements. Admin dashboard metrics aggregate achievements by configured level.
+
+Achievements are historical once earned and are not automatically downgraded if a referral is later reversed or requirements change. Current direct counts may therefore differ from historical achievement. The internal `recalculateReferralAchievements(userId)` service operation repairs missing achievements without deleting history or duplicating bonus credits. Level 5 is currently the highest configured level.
 
 `reward_conversion_rates` provides configurable points-to-currency conversion without assuming points equal Naira. No rate is seeded until the business approves one.
 

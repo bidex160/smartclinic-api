@@ -22,6 +22,7 @@ class AdminDashboardReferralsDto {
   @ApiProperty() registered!: number;
   @ApiProperty() qualified!: number;
   @ApiProperty() level1Achieved!: number;
+  @ApiProperty({ type: [Object] }) levels!: { code: string; name: string; ordinal: number; achieved: number }[];
   @ApiProperty() pointsIssued!: number;
 }
 

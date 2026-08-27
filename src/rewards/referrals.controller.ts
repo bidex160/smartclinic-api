@@ -15,7 +15,7 @@ import { ReferralsService } from './referrals.service';
 @Controller('me/referrals')
 export class MeReferralsController {
   constructor(private readonly referrals: ReferralsService) {}
-  @Get() @ApiOperation({ summary: 'Get direct-referral links, points balance, and Level 1 progress' }) @ApiOkResponse({ type: ReferralSummaryDto })
+  @Get() @ApiOperation({ summary: 'Get direct-referral links, points balance, and cumulative level progress' }) @ApiOkResponse({ type: ReferralSummaryDto })
   summary(@Req() request: { user: User }) { return this.referrals.summary(request.user.id); }
   @Get('history') @ApiOperation({ summary: 'List safe direct-referral history' })
   history(@Req() request: { user: User }, @Query() query: ReferralHistoryQueryDto) { return this.referrals.history(request.user.id, query); }

@@ -169,19 +169,19 @@ export class ReferralsService {
 
   async summary(userId: string): Promise<ReferralSummaryDto> {
     const code = await this.ensureReferralCode(userId);
-    const [counts, balance, level, achievement, totals] = await Promise.all([
+    const [counts, balance, levels, achievements, totals] = await Promise.all([
       this.qualifiedCounts(userId),
       this.withdrawals.balance(userId),
-      this.levels.findOne({
-        where: { code: "LEVEL_1", isActive: true },
+      this.levels.find({
+        where: { isActive: true },
         relations: { requirements: true },
+        order: { ordinal: "ASC" },
       }),
       this.levels.manager
         .getRepository(RewardLevelAchievement)
-        .findOne({
+        .find({
           where: { userId },
           relations: { level: true },
-          order: { achievedAt: "DESC" },
         }),
       this.referrals
         .createQueryBuilder("referral")
@@ -194,7 +194,9 @@ export class ReferralsService {
         .setParameter("qualified", ReferralStatus.QUALIFIED)
         .getRawOne<{ registered: string; qualified: string }>(),
     ]);
-    const progress = this.progress(level, counts);
+    const levelProgress = this.levelProgress(levels, achievements, counts);
+    const nextDefinition = levels.find((level) => level.code === levelProgress.nextLevel?.code) ?? null;
+    const legacyProgress = this.progress(nextDefinition, counts);
     return {
       referralCode: code.codeNormalized,
       links: {
@@ -204,13 +206,11 @@ export class ReferralsService {
         PHARMACY: `/provider/register?ref=${code.codeNormalized}&type=PHARMACY`,
       },
       ...balance,
-      currentLevel: achievement
-        ? { code: achievement.level.code, name: achievement.level.name }
-        : null,
-      nextLevel:
-        achievement || !level ? null : { code: level.code, name: level.name },
-      progress,
-      completed: Boolean(achievement),
+      levelProgress,
+      currentLevel: levelProgress.currentLevel ? { code: levelProgress.currentLevel.code, name: levelProgress.currentLevel.name } : null,
+      nextLevel: levelProgress.nextLevel ? { code: levelProgress.nextLevel.code, name: levelProgress.nextLevel.name } : null,
+      progress: legacyProgress,
+      completed: levelProgress.highestLevelAchieved > 0,
       registeredDirectReferrals: Number(totals?.registered ?? 0),
       qualifiedDirectReferrals: Number(totals?.qualified ?? 0),
     };
@@ -317,9 +317,10 @@ export class ReferralsService {
     registered: number;
     qualified: number;
     level1Achieved: number;
+    levels: { code: string; name: string; ordinal: number; achieved: number }[];
     pointsIssued: number;
   }> {
-    const [referrals, levels, points] = await Promise.all([
+    const [referrals, levelRows, points] = await Promise.all([
       this.referrals
         .createQueryBuilder("referral")
         .select("COUNT(*)", "registered")
@@ -329,12 +330,20 @@ export class ReferralsService {
         )
         .setParameter("qualified", ReferralStatus.QUALIFIED)
         .getRawOne<{ registered: string; qualified: string }>(),
-      this.levels.manager
-        .getRepository(RewardLevelAchievement)
-        .createQueryBuilder("achievement")
-        .innerJoin("achievement.level", "level")
-        .where("level.code = :code", { code: "LEVEL_1" })
-        .getCount(),
+      this.levels
+        .createQueryBuilder("level")
+        .leftJoin("reward_level_achievements", "achievement", "achievement.level_id = level.id")
+        .select("level.code", "code")
+        .addSelect("level.name", "name")
+        .addSelect("level.ordinal", "ordinal")
+        .addSelect("COUNT(achievement.id)", "achieved")
+        .where("level.isActive = true")
+        .groupBy("level.id")
+        .addGroupBy("level.code")
+        .addGroupBy("level.name")
+        .addGroupBy("level.ordinal")
+        .orderBy("level.ordinal", "ASC")
+        .getRawMany<{ code: string; name: string; ordinal: string; achieved: string }>(),
       this.ledger
         .createQueryBuilder("entry")
         .select(
@@ -344,10 +353,12 @@ export class ReferralsService {
         .setParameter("credit", RewardLedgerDirection.CREDIT)
         .getRawOne<{ points: string }>(),
     ]);
+    const levelMetrics = levelRows.map((row) => ({ code: row.code, name: row.name, ordinal: Number(row.ordinal), achieved: Number(row.achieved) }));
     return {
       registered: Number(referrals?.registered ?? 0),
       qualified: Number(referrals?.qualified ?? 0),
-      level1Achieved: levels,
+      level1Achieved: levelMetrics.find((level) => level.code === "LEVEL_1")?.achieved ?? 0,
+      levels: levelMetrics,
       pointsIssued: Number(points?.points ?? 0),
     };
   }
@@ -428,52 +439,48 @@ export class ReferralsService {
       ruleCode,
       rule.points,
     );
-    await this.evaluateLevelOne(manager, referral.referrerUserId);
+    await this.evaluateAchievements(manager, referral.referrerUserId);
   }
 
-  private async evaluateLevelOne(
+  async recalculateReferralAchievements(userId: string): Promise<void> {
+    await this.referrals.manager.transaction(async (manager) => {
+      const user = await manager.getRepository(User).findOne({ where: { id: userId }, lock: { mode: "pessimistic_write" } });
+      if (!user) throw new BadRequestException("User does not exist");
+      await this.evaluateAchievements(manager, userId);
+    });
+  }
+
+  private async evaluateAchievements(
     manager: EntityManager,
     userId: string,
   ): Promise<void> {
-    const level = await manager
+    const levels = await manager
       .getRepository(RewardLevelDefinition)
-      .findOne({
-        where: { code: "LEVEL_1", isActive: true },
+      .find({
+        where: { isActive: true },
         relations: { requirements: true },
+        order: { ordinal: "ASC" },
       });
-    if (!level) return;
+    if (!levels.length) return;
     const existing = await manager
       .getRepository(RewardLevelAchievement)
-      .findOne({ where: { userId, levelId: level.id } });
-    if (existing) return;
+      .find({ where: { userId } });
+    const achieved = new Set(existing.map((value) => value.levelId));
     const counts = await this.qualifiedCounts(userId, manager);
-    if (
-      !level.requirements.every(
+    for (const level of levels) {
+      const satisfied = level.requirements.length > 0 && level.requirements.every(
         (requirement) =>
           (counts.get(requirement.targetType) ?? 0) >=
           requirement.requiredCount,
-      )
-    )
-      return;
-    await manager
-      .getRepository(RewardLevelAchievement)
-      .save(
-        manager
-          .getRepository(RewardLevelAchievement)
-          .create({ userId, levelId: level.id }),
       );
-    const bonus = await manager
-      .getRepository(RewardRule)
-      .findOne({ where: { code: "LEVEL_1_COMPLETED", isActive: true } });
-    if (bonus?.points && bonus.points > 0)
-      await this.credit(
-        manager,
-        userId,
-        null,
-        `LEVEL_ACHIEVED:${level.code}:${userId}`,
-        "LEVEL_1_COMPLETED",
-        bonus.points,
-      );
+      if (!satisfied) break;
+      if (achieved.has(level.id)) continue;
+      await manager.getRepository(RewardLevelAchievement).save(manager.getRepository(RewardLevelAchievement).create({ userId, levelId: level.id }));
+      achieved.add(level.id);
+      const bonusCode = `${level.code}_COMPLETED`;
+      const bonus = await manager.getRepository(RewardRule).findOne({ where: { code: bonusCode, isActive: true } });
+      if (bonus?.points && bonus.points > 0) await this.credit(manager, userId, null, `LEVEL_ACHIEVED:${userId}:${level.code}`, bonusCode, bonus.points);
+    }
   }
 
   private async credit(
@@ -533,6 +540,26 @@ export class ReferralsService {
       clinics: value(ReferralTargetType.CLINIC),
       laboratories: value(ReferralTargetType.LABORATORY),
       pharmacies: value(ReferralTargetType.PHARMACY),
+    };
+  }
+
+  private levelProgress(levels: RewardLevelDefinition[], achievements: RewardLevelAchievement[], counts: Map<ReferralTargetType, number>) {
+    const ordered = [...levels].sort((a, b) => a.ordinal - b.ordinal);
+    const achievedIds = new Set(achievements.map((achievement) => achievement.levelId));
+    const historical = ordered.filter((level) => achievedIds.has(level.id));
+    const current = historical.length ? historical[historical.length - 1] : null;
+    const next = ordered.find((level) => !current || level.ordinal > current.ordinal) ?? null;
+    const summary = (level: RewardLevelDefinition | null) => level ? { code: level.code, name: level.name, ordinal: level.ordinal } : null;
+    return {
+      currentLevel: summary(current),
+      nextLevel: summary(next),
+      highestLevelAchieved: current?.ordinal ?? 0,
+      requirements: next ? [...next.requirements].sort((a, b) => a.targetType.localeCompare(b.targetType)).map((requirement) => {
+        const qualified = counts.get(requirement.targetType) ?? 0;
+        return { targetType: requirement.targetType, qualified, required: requirement.requiredCount, remaining: Math.max(requirement.requiredCount - qualified, 0), completed: qualified >= requirement.requiredCount };
+      }) : [],
+      highestConfiguredLevelReached: Boolean(current && !next),
+      qualifiedCounts: Object.fromEntries(Object.values(ReferralTargetType).map((target) => [target, counts.get(target) ?? 0])) as Record<ReferralTargetType, number>,
     };
   }
 

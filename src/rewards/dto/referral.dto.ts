@@ -16,6 +16,29 @@ export class ReferralLevelProgressDto {
   @ApiProperty({ type: ReferralTargetProgressDto }) pharmacies!: ReferralTargetProgressDto;
 }
 
+export class ReferralLevelRequirementProgressDto {
+  @ApiProperty({ enum: ReferralTargetType }) targetType!: ReferralTargetType;
+  @ApiProperty() qualified!: number;
+  @ApiProperty() required!: number;
+  @ApiProperty() remaining!: number;
+  @ApiProperty() completed!: boolean;
+}
+
+export class ReferralLevelSummaryDto {
+  @ApiProperty() code!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty() ordinal!: number;
+}
+
+export class MultiLevelReferralProgressDto {
+  @ApiPropertyOptional({ nullable: true, type: ReferralLevelSummaryDto }) currentLevel!: ReferralLevelSummaryDto | null;
+  @ApiPropertyOptional({ nullable: true, type: ReferralLevelSummaryDto }) nextLevel!: ReferralLevelSummaryDto | null;
+  @ApiProperty() highestLevelAchieved!: number;
+  @ApiProperty({ type: [ReferralLevelRequirementProgressDto] }) requirements!: ReferralLevelRequirementProgressDto[];
+  @ApiProperty() highestConfiguredLevelReached!: boolean;
+  @ApiProperty({ type: Object }) qualifiedCounts!: Record<ReferralTargetType, number>;
+}
+
 export class ReferralSummaryDto {
   @ApiProperty() referralCode!: string;
   @ApiProperty({ type: Object }) links!: Record<ReferralTargetType, string>;
@@ -23,8 +46,12 @@ export class ReferralSummaryDto {
   @ApiProperty() reservedPoints!: number;
   @ApiProperty() lifetimeEarnedPoints!: number;
   @ApiProperty() lifetimeRedeemedPoints!: number;
+  @ApiProperty({ type: MultiLevelReferralProgressDto }) levelProgress!: MultiLevelReferralProgressDto;
+  /** @deprecated Use levelProgress.currentLevel. */
   @ApiPropertyOptional({ nullable: true }) currentLevel!: { code: string; name: string } | null;
+  /** @deprecated Use levelProgress.nextLevel. */
   @ApiPropertyOptional({ nullable: true }) nextLevel!: { code: string; name: string } | null;
+  /** @deprecated Use levelProgress.requirements. */
   @ApiProperty({ type: ReferralLevelProgressDto }) progress!: ReferralLevelProgressDto;
   @ApiProperty() completed!: boolean;
   @ApiProperty() registeredDirectReferrals!: number;

@@ -37,12 +37,15 @@ export class ProviderDashboardService {
       healthChecks: { inProgress, completed },
       referrals: {
         availablePoints: referralSummary.availablePoints,
-        currentLevel: referralSummary.currentLevel,
-        nextLevel: referralSummary.nextLevel,
-        qualifiedPatients: referralSummary.progress.patients.qualified,
-        qualifiedClinics: referralSummary.progress.clinics.qualified,
-        qualifiedLaboratories: referralSummary.progress.laboratories.qualified,
-        qualifiedPharmacies: referralSummary.progress.pharmacies.qualified,
+        reservedPoints: referralSummary.reservedPoints,
+        currentLevel: referralSummary.levelProgress.currentLevel,
+        nextLevel: referralSummary.levelProgress.nextLevel,
+        nextLevelRequirements: referralSummary.levelProgress.requirements,
+        highestConfiguredLevelReached: referralSummary.levelProgress.highestConfiguredLevelReached,
+        qualifiedPatients: referralSummary.levelProgress.qualifiedCounts.PATIENT,
+        qualifiedClinics: referralSummary.levelProgress.qualifiedCounts.CLINIC,
+        qualifiedLaboratories: referralSummary.levelProgress.qualifiedCounts.LABORATORY,
+        qualifiedPharmacies: referralSummary.levelProgress.qualifiedCounts.PHARMACY,
       },
     };
   }

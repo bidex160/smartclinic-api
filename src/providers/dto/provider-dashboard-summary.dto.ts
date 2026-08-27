@@ -16,8 +16,11 @@ class ProviderDashboardHealthChecksDto {
 
 class ProviderDashboardReferralsDto {
   @ApiProperty() availablePoints!: number;
-  @ApiProperty({ nullable: true }) currentLevel!: { code: string; name: string } | null;
-  @ApiProperty({ nullable: true }) nextLevel!: { code: string; name: string } | null;
+  @ApiProperty() reservedPoints!: number;
+  @ApiProperty({ nullable: true }) currentLevel!: { code: string; name: string; ordinal: number } | null;
+  @ApiProperty({ nullable: true }) nextLevel!: { code: string; name: string; ordinal: number } | null;
+  @ApiProperty({ type: [Object] }) nextLevelRequirements!: { targetType: string; qualified: number; required: number; remaining: number; completed: boolean }[];
+  @ApiProperty() highestConfiguredLevelReached!: boolean;
   @ApiProperty() qualifiedPatients!: number;
   @ApiProperty() qualifiedClinics!: number;
   @ApiProperty() qualifiedLaboratories!: number;
