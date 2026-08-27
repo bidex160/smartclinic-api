@@ -10,6 +10,7 @@ import { CareServiceDefinition } from './care-service-definition.entity';
 @Index('IDX_provider_care_services_provider_active', ['providerId', 'isActive'])
 @Check('CHK_provider_care_services_price_minor', '"price_minor" IS NULL OR "price_minor" >= 0')
 @Check('CHK_provider_care_services_price_currency', '("price_minor" IS NULL AND "currency" IS NULL) OR ("price_minor" IS NOT NULL AND "currency" IS NOT NULL)')
+@Check('CHK_provider_care_services_fasttrack_fee', '("supports_fast_track" = false AND "fast_track_fee_minor" IS NULL AND "fast_track_currency" IS NULL) OR ("supports_fast_track" = true AND "fast_track_fee_minor" > 0 AND "fast_track_currency" IS NOT NULL)')
 export class ProviderCareService {
   @PrimaryGeneratedColumn('uuid') id!: string;
   @Column({ name: 'provider_id', type: 'uuid' }) providerId!: string;
@@ -20,6 +21,9 @@ export class ProviderCareService {
   @Column({ name: 'price_minor', type: 'bigint', nullable: true }) priceMinor!: string | null;
   @Column({ type: 'char', length: 3, nullable: true }) currency!: string | null;
   @Column({ name: 'supports_appointment_requests', type: 'boolean', default: true }) supportsAppointmentRequests!: boolean;
+  @Column({ name: 'supports_fast_track', type: 'boolean', default: false }) supportsFastTrack!: boolean;
+  @Column({ name: 'fast_track_fee_minor', type: 'bigint', nullable: true }) fastTrackFeeMinor!: string | null;
+  @Column({ name: 'fast_track_currency', type: 'char', length: 3, nullable: true }) fastTrackCurrency!: string | null;
   @Column({ name: 'is_active', type: 'boolean', default: true }) isActive!: boolean;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;

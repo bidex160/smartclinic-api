@@ -31,6 +31,12 @@ describe('ProviderCareServicesService', () => {
     await expect(subject.createForProvider(provider.id, { careServiceDefinitionId: definition.id })).resolves.toMatchObject({ priceMinor: null, currency: null });
   });
 
+  it('requires a positive server-owned FastTrack fee/currency pair', async () => {
+    await expect(subject.createForProvider(provider.id, { careServiceDefinitionId: definition.id, supportsFastTrack: true })).rejects.toBeInstanceOf(ConflictException);
+    await expect(subject.createForProvider(provider.id, { careServiceDefinitionId: definition.id, supportsFastTrack: false, fastTrackFeeMinor: 500000, fastTrackCurrency: 'NGN' })).rejects.toBeInstanceOf(ConflictException);
+    await expect(subject.createForProvider(provider.id, { careServiceDefinitionId: definition.id, supportsFastTrack: true, fastTrackFeeMinor: 500000, fastTrackCurrency: 'NGN' })).resolves.toMatchObject({ supportsFastTrack: true, fastTrackFeeMinor: '500000', fastTrackCurrency: 'NGN' });
+  });
+
   it('uses provider-scoped lookup so another provider cannot mutate a service', async () => {
     services.findOne.mockResolvedValue(null);
     await expect(subject.updateForProvider('other-provider', 'service-1', { description: 'changed' })).rejects.toBeInstanceOf(NotFoundException);

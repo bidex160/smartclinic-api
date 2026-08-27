@@ -14,6 +14,7 @@ import {
 
 import { PaymentAttemptStatus } from "../enums/payment-attempt-status.enum";
 import { PaymentTransaction } from "./payment-transaction.entity";
+import { FastTrackRequest } from '../../fasttrack/entities/fasttrack-request.entity';
 
 @Entity("payment_attempts")
 @Index("UQ_payment_attempts_idempotency_key", ["idempotencyKey"], {
@@ -25,20 +26,25 @@ import { PaymentTransaction } from "./payment-transaction.entity";
   { unique: true, where: '"provider_reference" IS NOT NULL' },
 )
 @Index("IDX_payment_attempts_funding_status", ["bookingFundingId", "status"])
+@Index("IDX_payment_attempts_fasttrack_status", ["fastTrackRequestId", "status"])
+@Check('CHK_payment_attempts_obligation', '("booking_funding_id" IS NOT NULL AND "fasttrack_request_id" IS NULL) OR ("booking_funding_id" IS NULL AND "fasttrack_request_id" IS NOT NULL)')
 @Check("CHK_payment_attempts_amount_non_negative", '"amount" >= 0')
 @Check("CHK_payment_attempts_currency_format", "\"currency\" ~ '^[A-Z]{3}$'")
 export class PaymentAttempt {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ name: "booking_funding_id", type: "uuid" })
-  bookingFundingId!: string;
+  @Column({ name: "booking_funding_id", type: "uuid", nullable: true })
+  bookingFundingId!: string | null;
 
   @ManyToOne(() => BookingFunding, (funding) => funding.paymentAttempts, {
-    onDelete: "RESTRICT",
+    nullable: true, onDelete: "RESTRICT",
   })
   @JoinColumn({ name: "booking_funding_id" })
-  bookingFunding!: BookingFunding;
+  bookingFunding!: BookingFunding | null;
+
+  @Column({ name: 'fasttrack_request_id', type: 'uuid', nullable: true }) fastTrackRequestId!: string | null;
+  @ManyToOne(() => FastTrackRequest, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'fasttrack_request_id' }) fastTrackRequest!: FastTrackRequest | null;
 
   @Column({ type: "numeric", precision: 12, scale: 2 })
   amount!: string;

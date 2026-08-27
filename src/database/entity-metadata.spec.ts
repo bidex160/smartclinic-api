@@ -91,10 +91,11 @@ describe('entity metadata', () => {
     for (const [entity, propertyName] of [
       [Booking, 'participantPatientId'],
       [BookingFunding, 'bookingId'],
-      [PaymentAttempt, 'bookingFundingId'],
     ] as const) {
       expect(findColumn(entity, propertyName)?.options.nullable).not.toBe(true);
     }
+    expect(findColumn(PaymentAttempt, 'bookingFundingId')).toMatchObject({ options: { nullable: true } });
+    expect(findColumn(PaymentAttempt, 'fastTrackRequestId')).toMatchObject({ options: { nullable: true } });
     expect(findColumn(PaymentTransaction, 'paymentAttemptId')).toMatchObject({ options: { nullable: true } });
   });
 

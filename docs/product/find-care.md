@@ -33,3 +33,6 @@ Public provider responses use the immutable server-generated `providerReference`
 A null service price means price on request. Otherwise the amount is stored and returned in integer minor units with an ISO-style three-letter currency. SmartClinic does not assume uniform Provider pricing.
 
 Care Requests, appointment processing, FastTrack flags/requests, queue behavior, private access codes, and Find Care payments remain deferred.
+# FastTrack discovery
+
+An active public provider-service offering may advertise `supportsFastTrack`, `fastTrackFeeMinor`, and `fastTrackCurrency`. These values describe administrative-priority eligibility and pricing only; they do not promise clinical queue priority. See [FastTrack foundation](fasttrack.md).

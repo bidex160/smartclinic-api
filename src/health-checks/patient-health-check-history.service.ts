@@ -36,7 +36,7 @@ export class PatientHealthCheckHistoryService {
     const fundingIds = fundingRows.map((value) => value.id); const attemptRows = fundingIds.length ? await this.attempts.find({ where: { bookingFundingId: In(fundingIds) }, order: { createdAt: 'DESC', id: 'DESC' } }) : [];
     const encounterByBooking = new Map(encounters.map((encounter) => [encounter.bookingId, encounter])); const providerByBooking = new Map<string, string>();
     for (const assignment of assignments) if (!providerByBooking.has(assignment.bookingId)) providerByBooking.set(assignment.bookingId, assignment.provider.displayName);
-    const fundingByBooking = new Map(fundingRows.map((value) => [value.bookingId, value])); const attemptByFunding = new Map<string, PaymentAttempt>(); for (const attempt of attemptRows) if (!attemptByFunding.has(attempt.bookingFundingId)) attemptByFunding.set(attempt.bookingFundingId, attempt);
+    const fundingByBooking = new Map(fundingRows.map((value) => [value.bookingId, value])); const attemptByFunding = new Map<string, PaymentAttempt>(); for (const attempt of attemptRows) if (attempt.bookingFundingId && !attemptByFunding.has(attempt.bookingFundingId)) attemptByFunding.set(attempt.bookingFundingId, attempt);
     return { items: bookings.map((booking) => { const funding = fundingByBooking.get(booking.id) ?? null; return this.map(booking, encounterByBooking.get(booking.id) ?? null, providerByBooking.get(booking.id) ?? null, funding, funding ? attemptByFunding.get(funding.id) ?? null : null); }), page: query.page, limit: query.limit, total, totalPages: total === 0 ? 0 : Math.ceil(total / query.limit) };
   }
 

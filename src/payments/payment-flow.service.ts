@@ -43,6 +43,9 @@ import { RewardBookingRedemptionStatus } from "../rewards/enums/reward-booking-r
 import { RewardLedgerDirection } from "../rewards/enums/reward-ledger-direction.enum";
 import { RewardWithdrawalsService } from "../rewards/reward-withdrawals.service";
 import { User } from "../users/entities/user.entity";
+import { FastTrackRequest } from '../fasttrack/entities/fasttrack-request.entity';
+import { FastTrackRequestStatusHistory } from '../fasttrack/entities/fasttrack-request-status-history.entity';
+import { FastTrackStatus } from '../fasttrack/enums/fasttrack-status.enum';
 
 @Injectable()
 export class PaymentFlowService {
@@ -238,6 +241,7 @@ export class PaymentFlowService {
       relations: { bookingFunding: { booking: true } },
     });
     if (existing) {
+      if (!existing.bookingFunding) throw new ConflictException('Idempotency key belongs to a different payment obligation');
       if (existing.bookingFunding.booking.bookingReference !== reference)
         throw new ConflictException(
           "Idempotency key belongs to a different booking",
@@ -347,6 +351,7 @@ export class PaymentFlowService {
       relations: { bookingFunding: { booking: true } },
     });
     if (!current) throw new NotFoundException("Payment attempt not found");
+    if (!current.bookingFunding) throw new ConflictException('Payment attempt does not belong to booking funding');
     if (current.status === PaymentAttemptStatus.SUCCEEDED) {
       await this.ensureMatchingStarted(current.bookingFunding.booking);
       return this.response(
@@ -383,8 +388,80 @@ export class PaymentFlowService {
       where: { providerCode, providerReference },
     });
     if (!attempt) throw new NotFoundException("Payment attempt not found");
+    if (attempt.fastTrackRequestId) return this.applyFastTrackVerification(attempt.id, null, verified) as never;
     return this.applyVerification(attempt.id, null, verified);
   }
+
+  async initializeFastTrackPayment(reference: string, userId: string) {
+    const existingRequest = await this.bookings.manager.getRepository(FastTrackRequest).findOne({ where: { reference, userId }, relations: { user: true } });
+    if (!existingRequest) throw new NotFoundException('FastTrack request was not found');
+    if (![FastTrackStatus.READY_FOR_PAYMENT, FastTrackStatus.PAYMENT_PENDING].includes(existingRequest.status)) throw new ConflictException('FastTrack request is not ready for payment');
+    const active = await this.attempts.findOne({ where: { fastTrackRequestId: existingRequest.id, status: In([PaymentAttemptStatus.CREATED, PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION, PaymentAttemptStatus.PENDING_CONFIRMATION]) }, order: { createdAt: 'DESC' } });
+    if (active) return this.fastTrackPaymentResponse(existingRequest, active);
+    if (!existingRequest.user?.email || !isEmail(existingRequest.user.email)) throw new BadRequestException('A valid account email is required to initialize payment');
+    const idempotencyKey = `FASTTRACK-${randomBytes(16).toString('hex')}`;
+    const paymentReference = `SC-PAY-${randomBytes(12).toString('hex')}`;
+    const initialized = await this.provider.initializePayment({ amount: this.fromMinor(BigInt(existingRequest.feeMinor)), currency: existingRequest.currency, idempotencyKey, bookingReference: reference, customerEmail: existingRequest.user.email, paymentReference, callbackUrl: this.callbackUrl(reference, true) });
+    return this.bookings.manager.transaction(async (manager) => {
+      const request = await manager.getRepository(FastTrackRequest).findOne({ where: { id: existingRequest.id, userId }, lock: { mode: 'pessimistic_write' } });
+      if (!request || request.status !== FastTrackStatus.READY_FOR_PAYMENT) throw new ConflictException('FastTrack request is no longer ready for payment');
+      const attemptRepo = manager.getRepository(PaymentAttempt);
+      const raced = await attemptRepo.findOne({ where: { fastTrackRequestId: request.id, status: In([PaymentAttemptStatus.CREATED, PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION, PaymentAttemptStatus.PENDING_CONFIRMATION]) } });
+      if (raced) return this.fastTrackPaymentResponse(request, raced);
+      const attempt = await attemptRepo.save(attemptRepo.create({ bookingFundingId: null, fastTrackRequestId: request.id, amount: this.fromMinor(BigInt(request.feeMinor)), currency: request.currency, status: initialized.status, idempotencyKey, providerCode: initialized.providerCode, providerReference: initialized.providerReference, checkoutUrl: initialized.checkoutUrl, accessCode: initialized.accessCode }));
+      const from = request.status; request.status = FastTrackStatus.PAYMENT_PENDING; await manager.getRepository(FastTrackRequest).save(request);
+      const history = manager.getRepository(FastTrackRequestStatusHistory); await history.save(history.create({ fastTrackRequestId: request.id, fromStatus: from, toStatus: request.status, actorUserId: userId, reasonCode: 'PAYMENT_INITIALIZED', reasonNote: null }));
+      return this.fastTrackPaymentResponse(request, attempt);
+    });
+  }
+
+  async getFastTrackPaymentStatus(reference: string, userId: string) {
+    const request = await this.bookings.manager.getRepository(FastTrackRequest).findOne({ where: { reference, userId } });
+    if (!request) throw new NotFoundException('FastTrack request was not found');
+    const attempt = await this.attempts.findOne({ where: { fastTrackRequestId: request.id }, order: { createdAt: 'DESC' } });
+    return this.fastTrackPaymentResponse(request, attempt);
+  }
+
+  async verifyFastTrackPayment(reference: string, userId: string) {
+    const request = await this.bookings.manager.getRepository(FastTrackRequest).findOne({ where: { reference, userId } });
+    if (!request) throw new NotFoundException('FastTrack request was not found');
+    const attempt = await this.attempts.findOne({ where: { fastTrackRequestId: request.id }, order: { createdAt: 'DESC' } });
+    if (!attempt) throw new ConflictException('No FastTrack payment attempt is available to verify');
+    if (attempt.status !== PaymentAttemptStatus.SUCCEEDED) {
+      if (!attempt.providerReference) throw new ConflictException('Payment attempt has no provider reference');
+      await this.claimVerification(attempt.id);
+      const verified = await this.provider.verifyPayment(attempt.providerReference);
+      await this.applyFastTrackVerification(attempt.id, userId, verified);
+    }
+    return this.getFastTrackPaymentStatus(reference, userId);
+  }
+
+  private async applyFastTrackVerification(attemptId: string, actorUserId: string | null, verified: VerifyPaymentResult) {
+    return this.bookings.manager.transaction(async (manager) => {
+      const attemptRepo = manager.getRepository(PaymentAttempt);
+      const attempt = await attemptRepo.findOne({ where: { id: attemptId }, lock: { mode: 'pessimistic_write' } });
+      if (!attempt?.fastTrackRequestId) throw new NotFoundException('FastTrack payment attempt was not found');
+      const requestRepo = manager.getRepository(FastTrackRequest);
+      const request = await requestRepo.findOne({ where: { id: attempt.fastTrackRequestId }, lock: { mode: 'pessimistic_write' } });
+      if (!request) throw new NotFoundException('FastTrack request was not found');
+      if (attempt.status === PaymentAttemptStatus.SUCCEEDED) return this.fastTrackPaymentResponse(request, attempt);
+      if (![FastTrackStatus.READY_FOR_PAYMENT, FastTrackStatus.PAYMENT_PENDING].includes(request.status)) throw new ConflictException('FastTrack request is no longer payable');
+      const expectedAmount = this.fromMinor(BigInt(request.feeMinor));
+      if (verified.providerReference !== attempt.providerReference || verified.amount !== attempt.amount || verified.currency !== attempt.currency || attempt.amount !== expectedAmount || attempt.currency !== request.currency) { attempt.status = PaymentAttemptStatus.FAILED; await attemptRepo.save(attempt); return this.fastTrackPaymentResponse(request, attempt); }
+      if (!verified.succeeded || verified.status !== PaymentAttemptStatus.SUCCEEDED) { attempt.status = verified.status; await attemptRepo.save(attempt); return this.fastTrackPaymentResponse(request, attempt); }
+      const transactions = manager.getRepository(PaymentTransaction);
+      const duplicate = await transactions.findOne({ where: { providerReference: verified.providerReference } });
+      if (duplicate && duplicate.paymentAttemptId !== attempt.id) throw new ConflictException('Verified provider transaction belongs to another payment attempt');
+      if (!duplicate) await transactions.save(transactions.create({ paymentAttemptId: attempt.id, parentTransactionId: null, transactionType: PaymentTransactionType.COLLECTION, status: PaymentTransactionStatus.SUCCEEDED, amount: verified.amount, currency: verified.currency, providerReference: verified.providerReference, occurredAt: verified.occurredAt }));
+      attempt.status = PaymentAttemptStatus.SUCCEEDED; await attemptRepo.save(attempt);
+      const history = manager.getRepository(FastTrackRequestStatusHistory);
+      const from = request.status; request.status = FastTrackStatus.PAID; request.paidAt = verified.occurredAt; await requestRepo.save(request); await history.save(history.create({ fastTrackRequestId: request.id, fromStatus: from, toStatus: FastTrackStatus.PAID, actorUserId, reasonCode: 'PAYMENT_CONFIRMED', reasonNote: null }));
+      request.status = FastTrackStatus.CONFIRMED; request.confirmedAt = new Date(); await requestRepo.save(request); await history.save(history.create({ fastTrackRequestId: request.id, fromStatus: FastTrackStatus.PAID, toStatus: FastTrackStatus.CONFIRMED, actorUserId: null, reasonCode: 'AUTOMATIC_CONFIRMATION_AFTER_PAYMENT', reasonNote: null }));
+      return this.fastTrackPaymentResponse(request, attempt);
+    });
+  }
+
+  private fastTrackPaymentResponse(request: FastTrackRequest, attempt: PaymentAttempt | null) { return { fastTrackReference: request.reference, fastTrackStatus: request.status, feeMinor: Number(request.feeMinor), amount: this.fromMinor(BigInt(request.feeMinor)), currency: request.currency, paymentReady: request.status === FastTrackStatus.READY_FOR_PAYMENT, paymentAttemptStatus: attempt?.status ?? null, paymentReference: attempt?.providerReference ?? null, checkoutUrl: attempt?.checkoutUrl ?? null, accessCode: attempt?.accessCode ?? null, paidAt: request.paidAt }; }
 
   async getPublicPaymentStatus(
     reference: string,
@@ -448,6 +525,7 @@ private async applyVerification(
     if (!attempt) {
       throw new NotFoundException("Payment attempt not found");
     }
+    if (!attempt.bookingFundingId) throw new ConflictException('Payment attempt does not belong to booking funding');
 
     // Lock the funding row separately.
     const funding = await fundingRepository.findOne({

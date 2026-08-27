@@ -7,7 +7,7 @@ import { CareRequest } from './entities/care-request.entity';
 import { CareRequestStatusHistory } from './entities/care-request-status-history.entity';
 import { AdminCareRequestsController, MeCareRequestsController, ProviderCareRequestsController } from './care-requests.controller';
 import { CareRequestsService } from './care-requests.service';
-import { User } from 'src/users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [AuthModule, ProvidersModule, TypeOrmModule.forFeature([CareRequest, CareRequestStatusHistory, Patient, User])],

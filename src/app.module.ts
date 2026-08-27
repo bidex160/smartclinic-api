@@ -16,6 +16,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { CareRequestsModule } from './care-requests/care-requests.module';
+import { FastTrackModule } from './fasttrack/fasttrack.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -30,6 +31,7 @@ const persistenceDomainModules = configuration.database.enabled
       AuthModule,
       RewardsModule,
       CareRequestsModule,
+      FastTrackModule,
     ]
   : [];
 

@@ -19,6 +19,9 @@ export class CreateProviderCareServiceDto {
   @ApiPropertyOptional({ nullable: true, description: 'Integer minor units; null means price on request.' }) @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(Number.MAX_SAFE_INTEGER) priceMinor?: number | null;
   @ApiPropertyOptional({ nullable: true, example: 'NGN' }) @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @IsOptional() @Matches(/^[A-Z]{3}$/) currency?: string | null;
   @ApiPropertyOptional({ default: true }) @IsOptional() @IsBoolean() supportsAppointmentRequests?: boolean;
+  @ApiPropertyOptional({ default: false }) @IsOptional() @IsBoolean() supportsFastTrack?: boolean;
+  @ApiPropertyOptional({ nullable: true, description: 'FastTrack fee in integer minor units.' }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) fastTrackFeeMinor?: number | null;
+  @ApiPropertyOptional({ nullable: true, example: 'NGN' }) @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @IsOptional() @Matches(/^[A-Z]{3}$/) fastTrackCurrency?: string | null;
 }
 
 export class UpdateProviderCareServiceDto {
@@ -26,6 +29,9 @@ export class UpdateProviderCareServiceDto {
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(Number.MAX_SAFE_INTEGER) priceMinor?: number | null;
   @ApiPropertyOptional({ nullable: true }) @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @IsOptional() @Matches(/^[A-Z]{3}$/) currency?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() supportsAppointmentRequests?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() supportsFastTrack?: boolean;
+  @ApiPropertyOptional({ nullable: true }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) fastTrackFeeMinor?: number | null;
+  @ApiPropertyOptional({ nullable: true }) @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @IsOptional() @Matches(/^[A-Z]{3}$/) fastTrackCurrency?: string | null;
 }
 
 export class FindCareQueryDto {
@@ -63,6 +69,9 @@ export class PublicProviderCareServiceDto {
   @ApiPropertyOptional({ nullable: true }) currency!: string | null;
   @ApiProperty() priceOnRequest!: boolean;
   @ApiProperty() supportsAppointmentRequests!: boolean;
+  @ApiProperty() supportsFastTrack!: boolean;
+  @ApiPropertyOptional({ nullable: true }) fastTrackFeeMinor!: number | null;
+  @ApiPropertyOptional({ nullable: true }) fastTrackCurrency!: string | null;
 }
 
 export class PublicProviderLocationDto {

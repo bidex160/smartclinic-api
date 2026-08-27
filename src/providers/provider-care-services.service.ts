@@ -52,7 +52,8 @@ export class ProviderCareServicesService {
     if (!definition) throw new ConflictException('Care service definition is not active');
     if (await this.services.exists({ where: { providerId, careServiceDefinitionId: definition.id } })) throw new ConflictException('Provider already offers this care service');
     this.validatePrice(dto.priceMinor, dto.currency);
-    const entity = this.services.create({ providerId, careServiceDefinitionId: definition.id, descriptionOverride: dto.description ?? null, priceMinor: dto.priceMinor == null ? null : String(dto.priceMinor), currency: dto.priceMinor == null ? null : dto.currency!, supportsAppointmentRequests: dto.supportsAppointmentRequests ?? true, isActive: true });
+    this.validateFastTrack(dto.supportsFastTrack ?? false, dto.fastTrackFeeMinor, dto.fastTrackCurrency);
+    const entity = this.services.create({ providerId, careServiceDefinitionId: definition.id, descriptionOverride: dto.description ?? null, priceMinor: dto.priceMinor == null ? null : String(dto.priceMinor), currency: dto.priceMinor == null ? null : dto.currency!, supportsAppointmentRequests: dto.supportsAppointmentRequests ?? true, supportsFastTrack: dto.supportsFastTrack ?? false, fastTrackFeeMinor: dto.supportsFastTrack ? String(dto.fastTrackFeeMinor) : null, fastTrackCurrency: dto.supportsFastTrack ? dto.fastTrackCurrency! : null, isActive: true });
     return this.services.save(entity);
   }
 
@@ -61,10 +62,17 @@ export class ProviderCareServicesService {
     const nextPrice = dto.priceMinor !== undefined ? dto.priceMinor : service.priceMinor == null ? null : Number(service.priceMinor);
     const nextCurrency = dto.currency !== undefined ? dto.currency : service.currency;
     this.validatePrice(nextPrice, nextCurrency);
+    const nextFastTrack = dto.supportsFastTrack ?? service.supportsFastTrack;
+    const nextFastTrackFee = nextFastTrack ? (dto.fastTrackFeeMinor !== undefined ? dto.fastTrackFeeMinor : service.fastTrackFeeMinor == null ? null : Number(service.fastTrackFeeMinor)) : null;
+    const nextFastTrackCurrency = nextFastTrack ? (dto.fastTrackCurrency !== undefined ? dto.fastTrackCurrency : service.fastTrackCurrency) : null;
+    this.validateFastTrack(nextFastTrack, nextFastTrackFee, nextFastTrackCurrency);
     if (dto.description !== undefined) service.descriptionOverride = dto.description;
     if (dto.priceMinor !== undefined) service.priceMinor = dto.priceMinor == null ? null : String(dto.priceMinor);
     if (dto.currency !== undefined || dto.priceMinor === null) service.currency = nextPrice == null ? null : nextCurrency;
     if (dto.supportsAppointmentRequests !== undefined) service.supportsAppointmentRequests = dto.supportsAppointmentRequests;
+    service.supportsFastTrack = nextFastTrack;
+    service.fastTrackFeeMinor = nextFastTrack ? String(nextFastTrackFee) : null;
+    service.fastTrackCurrency = nextFastTrack ? nextFastTrackCurrency : null;
     return this.services.save(service);
   }
 
@@ -78,6 +86,10 @@ export class ProviderCareServicesService {
   private validatePrice(priceMinor: number | null | undefined, currency: string | null | undefined) {
     if (priceMinor == null && currency != null) throw new ConflictException('Currency is only valid with a price');
     if (priceMinor != null && !currency) throw new ConflictException('Currency is required with a price');
+  }
+  private validateFastTrack(enabled: boolean, feeMinor: number | null | undefined, currency: string | null | undefined) {
+    if (!enabled && (feeMinor != null || currency != null)) throw new ConflictException('FastTrack fee is only valid when FastTrack is enabled');
+    if (enabled && (!feeMinor || !currency)) throw new ConflictException('FastTrack requires a positive fee and currency');
   }
   private async owned(providerId: string, id: string) {
     const service = await this.services.findOne({ where: { id, providerId }, relations: { definition: true } });

@@ -22,6 +22,8 @@ import { RewardsModule } from "../rewards/rewards.module";
 import { RewardBookingRedemption } from "../rewards/entities/reward-booking-redemption.entity";
 import { RewardConversionRate } from "../rewards/entities/reward-conversion-rate.entity";
 import { RewardPointsLedger } from "../rewards/entities/reward-points-ledger.entity";
+import { FastTrackRequest } from '../fasttrack/entities/fasttrack-request.entity';
+import { FastTrackRequestStatusHistory } from '../fasttrack/entities/fasttrack-request-status-history.entity';
 @Module({
   imports: [
     AuthModule,
@@ -38,6 +40,8 @@ import { RewardPointsLedger } from "../rewards/entities/reward-points-ledger.ent
       ,RewardBookingRedemption,
       RewardConversionRate,
       RewardPointsLedger
+      ,FastTrackRequest,
+      FastTrackRequestStatusHistory
     ]),
   ],
   controllers: [AdminPaymentFlowController, PaystackWebhookController],
