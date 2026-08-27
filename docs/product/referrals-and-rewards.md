@@ -50,3 +50,17 @@ Authenticated `USER` patients may preview and apply points only to a Health Chec
 `reward_booking_redemptions` snapshots the rate and integer minor-unit value. `RESERVED` redemptions reduce `availablePoints` alongside withdrawal reservations but do not debit the ledger. A points-only redemption settles immediately, creates one `HEALTH_CHECK_REDEMPTION` debit, settles funding, and starts matching after commit. Split redemption reduces the existing SELF/Paystack obligation; Popup and Payment Link initialize for only the remaining external amount. Paystack verification consumes the reservation and settles combined funding atomically.
 
 Failed or abandoned provider attempts retain the reservation for retry. A user may explicitly release it only while no active external attempt exists. Booking cancellation changes an active redemption to `CANCELLED` without a debit. There is currently no independent booking-expiry command; any future expiry transition must use the same release rule. Points are a funding source, not a wallet, and are never represented as Paystack transactions.
+
+## Public leaderboard and authenticated impact
+
+SmartClinic is the single source of truth for referral codes, direct referrals, qualification, reward points, and Levels 1–5. Join and other acquisition experiences consume SmartClinic APIs; referral-code possession never authenticates a member.
+
+`GET /api/v1/public/referrals/leaderboard` returns at most 20 people, cities, and countries. Participation is explicit and private by default. A `USER` controls consent with `PATCH /api/v1/me/referrals/preferences` and `{ "publicLeaderboard": true|false }`. Opted-out members are excluded from people rankings and geographic aggregates.
+
+People rank by lifetime earned ledger credits, then qualified direct-referral count, with a stable internal tie-break. Withdrawals, Health Check redemptions, and reservations therefore do not reduce historical impact. Public referral counts include only `QUALIFIED` direct referrals. Levels come from persisted database-driven achievements, never point totals. Public names are minimized (for example, `Tosin A.`); private identity, booking, health, payment, withdrawal, and street-address data are never returned.
+
+Only provider profiles currently contain authoritative city/country geography. A linked, non-deleted provider supplies those fields; patient-only members have null geography and do not contribute to place aggregates. Countries use the stored normalized ISO alpha-2 code. No address inference or arbitrary profile merging occurs.
+
+`GET /api/v1/me/impact` requires JWT `USER` authority and composes the existing referral code, target-aware invite links, ledger/reservation-aware balances, Level 1–5 progression, qualified target counts, direct-referral totals, and opt-in ranking position. It accepts no user, email, or referral-code lookup authority. Provider-only accounts retain their existing security boundary.
+
+The public response has a 60-second HTTP cache directive and uses database aggregate queries. Old Join weights, level labels, cash milestones, email-plus-code authentication, downlines, missions, posts, hubs, and organisation metrics are not recreated.

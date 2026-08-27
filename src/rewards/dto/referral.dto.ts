@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import { ReferralStatus } from '../enums/referral-status.enum';
 import { ReferralTargetType } from '../enums/referral-target-type.enum';
 
@@ -58,6 +58,7 @@ export class ReferralSummaryDto {
   @ApiProperty() completed!: boolean;
   @ApiProperty() registeredDirectReferrals!: number;
   @ApiProperty() qualifiedDirectReferrals!: number;
+  @ApiProperty() pendingDirectReferrals!: number;
 }
 
 export class ReferralHistoryQueryDto {
@@ -72,4 +73,40 @@ export class AdminReferralQueryDto extends ReferralHistoryQueryDto {
   @ApiPropertyOptional({ format: 'date' }) @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) qualifiedFrom?: string;
   @ApiPropertyOptional({ format: 'date' }) @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) qualifiedTo?: string;
   @ApiPropertyOptional({ example: 'LEVEL_1' }) @IsOptional() @IsString() @MaxLength(40) levelAchieved?: string;
+}
+
+export class UpdateReferralPreferencesDto {
+  @ApiProperty({ description: 'Explicit consent to appear in public referral rankings.' })
+  @IsBoolean()
+  publicLeaderboard!: boolean;
+}
+
+export class PublicReferralLeaderboardPersonDto {
+  @ApiProperty() name!: string;
+  @ApiProperty() points!: number;
+  @ApiPropertyOptional({ nullable: true }) city!: string | null;
+  @ApiPropertyOptional({ nullable: true, description: 'Stored normalized country code.' }) country!: string | null;
+  @ApiPropertyOptional({ nullable: true }) level!: string | null;
+  @ApiProperty() referrals!: number;
+}
+
+export class PublicReferralLeaderboardPlaceDto {
+  @ApiProperty() name!: string;
+  @ApiProperty() points!: number;
+}
+
+export class PublicReferralLeaderboardDto {
+  @ApiProperty({ type: [PublicReferralLeaderboardPersonDto] }) people!: PublicReferralLeaderboardPersonDto[];
+  @ApiProperty({ type: [PublicReferralLeaderboardPlaceDto] }) cities!: PublicReferralLeaderboardPlaceDto[];
+  @ApiProperty({ type: [PublicReferralLeaderboardPlaceDto] }) countries!: PublicReferralLeaderboardPlaceDto[];
+}
+
+export class ReferralImpactDto {
+  @ApiProperty() referralCode!: string;
+  @ApiProperty({ type: Object }) balances!: Record<string, number>;
+  @ApiProperty({ type: MultiLevelReferralProgressDto }) levelProgress!: MultiLevelReferralProgressDto;
+  @ApiProperty({ type: Object }) qualifiedCounts!: Record<ReferralTargetType, number>;
+  @ApiProperty({ type: Object }) summary!: { registeredReferrals: number; qualifiedReferrals: number; pendingReferrals: number };
+  @ApiProperty({ type: Object }) inviteLinks!: Record<ReferralTargetType, string>;
+  @ApiProperty({ type: Object }) leaderboard!: { optedIn: boolean; position: number | null };
 }

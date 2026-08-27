@@ -34,6 +34,9 @@ export class User {
   @Column({ type: 'enum', enum: UserRole, enumName: 'user_role_enum', array: true, default: () => "ARRAY['USER']::user_role_enum[]" })
   roles!: UserRole[];
 
+  @Column({ name: 'public_leaderboard', type: 'boolean', default: false })
+  publicLeaderboard!: boolean;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

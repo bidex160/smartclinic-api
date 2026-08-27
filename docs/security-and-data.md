@@ -4,6 +4,8 @@
 
 SmartClinic handles sensitive health-related information. Features should be designed with authentication, role-based authorization, validated input, minimal data exposure, secure configuration, and auditability in mind.
 
+Public referral ranking is explicit opt-in and defaults to disabled. Opt-out removes the member from people, city, and country results; no public snapshot is persisted. Public rows contain only a minimized display label, lifetime earned points, qualified direct-referral count, achieved level name, and optional provider-profile city/country code. Referral codes remain attribution identifiers, not credentials. Authenticated impact reads derive identity only from JWT `USER` authority and accept no identity lookup parameters.
+
 - Authenticate callers before access to protected resources.
 - Authorise actions by role and relationship to the resource; a role alone may not always be sufficient for patient data access.
 - Use DTOs with `class-validator` and `class-transformer` at API boundaries.

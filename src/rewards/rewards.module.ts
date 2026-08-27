@@ -11,8 +11,9 @@ import { RewardLevelDefinition } from './entities/reward-level-definition.entity
 import { RewardLevelRequirement } from './entities/reward-level-requirement.entity';
 import { RewardPointsLedger } from './entities/reward-points-ledger.entity';
 import { RewardRule } from './entities/reward-rule.entity';
-import { AdminReferralsController, MeReferralsController } from './referrals.controller';
+import { AdminReferralsController, MeImpactController, MeReferralsController, PublicReferralsController } from './referrals.controller';
 import { ReferralsService } from './referrals.service';
+import { ReferralImpactService } from './referral-impact.service';
 import { User } from '../users/entities/user.entity';
 import { RewardWithdrawalRequest } from './entities/reward-withdrawal-request.entity';
 import { RewardWithdrawalStatusHistory } from './entities/reward-withdrawal-status-history.entity';
@@ -25,8 +26,8 @@ import { RewardBookingRedemption } from './entities/reward-booking-redemption.en
     forwardRef(() => AuthModule),
     TypeOrmModule.forFeature([ReferralCode, Referral, RewardPointsLedger, RewardRule, RewardLevelDefinition, RewardLevelRequirement, RewardLevelAchievement, RewardConversionRate, RewardWithdrawalRequest, RewardWithdrawalStatusHistory, RewardBookingRedemption, Provider, HealthCheckEncounter, User]),
   ],
-  controllers: [MeReferralsController, AdminReferralsController, MeRewardWithdrawalsController, AdminRewardWithdrawalsController],
-  providers: [ReferralsService, RewardWithdrawalsService],
+  controllers: [MeReferralsController, MeImpactController, PublicReferralsController, AdminReferralsController, MeRewardWithdrawalsController, AdminRewardWithdrawalsController],
+  providers: [ReferralsService, ReferralImpactService, RewardWithdrawalsService],
   exports: [ReferralsService, RewardWithdrawalsService],
 })
 export class RewardsModule {}

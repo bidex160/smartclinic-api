@@ -452,6 +452,8 @@ Referral rewards use separate persistence boundaries. `referral_codes` provides 
 
 `reward_booking_redemptions` is the separate Health Check reservation source. One active reservation is allowed per Booking. It snapshots points, conversion values, and currency; `RESERVED` participates in the shared available-points calculation, `SETTLED` has one immutable ledger debit, and `RELEASED`/`CANCELLED` consume no points. For split funding, `booking_funding.amount` is the remaining external collection obligation while `Booking.quotedAmount` remains the total authoritative price.
 
+`users.public_leaderboard` is a non-null, privacy-preserving opt-in flag defaulting to `false`. Leaderboard scores and ranks are calculated, not persisted: lifetime credit movements come from `reward_points_ledger`, qualified direct-referral counts from `referrals`, and levels from `reward_level_achievements`. A partial index supports opted-in user scans.
+
 `patients.user_id` is the enforceable one-to-one SELF ownership relationship and remains nullable for guest Patients. `patients.patient_reference` is a unique immutable server-generated `SCP-XXXX-XXXX` identifier distinct from the internal UUID. Existing Patients are deterministically backfilled without merging records or inferring ownership from contact fields.
 
 Other planned extensions are a booking-group/order table, package-price table, address revisions, consent/authority records, matching cycles/eligibility snapshots, payment provider events, notification delivery, and clinical health-check/result records.

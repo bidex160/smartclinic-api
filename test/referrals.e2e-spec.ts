@@ -4,8 +4,9 @@ import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
 import { RolesGuard } from '../src/auth/roles.guard';
-import { AdminReferralsController, MeReferralsController } from '../src/rewards/referrals.controller';
+import { AdminReferralsController, MeImpactController, MeReferralsController, PublicReferralsController } from '../src/rewards/referrals.controller';
 import { ReferralsService } from '../src/rewards/referrals.service';
+import { ReferralImpactService } from '../src/rewards/referral-impact.service';
 import { UserRole } from '../src/users/enums/user-role.enum';
 import { AdminRewardWithdrawalsController, MeRewardWithdrawalsController } from '../src/rewards/reward-withdrawals.controller';
 import { RewardWithdrawalsService } from '../src/rewards/reward-withdrawals.service';
@@ -18,8 +19,9 @@ describe('Referral read authorization (e2e)', () => {
     adminHistory: jest.fn().mockResolvedValue({ items: [], page: 1, limit: 20, total: 0, totalPages: 0 }),
   };
   const withdrawals = { listMine: jest.fn().mockResolvedValue({ items: [], page: 1, limit: 20, total: 0, totalPages: 0 }), getMine: jest.fn(), create: jest.fn().mockResolvedValue({ withdrawalReference: 'SCW-2026-ABCDEF12', status: 'REQUESTED' }), cancelMine: jest.fn(), adminList: jest.fn().mockResolvedValue({ items: [], page: 1, limit: 20, total: 0, totalPages: 0 }), adminDetail: jest.fn(), processing: jest.fn(), paid: jest.fn(), failed: jest.fn(), adminCancel: jest.fn() };
+  const impact = { leaderboard: jest.fn().mockResolvedValue({ people: [], cities: [], countries: [] }), updatePreference: jest.fn().mockResolvedValue({ publicLeaderboard: true }), impact: jest.fn().mockResolvedValue({ referralCode: 'SC-AB12CD', balances: {}, levelProgress: {}, qualifiedCounts: {}, summary: {}, inviteLinks: {}, leaderboard: { optedIn: false, position: null } }) };
   beforeAll(async () => {
-    const module = await Test.createTestingModule({ controllers: [MeReferralsController, AdminReferralsController, MeRewardWithdrawalsController, AdminRewardWithdrawalsController], providers: [RolesGuard, Reflector, { provide: ReferralsService, useValue: referrals }, { provide: RewardWithdrawalsService, useValue: withdrawals }] })
+    const module = await Test.createTestingModule({ controllers: [MeReferralsController, MeImpactController, PublicReferralsController, AdminReferralsController, MeRewardWithdrawalsController, AdminRewardWithdrawalsController], providers: [RolesGuard, Reflector, { provide: ReferralsService, useValue: referrals }, { provide: ReferralImpactService, useValue: impact }, { provide: RewardWithdrawalsService, useValue: withdrawals }] })
       .overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); const token = req.headers.authorization?.replace('Bearer ', ''); if (!token) throw new UnauthorizedException(); const role = token === 'admin' ? UserRole.ADMIN : token === 'operations' ? UserRole.OPERATIONS : token === 'provider' ? UserRole.PROVIDER : UserRole.USER; req.user = { id: `${token}-user`, roles: [role] }; return true; } }).compile();
     app = module.createNestApplication(); app.setGlobalPrefix('api/v1'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true })); await app.init();
   });
@@ -35,6 +37,20 @@ describe('Referral read authorization (e2e)', () => {
   it('allows ADMIN and OPERATIONS to use filtered operational reads', async () => {
     for (const token of ['admin', 'operations']) await request(app.getHttpServer()).get('/api/v1/admin/referrals?targetType=PATIENT&status=QUALIFIED').set('Authorization', `Bearer ${token}`).expect(200);
     await request(app.getHttpServer()).get('/api/v1/admin/referrals').set('Authorization', 'Bearer user').expect(403);
+  });
+
+  it('serves an anonymous cacheable leaderboard and protects impact', async () => {
+    await request(app.getHttpServer()).get('/api/v1/public/referrals/leaderboard').expect(200).expect('Cache-Control', 'public, max-age=60');
+    await request(app.getHttpServer()).get('/api/v1/me/impact').expect(401);
+    await request(app.getHttpServer()).get('/api/v1/me/impact').set('Authorization', 'Bearer provider').expect(403);
+    await request(app.getHttpServer()).get('/api/v1/me/impact').set('Authorization', 'Bearer user').expect(200);
+    expect(impact.impact).toHaveBeenCalledWith('user-user');
+  });
+
+  it('allows a USER to change only their own leaderboard consent', async () => {
+    await request(app.getHttpServer()).patch('/api/v1/me/referrals/preferences').set('Authorization', 'Bearer provider').send({ publicLeaderboard: true }).expect(403);
+    await request(app.getHttpServer()).patch('/api/v1/me/referrals/preferences').set('Authorization', 'Bearer user').send({ publicLeaderboard: true, points: 999999 }).expect(200).expect({ publicLeaderboard: true });
+    expect(impact.updatePreference).toHaveBeenCalledWith('user-user', true);
   });
 
   it('protects user withdrawal creation and derives the owner from JWT', async () => {
