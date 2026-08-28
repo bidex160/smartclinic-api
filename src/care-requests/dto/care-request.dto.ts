@@ -3,6 +3,7 @@ import { Transform, Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { CareRequestContactMethod } from '../enums/care-request-contact-method.enum';
 import { CareRequestStatus } from '../enums/care-request-status.enum';
+import { CARE_REQUEST_REFERENCE_EXAMPLE, CARE_REQUEST_REFERENCE_PATTERN } from '../care-request-reference';
 
 export class CreateCareRequestDto {
   @ApiProperty() @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z][A-Z0-9_]{1,79}$/) serviceCode!: string;
@@ -40,5 +41,5 @@ export class CareRequestReasonDto {
 }
 
 export class CareRequestReferenceParamsDto {
-  @ApiProperty() @Matches(/^SC-CARE-[A-F0-9]{12}$/) reference!: string;
+  @ApiProperty({ example: CARE_REQUEST_REFERENCE_EXAMPLE }) @Matches(CARE_REQUEST_REFERENCE_PATTERN) reference!: string;
 }

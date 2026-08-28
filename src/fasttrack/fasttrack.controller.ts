@@ -6,7 +6,8 @@ import { RolesGuard } from '../auth/roles.guard';
 import { PaymentFlowService } from '../payments/payment-flow.service';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../users/enums/user-role.enum';
-import { AdminFastTrackQueryDto, CareRequestReferenceParamsDto, CreateExternalFastTrackDto, FastTrackListQueryDto, FastTrackReasonDto, FastTrackReferenceParamsDto } from './dto/fasttrack.dto';
+import { CareRequestReferenceParamsDto } from '../care-requests/dto/care-request.dto';
+import { AdminFastTrackQueryDto, CreateExternalFastTrackDto, FastTrackListQueryDto, FastTrackReasonDto, FastTrackReferenceParamsDto } from './dto/fasttrack.dto';
 import { FastTrackService } from './fasttrack.service';
 
 @ApiTags('My FastTrack') @ApiBearerAuth() @UseGuards(JwtAuthGuard, RolesGuard) @Roles(UserRole.USER) @Controller('me')

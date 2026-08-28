@@ -7,10 +7,11 @@ import { RolesGuard } from '../src/auth/roles.guard';
 import { AdminCareRequestsController, MeCareRequestsController, ProviderCareRequestsController } from '../src/care-requests/care-requests.controller';
 import { CareRequestsService } from '../src/care-requests/care-requests.service';
 import { UserRole } from '../src/users/enums/user-role.enum';
+import { generateCareRequestReference } from '../src/care-requests/care-request-reference';
 
 describe('Care Request API authorization (e2e)', () => {
   let app: INestApplication;
-  const reference = 'SC-CARE-ABCDEF123456';
+  const reference = generateCareRequestReference();
   const requestBody = { serviceCode: 'GENERAL_CONSULTATION', countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', contactMethod: 'WHATSAPP' };
   const service = { create: jest.fn().mockResolvedValue({ reference, status: 'MATCHING' }), listMine: jest.fn().mockResolvedValue({ items: [] }), getMine: jest.fn().mockResolvedValue({ reference }), cancelMine: jest.fn().mockResolvedValue({ reference, status: 'CANCELLED' }), listForProvider: jest.fn().mockResolvedValue({ items: [] }), getForProvider: jest.fn().mockResolvedValue({ reference }), providerRespond: jest.fn().mockResolvedValue({ reference }), adminList: jest.fn().mockResolvedValue({ items: [] }), adminGet: jest.fn().mockResolvedValue({ reference }), assign: jest.fn().mockResolvedValue({ reference }), markUnfulfillable: jest.fn().mockResolvedValue({ reference }) };
   beforeAll(async () => {
@@ -31,6 +32,14 @@ describe('Care Request API authorization (e2e)', () => {
     await request(app.getHttpServer()).post(`/api/v1/provider/care-requests/${reference}/accept`).set('Authorization', 'Bearer user').expect(403);
     await request(app.getHttpServer()).post(`/api/v1/provider/care-requests/${reference}/accept`).set('Authorization', 'Bearer provider').expect(201);
     expect(service.providerRespond).toHaveBeenCalledWith(expect.objectContaining({ id: 'provider-user' }), reference, true, null);
+  });
+
+  it('accepts generated references across patient reads/cancellation and rejects malformed references', async () => {
+    await request(app.getHttpServer()).get(`/api/v1/me/care-requests/${reference}`).set('Authorization', 'Bearer user').expect(200);
+    await request(app.getHttpServer()).post(`/api/v1/me/care-requests/${reference}/cancel`).set('Authorization', 'Bearer user').expect(201);
+    await request(app.getHttpServer()).get('/api/v1/me/care-requests/SC-CARE-TOO-SHORT').set('Authorization', 'Bearer user').expect(400);
+    expect(service.getMine).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-user' }), reference);
+    expect(service.cancelMine).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-user' }), reference);
   });
 
   it('allows ADMIN/OPERATIONS assignment and filters but denies other roles', async () => {

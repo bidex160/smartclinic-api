@@ -8,7 +8,6 @@ const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? valu
 const optionalTrim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() || null : value;
 
 export class FastTrackReferenceParamsDto { @ApiProperty() @Matches(/^SC-FT-[A-F0-9]{16}$/) reference!: string; }
-export class CareRequestReferenceParamsDto { @ApiProperty() @Matches(/^SC-CARE-[A-F0-9]{16}$/) reference!: string; }
 export class CreateExternalFastTrackDto {
   @ApiProperty() @Transform(trim) @Matches(/^SCPR-[A-F0-9]{16,32}$/) providerReference!: string;
   @ApiProperty() @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z][A-Z0-9_]{1,79}$/) serviceCode!: string;
