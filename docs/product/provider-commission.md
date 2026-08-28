@@ -8,4 +8,4 @@ Commission calculation uses integer minor units and rounds the commission half u
 
 Admin and Operations may read/update the platform default at `/api/v1/admin/commercial-settings/provider-commission`, and read/set/clear a Provider override at `/api/v1/admin/providers/:id/commission`. Every effective configuration change appends an actor-attributed history row. Providers and patients have no commission configuration access.
 
-No current Health Check, General Care, or FastTrack payment flow consumes this configuration. Provider earnings, settlements, payment splits/transfers, refunds, and commission snapshots remain deferred.
+New Health Check Provider earnings consume this configuration when authoritative funding settles. General Care and FastTrack remain unchanged. Provider settlement, payment splits/transfers, refunds, and historical earning reconstruction remain deferred.

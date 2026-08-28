@@ -32,12 +32,14 @@ import { PaymentAttempt } from '../payments/entities/payment-attempt.entity';
 import { MePatientProfileController } from './me-patient-profile.controller';
 import { PatientPortalProfileService } from './patient-portal-profile.service';
 import { RewardsModule } from '../rewards/rewards.module';
+import { EarningsModule } from '../earnings/earnings.module';
 
 @Module({
   imports: [
     AuthModule,
     ProvidersModule,
     RewardsModule,
+    EarningsModule,
     TypeOrmModule.forFeature([
       HealthCheckPackage,
       FulfilmentMode,

@@ -46,6 +46,7 @@ import { User } from "../users/entities/user.entity";
 import { FastTrackRequest } from '../fasttrack/entities/fasttrack-request.entity';
 import { FastTrackRequestStatusHistory } from '../fasttrack/entities/fasttrack-request-status-history.entity';
 import { FastTrackStatus } from '../fasttrack/enums/fasttrack-status.enum';
+import { ProviderEarningsService } from '../earnings/provider-earnings.service';
 
 @Injectable()
 export class PaymentFlowService {
@@ -63,6 +64,8 @@ export class PaymentFlowService {
     private readonly matching?: ProviderMatchingService,
     @Optional()
     private readonly rewards?: RewardWithdrawalsService,
+    @Optional()
+    private readonly earnings?: ProviderEarningsService,
   ) {}
 
   async previewRewardRedemption(reference: string, userId: string) {
@@ -110,6 +113,7 @@ export class PaymentFlowService {
       funding.amount = this.fromMinor(remainingMinor);
       if (remainingMinor === 0n) {
         await this.settleRedemption(manager, redemption);
+        if (this.earnings) await this.earnings.createHeldHealthCheckEarning(manager, booking, null);
         funding.status = BookingFundingStatus.SETTLED;
         const fromStatus = booking.status; booking.status = BookingStatus.PENDING_PROVIDER_MATCH;
         await manager.getRepository(Booking).save(booking);
@@ -602,8 +606,9 @@ private async applyVerification(
       );
     }
 
-    if (!duplicate) {
-      await transactions.save(
+    let collectionTransaction = duplicate;
+    if (!collectionTransaction) {
+      collectionTransaction = await transactions.save(
         transactions.create({
           paymentAttemptId: attempt.id,
           parentTransactionId: null,
@@ -616,6 +621,8 @@ private async applyVerification(
         }),
       );
     }
+
+    if (this.earnings) await this.earnings.createHeldHealthCheckEarning(manager, booking, collectionTransaction);
 
     attempt.status = PaymentAttemptStatus.SUCCEEDED;
     await attemptRepository.save(attempt);

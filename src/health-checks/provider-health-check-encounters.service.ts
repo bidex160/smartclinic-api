@@ -18,12 +18,13 @@ import { HealthCheckEncounterStatus } from './enums/health-check-encounter-statu
 import { HealthCheckMeasurementAction } from './enums/health-check-measurement-action.enum';
 import { HEALTH_CHECK_MEASUREMENT_UNITS, HealthCheckMeasurementCode } from './enums/health-check-measurement-code.enum';
 import { ReferralsService } from '../rewards/referrals.service';
+import { ProviderEarningsService } from '../earnings/provider-earnings.service';
 
 interface MeasurementInput { code: HealthCheckMeasurementCode; primary: number; secondary: number | null }
 
 @Injectable()
 export class ProviderHealthCheckEncountersService {
-  constructor(@InjectRepository(HealthCheckEncounter) private readonly encounters: Repository<HealthCheckEncounter>, private readonly currentProvider: CurrentProviderService, private readonly referrals: ReferralsService) {}
+  constructor(@InjectRepository(HealthCheckEncounter) private readonly encounters: Repository<HealthCheckEncounter>, private readonly currentProvider: CurrentProviderService, private readonly referrals: ReferralsService, private readonly earnings: ProviderEarningsService) {}
 
   async start(user: User, reference: string): Promise<ProviderHealthCheckEncounterResponseDto> {
     const provider = await this.currentProvider.resolve(user);
@@ -89,6 +90,7 @@ export class ProviderHealthCheckEncountersService {
       await manager.getRepository(HealthCheckEncounterHistory).save({ encounterId: encounter.id, fromStatus: HealthCheckEncounterStatus.IN_PROGRESS, toStatus: HealthCheckEncounterStatus.COMPLETED, actorUserId: user.id });
       encounter.booking.status = BookingStatus.COMPLETED; await manager.getRepository(Booking).save(encounter.booking);
       await manager.getRepository(BookingStatusHistory).save({ bookingId: encounter.bookingId, fromStatus: BookingStatus.IN_PROGRESS, toStatus: BookingStatus.COMPLETED, actorUserId: user.id, reasonCode: 'HEALTH_CHECK_ENCOUNTER_COMPLETED', reasonNote: null });
+      await this.earnings.markHealthCheckPayable(manager, encounter.bookingId, user.id);
       completedPatientId = encounter.booking.participantPatientId;
     });
     if (completedPatientId) await this.referrals.qualifyPatient(completedPatientId).catch(() => this.referrals.logQualificationFailure('encounter completion', reference));

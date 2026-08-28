@@ -1,0 +1,5 @@
+import { ProviderEarningsLedger1790352000000 } from './migrations/1790352000000-ProviderEarningsLedger';
+describe('ProviderEarningsLedger migration', () => {
+  it('enforces source and payment idempotency without reconstructing historical transactions', async () => { const sql: string[] = []; await new ProviderEarningsLedger1790352000000().up({ query: jest.fn(async value => { sql.push(value); }) } as never); expect(sql.join(' ')).toContain('UQ_provider_earnings_source'); expect(sql.join(' ')).toContain('UQ_provider_earnings_payment_transaction'); expect(sql.join(' ')).not.toContain('INSERT INTO "provider_earnings"'); expect(sql.join(' ')).not.toContain('UPDATE "payment_transactions"'); });
+  it('enforces arithmetic and creates append-only status history', async () => { const sql: string[] = []; await new ProviderEarningsLedger1790352000000().up({ query: jest.fn(async value => { sql.push(value); }) } as never); expect(sql.join(' ')).toContain('"commission_amount_minor" + "provider_share_minor" = "gross_amount_minor"'); expect(sql.join(' ')).toContain('provider_earning_status_history'); });
+});

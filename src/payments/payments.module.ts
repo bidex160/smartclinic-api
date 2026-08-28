@@ -24,11 +24,13 @@ import { RewardConversionRate } from "../rewards/entities/reward-conversion-rate
 import { RewardPointsLedger } from "../rewards/entities/reward-points-ledger.entity";
 import { FastTrackRequest } from '../fasttrack/entities/fasttrack-request.entity';
 import { FastTrackRequestStatusHistory } from '../fasttrack/entities/fasttrack-request-status-history.entity';
+import { EarningsModule } from '../earnings/earnings.module';
 @Module({
   imports: [
     AuthModule,
     ProvidersModule,
     RewardsModule,
+    EarningsModule,
     TypeOrmModule.forFeature([
       PaymentAttempt,
       PaymentTransaction,

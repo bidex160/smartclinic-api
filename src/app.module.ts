@@ -20,6 +20,7 @@ import { FastTrackModule } from './fasttrack/fasttrack.module';
 import { CareAppointmentsModule } from './care-appointments/care-appointments.module';
 import { CareChatModule } from './care-chat/care-chat.module';
 import { CommissionsModule } from './commissions/commissions.module';
+import { EarningsModule } from './earnings/earnings.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -38,6 +39,7 @@ const persistenceDomainModules = configuration.database.enabled
       CareAppointmentsModule,
       CareChatModule,
       CommissionsModule,
+      EarningsModule,
     ]
   : [];
 

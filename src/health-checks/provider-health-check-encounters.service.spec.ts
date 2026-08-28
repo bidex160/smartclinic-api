@@ -31,7 +31,7 @@ describe('ProviderHealthCheckEncountersService', () => {
     const encounterHistoryRepository = historyRepository(encounterHistory); const measurementHistoryRepository = historyRepository(measurementHistory); const bookingHistoryRepository = historyRepository(bookingHistory);
     manager = { getRepository: jest.fn((entity) => entity === Booking ? bookingRepository : entity === ProviderAssignment ? assignmentRepository : entity === HealthCheckEncounter ? encounterRepository : entity === HealthCheckMeasurement ? measurementRepository : entity === HealthCheckEncounterHistory ? encounterHistoryRepository : entity === HealthCheckMeasurementHistory ? measurementHistoryRepository : entity === BookingStatusHistory ? bookingHistoryRepository : {}), transaction: jest.fn(async (work) => work(manager)) };
     encounterRepository.manager = manager;
-    subject = new ProviderHealthCheckEncountersService(encounterRepository, { resolve: jest.fn().mockResolvedValue(provider) } as any, { qualifyPatient: jest.fn(), logQualificationFailure: jest.fn() } as any);
+    subject = new ProviderHealthCheckEncountersService(encounterRepository, { resolve: jest.fn().mockResolvedValue(provider) } as any, { qualifyPatient: jest.fn(), logQualificationFailure: jest.fn() } as any, { markHealthCheckPayable: jest.fn().mockResolvedValue(null) } as any);
     jest.spyOn(subject, 'get').mockResolvedValue(response);
   });
 
@@ -77,6 +77,7 @@ describe('ProviderHealthCheckEncountersService', () => {
     encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS }; booking.status = BookingStatus.IN_PROGRESS;
     measurements = Object.values(HealthCheckMeasurementCode).map((code) => ({ code })); await subject.complete(user, booking.bookingReference);
     expect(encounter.status).toBe(HealthCheckEncounterStatus.COMPLETED); expect(encounter.completedAt).toEqual(expect.any(Date)); expect(booking.status).toBe(BookingStatus.COMPLETED); expect(encounterHistory).toHaveLength(1); expect(bookingHistory[0]).toMatchObject({ fromStatus: BookingStatus.IN_PROGRESS, toStatus: BookingStatus.COMPLETED });
+    expect((subject as any).earnings.markHealthCheckPayable).toHaveBeenCalledWith(manager, booking.id, user.id);
   });
 
   it('maps only the safe provider encounter projection', () => {
