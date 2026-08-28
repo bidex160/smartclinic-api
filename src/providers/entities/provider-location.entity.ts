@@ -7,6 +7,7 @@ import { ProviderBookingReservation } from './provider-booking-reservation.entit
 
 @Entity('provider_locations')
 @Unique('UQ_provider_locations_id_provider', ['id', 'providerId'])
+@Index('UQ_provider_locations_reference', ['locationReference'], { unique: true })
 @Index('IDX_provider_locations_provider_active', ['providerId', 'isActive'])
 @Index('IDX_provider_locations_active_place', ['isActive', 'countryCode', 'state', 'city'])
 @Check('CHK_provider_locations_country_code', `"country_code" ~ '^[A-Z]{2}$'`)
@@ -14,6 +15,7 @@ import { ProviderBookingReservation } from './provider-booking-reservation.entit
 @Check('CHK_provider_locations_longitude', '"longitude" IS NULL OR ("longitude" >= -180 AND "longitude" <= 180)')
 export class ProviderLocation {
   @PrimaryGeneratedColumn('uuid') id!: string;
+  @Column({ name: 'location_reference', type: 'varchar', length: 21 }) locationReference!: string;
   @Column({ name: 'provider_id', type: 'uuid' }) providerId!: string;
   @ManyToOne(() => Provider, (provider) => provider.locations, { onDelete: 'RESTRICT' }) @JoinColumn({ name: 'provider_id' }) provider!: Provider;
   @Column({ type: 'varchar' }) name!: string;

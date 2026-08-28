@@ -1,4 +1,4 @@
-import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm';
 import { CareServiceDefinition } from '../../providers/entities/care-service-definition.entity';
 import { ProviderCareService } from '../../providers/entities/provider-care-service.entity';
 import { Provider } from '../../providers/entities/provider.entity';
@@ -7,6 +7,7 @@ import { User } from '../../users/entities/user.entity';
 import { CareRequestContactMethod } from '../enums/care-request-contact-method.enum';
 import { CareRequestStatus } from '../enums/care-request-status.enum';
 import { CareRequestStatusHistory } from './care-request-status-history.entity';
+import { CareAppointment } from '../../care-appointments/entities/care-appointment.entity';
 
 @Entity('care_requests')
 @Index('UQ_care_requests_reference', ['reference'], { unique: true })
@@ -15,6 +16,7 @@ import { CareRequestStatusHistory } from './care-request-status-history.entity';
 @Index('IDX_care_requests_status_created', ['status', 'createdAt'])
 @Index('IDX_care_requests_assigned_provider_status', ['assignedProviderId', 'status'])
 @Index('IDX_care_requests_service_status', ['careServiceDefinitionId', 'status'])
+@Unique('UQ_care_requests_appointment_link', ['id', 'patientId', 'assignedProviderId', 'assignedProviderCareServiceId'])
 @Check('CHK_care_requests_country_code', `"country_code" ~ '^[A-Z]{2}$'`)
 @Check('CHK_care_requests_assigned_pair', '("assigned_provider_id" IS NULL AND "assigned_provider_care_service_id" IS NULL) OR ("assigned_provider_id" IS NOT NULL AND "assigned_provider_care_service_id" IS NOT NULL)')
 @Check('CHK_care_requests_preferred_pair', '("preferred_provider_id" IS NULL AND "preferred_provider_care_service_id" IS NULL) OR ("preferred_provider_id" IS NOT NULL AND "preferred_provider_care_service_id" IS NOT NULL)')
@@ -46,4 +48,5 @@ export class CareRequest {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;
   @OneToMany(() => CareRequestStatusHistory, (history) => history.careRequest) statusHistory!: CareRequestStatusHistory[];
+  @OneToMany(() => CareAppointment, (appointment) => appointment.careRequest) appointments!: CareAppointment[];
 }

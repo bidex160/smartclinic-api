@@ -75,6 +75,7 @@ export class PublicProviderCareServiceDto {
 }
 
 export class PublicProviderLocationDto {
+  @ApiProperty() locationReference!: string;
   @ApiProperty() name!: string;
   @ApiProperty() addressLine1!: string;
   @ApiPropertyOptional({ nullable: true }) addressLine2!: string | null;

@@ -2,6 +2,8 @@
 
 FastTrack is a paid administrative-priority service. It can reduce SmartClinic/provider administrative waiting, but it is not clinical triage, emergency prioritisation, or a guarantee that a patient will bypass a clinically determined queue. Clinical urgency always takes precedence.
 
+FastTrack confirmation does not schedule care. SmartClinic-source FastTrack exposes an existing Care Appointment through the shared Care Request when the provider has separately scheduled one; external FastTrack remains external.
+
 ## Sources
 
 - `SMARTCLINIC_CARE_REQUEST` is created only from an authenticated patient's owned Care Request after its exact provider offering has been accepted. Provider, service, fee, and currency are derived by the backend. It begins `READY_FOR_PAYMENT`.

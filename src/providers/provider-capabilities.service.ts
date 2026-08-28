@@ -10,6 +10,7 @@ import { isTimeZone } from "class-validator";
 import { FulfilmentMode } from "../health-checks/entities/fulfilment-mode.entity";
 import { HealthCheckPackage } from "../health-checks/entities/health-check-package.entity";
 import { CreateProviderLocationDto } from "./dto/create-provider-location.dto";
+import { generateProviderLocationReference } from './provider-location-reference';
 import { CreateProviderServiceDto } from "./dto/create-provider-service.dto";
 import { ProviderLocationResponseDto } from "./dto/provider-location-response.dto";
 import { ProviderServiceResponseDto } from "./dto/provider-service-response.dto";
@@ -169,6 +170,7 @@ export class ProviderCapabilitiesService {
         this.locations.create({
           ...dto,
           providerId,
+          locationReference: generateProviderLocationReference(),
           name: dto.name.trim(),
           addressLine1: dto.addressLine1.trim(),
           addressLine2: dto.addressLine2?.trim() || null,

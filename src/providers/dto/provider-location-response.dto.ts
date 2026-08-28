@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ProviderLocation } from '../entities/provider-location.entity';
 export class ProviderLocationResponseDto {
+  @ApiProperty() locationReference!: string;
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) providerId!: string;
   @ApiProperty() name!: string;
@@ -16,6 +17,6 @@ export class ProviderLocationResponseDto {
   @ApiProperty({ format: 'date-time' }) createdAt!: Date;
   @ApiProperty({ format: 'date-time' }) updatedAt!: Date;
   static fromEntity(value: ProviderLocation): ProviderLocationResponseDto {
-    return { id: value.id, providerId: value.providerId, name: value.name, addressLine1: value.addressLine1, addressLine2: value.addressLine2, city: value.city, state: value.state, postalCode: value.postalCode, countryCode: value.countryCode, latitude: value.latitude === null ? null : Number(value.latitude), longitude: value.longitude === null ? null : Number(value.longitude), isActive: value.isActive, createdAt: value.createdAt, updatedAt: value.updatedAt };
+    return { id: value.id, providerId: value.providerId, locationReference: value.locationReference, name: value.name, addressLine1: value.addressLine1, addressLine2: value.addressLine2, city: value.city, state: value.state, postalCode: value.postalCode, countryCode: value.countryCode, latitude: value.latitude === null ? null : Number(value.latitude), longitude: value.longitude === null ? null : Number(value.longitude), isActive: value.isActive, createdAt: value.createdAt, updatedAt: value.updatedAt };
   }
 }

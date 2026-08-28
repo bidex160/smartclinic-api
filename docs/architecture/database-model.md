@@ -458,6 +458,8 @@ Find Care adds immutable `providers.provider_reference`, controlled `care_servic
 
 `care_requests` links an authenticated User and SELF Patient to one care-service definition, optional preferred Provider/offering, and optional assigned Provider/offering. Composite offering foreign keys prevent cross-Provider or wrong-service assignment. Public references are independently generated and unique. Indexed status, Patient, service, and assigned-Provider columns support portal/provider/operations queues. `care_request_status_history` is append-only transition audit data.
 
+`care_appointments` stores the agreed schedule for an accepted Care Request and preserves the exact Provider, `ProviderCareService`, optional ProviderLocation, local interval, and IANA timezone. Composite foreign keys preserve request/offering/location ownership. Partial uniqueness and a GiST exclusion constraint prevent duplicate active appointments and provider time overlap. `care_appointment_status_history` is append-only. Provider locations also carry stable public `SCPL-…` references for external API selection.
+
 `patients.user_id` is the enforceable one-to-one SELF ownership relationship and remains nullable for guest Patients. `patients.patient_reference` is a unique immutable server-generated `SCP-XXXX-XXXX` identifier distinct from the internal UUID. Existing Patients are deterministically backfilled without merging records or inferring ownership from contact fields.
 
 Other planned extensions are a booking-group/order table, package-price table, address revisions, consent/authority records, matching cycles/eligibility snapshots, payment provider events, notification delivery, and clinical health-check/result records.

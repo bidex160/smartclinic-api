@@ -67,7 +67,7 @@ export class FindCareService {
       displayName: provider.displayName,
       providerType: provider.providerType,
       location: { city: provider.city, stateOrRegion: provider.stateOrRegion, countryCode: provider.countryCode },
-      locations: (provider.locations ?? []).filter((location) => location.isActive).map((location) => ({ name: location.name, addressLine1: location.addressLine1, addressLine2: location.addressLine2, city: location.city, stateOrRegion: location.state, postalCode: location.postalCode, countryCode: location.countryCode })),
+      locations: (provider.locations ?? []).filter((location) => location.isActive).map((location) => ({ locationReference: location.locationReference, name: location.name, addressLine1: location.addressLine1, addressLine2: location.addressLine2, city: location.city, stateOrRegion: location.state, postalCode: location.postalCode, countryCode: location.countryCode })),
       services: (provider.careServices ?? []).filter((service) => service.isActive && service.definition?.isActive).map((service) => ({ code: service.definition.code, name: service.definition.name, description: service.descriptionOverride ?? service.definition.description, priceMinor: service.priceMinor == null ? null : Number(service.priceMinor), currency: service.currency, priceOnRequest: service.priceMinor == null, supportsAppointmentRequests: service.supportsAppointmentRequests, supportsFastTrack: service.supportsFastTrack, fastTrackFeeMinor: service.supportsFastTrack && service.fastTrackFeeMinor != null ? Number(service.fastTrackFeeMinor) : null, fastTrackCurrency: service.supportsFastTrack ? service.fastTrackCurrency : null })),
     };
   }
