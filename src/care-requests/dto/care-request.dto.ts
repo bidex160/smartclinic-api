@@ -4,6 +4,8 @@ import { IsEnum, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinL
 import { CareRequestContactMethod } from '../enums/care-request-contact-method.enum';
 import { CareRequestStatus } from '../enums/care-request-status.enum';
 import { CARE_REQUEST_REFERENCE_EXAMPLE, CARE_REQUEST_REFERENCE_PATTERN } from '../care-request-reference';
+import { CareAppointmentStatus } from '../../care-appointments/enums/care-appointment-status.enum';
+import { CareDeliveryMode } from '../../providers/enums/care-delivery-mode.enum';
 
 export class CreateCareRequestDto {
   @ApiProperty() @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z][A-Z0-9_]{1,79}$/) serviceCode!: string;
@@ -11,6 +13,7 @@ export class CreateCareRequestDto {
   @ApiProperty({ example: 'NG' }) @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z]{2}$/) countryCode!: string;
   @ApiProperty() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @MinLength(1) @MaxLength(120) stateOrRegion!: string;
   @ApiProperty() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @MinLength(1) @MaxLength(120) city!: string;
+  @ApiPropertyOptional({ enum: CareDeliveryMode, default: CareDeliveryMode.IN_PERSON }) @IsOptional() @IsEnum(CareDeliveryMode) deliveryMode?: CareDeliveryMode;
   @ApiPropertyOptional({ format: 'date', nullable: true }) @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) preferredDate?: string | null;
   @ApiPropertyOptional({ example: '10:30', nullable: true }) @IsOptional() @Matches(/^([01]\d|2[0-3]):[0-5]\d$/) preferredTime?: string | null;
   @ApiProperty({ enum: CareRequestContactMethod }) @IsEnum(CareRequestContactMethod) contactMethod!: CareRequestContactMethod;
@@ -42,4 +45,27 @@ export class CareRequestReasonDto {
 
 export class CareRequestReferenceParamsDto {
   @ApiProperty({ example: CARE_REQUEST_REFERENCE_EXAMPLE }) @Matches(CARE_REQUEST_REFERENCE_PATTERN) reference!: string;
+}
+
+export class CareRequestAppointmentLocationSummaryDto {
+  @ApiProperty() reference!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty() addressLine1!: string;
+  @ApiPropertyOptional({ nullable: true }) addressLine2!: string | null;
+  @ApiProperty() city!: string;
+  @ApiProperty() stateOrRegion!: string;
+  @ApiPropertyOptional({ nullable: true }) postalCode!: string | null;
+  @ApiProperty() countryCode!: string;
+}
+
+export class CareRequestAppointmentSummaryDto {
+  @ApiProperty() reference!: string;
+  @ApiProperty({ enum: CareAppointmentStatus }) status!: CareAppointmentStatus;
+  @ApiProperty({ format: 'date' }) scheduledDate!: string;
+  @ApiProperty() scheduledTimeFrom!: string;
+  @ApiProperty() scheduledTimeTo!: string;
+  @ApiProperty() timezone!: string;
+  @ApiProperty({ enum: CareDeliveryMode }) deliveryMode!: CareDeliveryMode;
+  @ApiProperty() hasMeetingLink!: boolean;
+  @ApiPropertyOptional({ type: CareRequestAppointmentLocationSummaryDto, nullable: true }) location!: CareRequestAppointmentLocationSummaryDto | null;
 }

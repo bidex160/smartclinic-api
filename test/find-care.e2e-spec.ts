@@ -8,6 +8,7 @@ import { AdminCareServicesController, ProviderCareServicesController, PublicFind
 import { ProviderCareServicesService } from '../src/providers/provider-care-services.service';
 import { FindCareService } from '../src/providers/find-care.service';
 import { UserRole } from '../src/users/enums/user-role.enum';
+import { CareDeliveryMode } from '../src/providers/enums/care-delivery-mode.enum';
 
 describe('Find Care API authorization (e2e)', () => {
   let app: INestApplication;
@@ -26,13 +27,15 @@ describe('Find Care API authorization (e2e)', () => {
 
   it('allows anonymous discovery with validated filters', async () => {
     await request(app.getHttpServer()).get('/api/v1/public/find-care/services').expect(200);
-    await request(app.getHttpServer()).get('/api/v1/public/find-care/providers?serviceCode=GENERAL_CONSULTATION&countryCode=NG&city=Ikeja').expect(200);
+    await request(app.getHttpServer()).get('/api/v1/public/find-care/providers?serviceCode=GENERAL_CONSULTATION&deliveryMode=VIRTUAL&countryCode=NG&city=Ikeja').expect(200);
+    expect(findCare.providersList).toHaveBeenCalledWith(expect.objectContaining({ deliveryMode: CareDeliveryMode.VIRTUAL }));
     await request(app.getHttpServer()).get('/api/v1/public/find-care/providers/SCPR-ABCDEF0123456789').expect(200);
     await request(app.getHttpServer()).get('/api/v1/public/find-care/providers?countryCode=NIGERIA').expect(400);
+    await request(app.getHttpServer()).get('/api/v1/public/find-care/providers?deliveryMode=REMOTE').expect(400);
   });
 
   it('requires PROVIDER and derives service ownership from JWT context', async () => {
-    const body = { careServiceDefinitionId: definitionId, priceMinor: 250000, currency: 'NGN' };
+    const body = { careServiceDefinitionId: definitionId, priceMinor: 250000, currency: 'NGN', deliveryModes: [CareDeliveryMode.IN_PERSON, CareDeliveryMode.VIRTUAL] };
     await request(app.getHttpServer()).post('/api/v1/provider/care-services').send(body).expect(401);
     await request(app.getHttpServer()).post('/api/v1/provider/care-services').set('Authorization', 'Bearer user').send(body).expect(403);
     await request(app.getHttpServer()).post('/api/v1/provider/care-services').set('Authorization', 'Bearer provider').send({ ...body, providerId: 'spoofed', isActive: false }).expect(201);

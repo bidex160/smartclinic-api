@@ -8,7 +8,9 @@ The owning provider schedules through `POST /api/v1/provider/care-requests/:refe
 
 V1 requires an explicit end time because general Care Services do not yet have authoritative duration configuration. Start and end must be on the same date, end must be after start, and the appointment must be in the future in its stated timezone.
 
-Provider locations have stable `SCPL-…` public references. When supplied, the location must be active and belong to the authenticated provider. A null location is permitted in V1 because `ProviderCareService` does not yet classify delivery as facility-only; no arbitrary appointment address is accepted.
+Provider locations have stable `SCPL-…` public references. When supplied for `IN_PERSON`, the location must be active and belong to the authenticated provider. `VIRTUAL` and `HOME_VISIT` appointments require a null Provider location. The appointment delivery mode is copied authoritatively from the Care Request and cannot be overridden by the scheduling command.
+
+For a `VIRTUAL` appointment, its owning active/approved Provider may set, replace, or clear an external HTTPS meeting URL while the appointment is `SCHEDULED`, `CONFIRMED`, or `IN_PROGRESS`. SmartClinic does not create or verify vendor meetings and does not integrate Google Meet, Zoom, Teams, or embedded video in V1. The URL appears only on authorized patient/provider appointment detail; lists, public discovery, and Care Request summaries expose no URL (the detail summary exposes only `hasMeetingLink`). No join-time restriction is enforced in V1.
 
 ## Lifecycle
 

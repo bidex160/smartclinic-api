@@ -1,7 +1,8 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { ArrayNotEmpty, ArrayUnique, IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { ProviderType } from '../enums/provider-type.enum';
+import { CareDeliveryMode } from '../enums/care-delivery-mode.enum';
 
 export class CreateCareServiceDefinitionDto {
   @ApiProperty({ example: 'GENERAL_CONSULTATION' }) @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z][A-Z0-9_]{1,79}$/) code!: string;
@@ -19,6 +20,7 @@ export class CreateProviderCareServiceDto {
   @ApiPropertyOptional({ nullable: true, description: 'Integer minor units; null means price on request.' }) @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(Number.MAX_SAFE_INTEGER) priceMinor?: number | null;
   @ApiPropertyOptional({ nullable: true, example: 'NGN' }) @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @IsOptional() @Matches(/^[A-Z]{3}$/) currency?: string | null;
   @ApiPropertyOptional({ default: true }) @IsOptional() @IsBoolean() supportsAppointmentRequests?: boolean;
+  @ApiPropertyOptional({ enum: CareDeliveryMode, isArray: true, default: [CareDeliveryMode.IN_PERSON] }) @IsOptional() @IsArray() @ArrayNotEmpty() @ArrayUnique() @IsEnum(CareDeliveryMode, { each: true }) deliveryModes?: CareDeliveryMode[];
   @ApiPropertyOptional({ default: false }) @IsOptional() @IsBoolean() supportsFastTrack?: boolean;
   @ApiPropertyOptional({ nullable: true, description: 'FastTrack fee in integer minor units.' }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) fastTrackFeeMinor?: number | null;
   @ApiPropertyOptional({ nullable: true, example: 'NGN' }) @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @IsOptional() @Matches(/^[A-Z]{3}$/) fastTrackCurrency?: string | null;
@@ -29,6 +31,7 @@ export class UpdateProviderCareServiceDto {
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(Number.MAX_SAFE_INTEGER) priceMinor?: number | null;
   @ApiPropertyOptional({ nullable: true }) @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @IsOptional() @Matches(/^[A-Z]{3}$/) currency?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() supportsAppointmentRequests?: boolean;
+  @ApiPropertyOptional({ enum: CareDeliveryMode, isArray: true }) @IsOptional() @IsArray() @ArrayNotEmpty() @ArrayUnique() @IsEnum(CareDeliveryMode, { each: true }) deliveryModes?: CareDeliveryMode[];
   @ApiPropertyOptional() @IsOptional() @IsBoolean() supportsFastTrack?: boolean;
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) fastTrackFeeMinor?: number | null;
   @ApiPropertyOptional({ nullable: true }) @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @IsOptional() @Matches(/^[A-Z]{3}$/) fastTrackCurrency?: string | null;
@@ -38,6 +41,7 @@ export class FindCareQueryDto {
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @MaxLength(160) q?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z][A-Z0-9_]{1,79}$/) serviceCode?: string;
   @ApiPropertyOptional({ enum: ProviderType }) @IsOptional() @IsEnum(ProviderType) providerType?: ProviderType;
+  @ApiPropertyOptional({ enum: CareDeliveryMode }) @IsOptional() @IsEnum(CareDeliveryMode) deliveryMode?: CareDeliveryMode;
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z]{2}$/) countryCode?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @MaxLength(120) stateOrRegion?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @MaxLength(120) city?: string;
@@ -69,6 +73,7 @@ export class PublicProviderCareServiceDto {
   @ApiPropertyOptional({ nullable: true }) currency!: string | null;
   @ApiProperty() priceOnRequest!: boolean;
   @ApiProperty() supportsAppointmentRequests!: boolean;
+  @ApiProperty({ enum: CareDeliveryMode, isArray: true }) deliveryModes!: CareDeliveryMode[];
   @ApiProperty() supportsFastTrack!: boolean;
   @ApiPropertyOptional({ nullable: true }) fastTrackFeeMinor!: number | null;
   @ApiPropertyOptional({ nullable: true }) fastTrackCurrency!: string | null;

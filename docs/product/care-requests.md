@@ -2,7 +2,11 @@
 
 After provider acceptance, the provider explicitly creates a distinct Care Appointment. Patient preferred date/time remains a preference, not a confirmed schedule. See [Care Appointments](care-appointments.md).
 
+Patient and provider Care Request detail responses include `appointment`. It is `null` before scheduling; otherwise it contains the authoritative appointment public reference, status, schedule, timezone, and safe provider-location summary. Detail reads prefer an active appointment (`SCHEDULED`, `CONFIRMED`, or `IN_PROGRESS`); when none is active, they return the most recently created historical appointment deterministically. Care Request list responses remain lightweight and do not join appointments.
+
 A Care Request is a lightweight authenticated-patient request to be connected to an existing SmartClinic Provider for a centrally defined Find Care service. It is separate from Health Check Booking and does not create funding, reservations, confirmed schedules, encounters, or FastTrack behavior.
+
+The request persists the patient's selected general-care delivery mode. Preferred-provider creation, operations assignment, and provider acceptance all revalidate that the exact active `ProviderCareService` still supports that mode. A no-preference request retains the requested mode unchanged while it remains in `MATCHING`.
 
 The authoritative relationship is `User -> SELF Patient -> CareRequest -> CareServiceDefinition`, with optional preferred and assigned `Provider` plus the exact `ProviderCareService` offering. Composite database foreign keys guarantee that stored offerings belong to both the stored Provider and selected service definition.
 

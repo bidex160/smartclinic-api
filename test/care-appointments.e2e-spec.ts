@@ -14,10 +14,20 @@ describe('Care Appointment API boundaries (e2e)', () => {
   let app: INestApplication;
   const careReference = generateCareRequestReference(); const appointmentReference = generateCareAppointmentReference();
   const scheduling = { scheduledDate: '2099-09-10', scheduledTimeFrom: '10:30', scheduledTimeTo: '11:00', timezone: 'Africa/Lagos', providerLocationReference: 'SCPL-ABCDEF0123456789' };
-  const service = { schedule: jest.fn().mockResolvedValue({ appointmentReference }), listProvider: jest.fn().mockResolvedValue({ items: [] }), getProvider: jest.fn().mockResolvedValue({ appointmentReference }), start: jest.fn(), complete: jest.fn(), cancelProvider: jest.fn(), noShow: jest.fn(), listMine: jest.fn().mockResolvedValue({ items: [] }), getMine: jest.fn().mockResolvedValue({ appointmentReference }), cancelMine: jest.fn() };
+  const service = { schedule: jest.fn().mockResolvedValue({ appointmentReference }), listProvider: jest.fn().mockResolvedValue({ items: [] }), getProvider: jest.fn().mockResolvedValue({ appointmentReference }), updateMeetingLink: jest.fn().mockResolvedValue({ appointmentReference, meetingUrl: 'https://meet.google.com/abc-defg-hij' }), start: jest.fn(), complete: jest.fn(), cancelProvider: jest.fn(), noShow: jest.fn(), listMine: jest.fn().mockResolvedValue({ items: [] }), getMine: jest.fn().mockResolvedValue({ appointmentReference }), cancelMine: jest.fn() };
   beforeAll(async () => {
     const module = await Test.createTestingModule({ controllers: [ProviderCareAppointmentsController, MeCareAppointmentsController], providers: [RolesGuard, Reflector, { provide: CareAppointmentsService, useValue: service }] }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); const token = req.headers.authorization?.replace('Bearer ', ''); if (!token) throw new UnauthorizedException(); const role = token === 'provider' ? UserRole.PROVIDER : UserRole.USER; req.user = { id: `${token}-user`, roles: [role] }; return true; } }).compile();
     app = module.createNestApplication(); app.setGlobalPrefix('api/v1'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })); await app.init();
+  });
+
+  it('validates the provider-owned external meeting-link command at the boundary', async () => {
+    const url = 'https://meet.google.com/abc-defg-hij';
+    await request(app.getHttpServer()).put(`/api/v1/provider/care-appointments/${appointmentReference}/meeting-link`).send({ meetingUrl: url }).expect(401);
+    await request(app.getHttpServer()).put(`/api/v1/provider/care-appointments/${appointmentReference}/meeting-link`).set('Authorization', 'Bearer user').send({ meetingUrl: url }).expect(403);
+    await request(app.getHttpServer()).put(`/api/v1/provider/care-appointments/${appointmentReference}/meeting-link`).set('Authorization', 'Bearer provider').send({ meetingUrl: 'http://example.test/room' }).expect(400);
+    await request(app.getHttpServer()).put(`/api/v1/provider/care-appointments/${appointmentReference}/meeting-link`).set('Authorization', 'Bearer provider').send({ meetingUrl: 'not-a-url' }).expect(400);
+    await request(app.getHttpServer()).put(`/api/v1/provider/care-appointments/${appointmentReference}/meeting-link`).set('Authorization', 'Bearer provider').send({ meetingUrl: url }).expect(200);
+    expect(service.updateMeetingLink).toHaveBeenCalledWith(expect.objectContaining({ id: 'provider-user' }), appointmentReference, url);
   });
   afterAll(() => app.close());
 

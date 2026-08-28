@@ -7,6 +7,7 @@ import { ProviderLocation } from './entities/provider-location.entity';
 import { CareServiceDefinition } from './entities/care-service-definition.entity';
 import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 import { ProviderStatus } from './enums/provider-status.enum';
+import { CareDeliveryMode } from './enums/care-delivery-mode.enum';
 
 export type ProviderCareEligibilityInput = {
   careServiceDefinitionId: string;
@@ -15,6 +16,7 @@ export type ProviderCareEligibilityInput = {
   city: string;
   providerReference?: string;
   providerId?: string;
+  deliveryMode: CareDeliveryMode;
 };
 
 @Injectable()
@@ -30,7 +32,7 @@ export class ProviderCareEligibilityService {
     const candidate = await builder.getOne();
     if (!candidate) return this.ineligible();
     const service = await repository.findOne({ where: { id: candidate.id }, lock: { mode: 'pessimistic_write' } });
-    if (!service || !service.isActive || !service.supportsAppointmentRequests) return this.ineligible();
+    if (!service || !service.isActive || !service.supportsAppointmentRequests || !service.deliveryModes.includes(input.deliveryMode)) return this.ineligible();
     const [provider, definition] = await Promise.all([
       manager.getRepository(Provider).findOne({ where: { id: service.providerId }, withDeleted: true, lock: { mode: 'pessimistic_read' } }),
       manager.getRepository(CareServiceDefinition).findOne({ where: { id: service.careServiceDefinitionId }, lock: { mode: 'pessimistic_read' } }),

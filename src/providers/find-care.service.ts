@@ -6,6 +6,7 @@ import { Provider } from './entities/provider.entity';
 import { FindCareQueryDto } from './dto/care-service.dto';
 import { ProviderStatus } from './enums/provider-status.enum';
 import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
+import { CareDeliveryMode } from './enums/care-delivery-mode.enum';
 
 @Injectable()
 export class FindCareService {
@@ -31,6 +32,7 @@ export class FindCareService {
     if (query.q) builder.andWhere(new Brackets((where) => where.where('provider.displayName ILIKE :search', { search: `%${query.q}%` }).orWhere('definition.name ILIKE :search', { search: `%${query.q}%` })));
     if (query.serviceCode) builder.andWhere('definition.code = :serviceCode', { serviceCode: query.serviceCode });
     if (query.providerType) builder.andWhere('provider.providerType = :providerType', { providerType: query.providerType });
+    if (query.deliveryMode) builder.andWhere('careService.deliveryModes @> ARRAY[:deliveryMode]::general_care_delivery_mode_enum[]', { deliveryMode: query.deliveryMode });
     this.applyPlace(builder, query);
     builder.orderBy('provider.displayName', 'ASC').addOrderBy('provider.providerReference', 'ASC').skip((query.page - 1) * query.limit).take(query.limit);
     const [providers, total] = await builder.getManyAndCount();
@@ -68,7 +70,7 @@ export class FindCareService {
       providerType: provider.providerType,
       location: { city: provider.city, stateOrRegion: provider.stateOrRegion, countryCode: provider.countryCode },
       locations: (provider.locations ?? []).filter((location) => location.isActive).map((location) => ({ locationReference: location.locationReference, name: location.name, addressLine1: location.addressLine1, addressLine2: location.addressLine2, city: location.city, stateOrRegion: location.state, postalCode: location.postalCode, countryCode: location.countryCode })),
-      services: (provider.careServices ?? []).filter((service) => service.isActive && service.definition?.isActive).map((service) => ({ code: service.definition.code, name: service.definition.name, description: service.descriptionOverride ?? service.definition.description, priceMinor: service.priceMinor == null ? null : Number(service.priceMinor), currency: service.currency, priceOnRequest: service.priceMinor == null, supportsAppointmentRequests: service.supportsAppointmentRequests, supportsFastTrack: service.supportsFastTrack, fastTrackFeeMinor: service.supportsFastTrack && service.fastTrackFeeMinor != null ? Number(service.fastTrackFeeMinor) : null, fastTrackCurrency: service.supportsFastTrack ? service.fastTrackCurrency : null })),
+      services: (provider.careServices ?? []).filter((service) => service.isActive && service.definition?.isActive).map((service) => ({ code: service.definition.code, name: service.definition.name, description: service.descriptionOverride ?? service.definition.description, priceMinor: service.priceMinor == null ? null : Number(service.priceMinor), currency: service.currency, priceOnRequest: service.priceMinor == null, supportsAppointmentRequests: service.supportsAppointmentRequests, deliveryModes: service.deliveryModes ?? [CareDeliveryMode.IN_PERSON], supportsFastTrack: service.supportsFastTrack, fastTrackFeeMinor: service.supportsFastTrack && service.fastTrackFeeMinor != null ? Number(service.fastTrackFeeMinor) : null, fastTrackCurrency: service.supportsFastTrack ? service.fastTrackCurrency : null })),
     };
   }
 }

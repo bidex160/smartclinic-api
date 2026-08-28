@@ -2,6 +2,8 @@
 
 Find Care uses the existing SmartClinic `Provider` domain. There is no separate hospital or facility directory. Only non-deleted Providers whose operational status is `ACTIVE` and onboarding status is `APPROVED` can appear publicly.
 
+General care delivery uses the shared `IN_PERSON`, `VIRTUAL`, and `HOME_VISIT` modes. Each exact `ProviderCareService` declares one or more supported modes; existing offerings were backfilled to `IN_PERSON`. Public provider results expose these modes, and `deliveryMode` filters the exact active offering rather than the Provider generally. Geography remains relevant for all modes: it is the discovery origin for in-person care, the service destination context for home visits, and jurisdiction/coverage context for virtual care.
+
 The existing `provider_services` model remains the Health Check capability matrix: Provider + Health Check package + fulfilment mode. General healthcare discovery has different catalogue, pricing, and future Care Request semantics, so it uses:
 
 - `care_service_definitions`: centrally controlled code, public name, description, and activation state.

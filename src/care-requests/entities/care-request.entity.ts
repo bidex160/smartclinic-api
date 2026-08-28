@@ -8,6 +8,7 @@ import { CareRequestContactMethod } from '../enums/care-request-contact-method.e
 import { CareRequestStatus } from '../enums/care-request-status.enum';
 import { CareRequestStatusHistory } from './care-request-status-history.entity';
 import { CareAppointment } from '../../care-appointments/entities/care-appointment.entity';
+import { CareDeliveryMode } from '../../providers/enums/care-delivery-mode.enum';
 
 @Entity('care_requests')
 @Index('UQ_care_requests_reference', ['reference'], { unique: true })
@@ -40,6 +41,7 @@ export class CareRequest {
   @Column({ name: 'country_code', type: 'char', length: 2 }) countryCode!: string;
   @Column({ name: 'state_or_region', type: 'varchar', length: 120 }) stateOrRegion!: string;
   @Column({ type: 'varchar', length: 120 }) city!: string;
+  @Column({ name: 'delivery_mode', type: 'enum', enum: CareDeliveryMode, enumName: 'general_care_delivery_mode_enum', default: CareDeliveryMode.IN_PERSON }) deliveryMode!: CareDeliveryMode;
   @Column({ type: 'text', nullable: true }) notes!: string | null;
   @Column({ name: 'preferred_date', type: 'date', nullable: true }) preferredDate!: string | null;
   @Column({ name: 'preferred_time', type: 'time', nullable: true }) preferredTime!: string | null;

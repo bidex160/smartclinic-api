@@ -1,5 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ProviderCareServicesService } from './provider-care-services.service';
+import { CareDeliveryMode } from './enums/care-delivery-mode.enum';
 
 describe('ProviderCareServicesService', () => {
   const provider = { id: '10000000-0000-4000-8000-000000000001', deletedAt: null, onboardingStatus: 'APPROVED' };
@@ -18,6 +19,15 @@ describe('ProviderCareServicesService', () => {
     const result = await subject.createMine({ id: 'user-1' } as any, { careServiceDefinitionId: definition.id, priceMinor: 250000, currency: 'NGN', supportsAppointmentRequests: true });
     expect(current.resolve).toHaveBeenCalled();
     expect(result).toMatchObject({ providerId: provider.id, careServiceDefinitionId: definition.id, priceMinor: '250000', currency: 'NGN' });
+    expect(result.deliveryModes).toEqual([CareDeliveryMode.IN_PERSON]);
+  });
+
+  it('supports one or multiple explicit delivery modes and rejects empty/duplicate configurations', async () => {
+    await expect(subject.createForProvider(provider.id, { careServiceDefinitionId: definition.id, deliveryModes: [CareDeliveryMode.VIRTUAL] })).resolves.toMatchObject({ deliveryModes: [CareDeliveryMode.VIRTUAL] });
+    services.exists.mockResolvedValue(false);
+    await expect(subject.createForProvider(provider.id, { careServiceDefinitionId: definition.id, deliveryModes: [CareDeliveryMode.IN_PERSON, CareDeliveryMode.VIRTUAL] })).resolves.toMatchObject({ deliveryModes: [CareDeliveryMode.IN_PERSON, CareDeliveryMode.VIRTUAL] });
+    await expect(subject.createForProvider(provider.id, { careServiceDefinitionId: definition.id, deliveryModes: [] })).rejects.toBeInstanceOf(ConflictException);
+    await expect(subject.createForProvider(provider.id, { careServiceDefinitionId: definition.id, deliveryModes: [CareDeliveryMode.VIRTUAL, CareDeliveryMode.VIRTUAL] })).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('prevents duplicate provider/catalogue associations', async () => {
