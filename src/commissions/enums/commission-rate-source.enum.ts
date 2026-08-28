@@ -1,0 +1,4 @@
+export enum CommissionRateSource {
+  PLATFORM_DEFAULT = 'PLATFORM_DEFAULT',
+  PROVIDER_OVERRIDE = 'PROVIDER_OVERRIDE',
+}

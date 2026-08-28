@@ -58,6 +58,8 @@ Public booking creation also creates an expiring booking-scoped session transact
 
 Paystack implements the Payments adapter boundary, not the Booking domain. It owns HTTP authentication, subunit conversion, response/status normalization, signature validation, and server-side verification. The payment service remains responsible for immutable attempt/funding expectations and transactional idempotent settlement.
 
+Provider revenue commission is a separate commercial-configuration boundary. A nullable persisted platform default and nullable per-Provider override are stored as integer basis points; zero is explicit and distinct from inheritance. `CommissionResolutionService` is the single resolver for future revenue products, while the integer calculator rounds half up to the nearest minor currency unit. No current patient payment, Provider earning, or settlement flow consumes commission yet.
+
 The admin matching queue is an operational read model composed in the Providers/matching boundary from Booking, SELF funding, catalogue, participant-name, and latest-assignment data. It exposes explicit DTOs and performs no lifecycle mutations. Pagination and deterministic oldest-first ordering support intervention for unfulfillable, active-offer, accepted, and assigned work; READY no longer implies that every booking needs a manual start command.
 
 The admin booking-detail read model extends that projection for one booking with authorized operational contact and summarized payment context. Public booking DTOs remain deliberately narrower and never gain contact or internal workflow fields through this endpoint.

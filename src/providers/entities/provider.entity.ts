@@ -1,4 +1,4 @@
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { BeforeInsert, Check, Column, CreateDateColumn, DeleteDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { randomBytes } from 'node:crypto';
 
 import { User } from '../../users/entities/user.entity';
@@ -15,6 +15,7 @@ import { ProviderType } from '../enums/provider-type.enum';
 import { ProviderCareService } from './provider-care-service.entity';
 
 @Entity('providers')
+@Check('CHK_providers_commission_override_bps', '"commission_override_bps" IS NULL OR ("commission_override_bps" >= 0 AND "commission_override_bps" <= 10000)')
 @Index('UQ_providers_user_id', ['userId'], { unique: true, where: '"user_id" IS NOT NULL' })
 @Index('UQ_providers_email', ['email'], { unique: true, where: '"email" IS NOT NULL' })
 @Index('UQ_providers_provider_reference', ['providerReference'], { unique: true })
@@ -82,6 +83,9 @@ export class Provider {
 
   @Column({ name: 'review_note', type: 'text', nullable: true })
   reviewNote!: string | null;
+
+  @Column({ name: 'commission_override_bps', type: 'smallint', nullable: true })
+  commissionOverrideBps!: number | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

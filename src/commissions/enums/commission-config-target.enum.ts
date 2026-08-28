@@ -1,0 +1,4 @@
+export enum CommissionConfigTarget {
+  PLATFORM_DEFAULT = 'PLATFORM_DEFAULT',
+  PROVIDER_OVERRIDE = 'PROVIDER_OVERRIDE',
+}
