@@ -15,6 +15,7 @@ import { UpdateProviderAvailabilityExceptionDto } from './dto/update-provider-av
 import { UpdateProviderLocationDto } from './dto/update-provider-location.dto';
 import { ProviderSelfServiceConfigurationService } from './provider-self-service-configuration.service';
 import { CreateProviderServiceAreaDto, UpdateProviderServiceAreaDto } from './dto/provider-service-area.dto';
+import { UpdateProviderServicePriceDto } from './dto/update-provider-service-price.dto';
 
 @ApiTags('Provider configuration') @ApiBearerAuth() @UseGuards(JwtAuthGuard, RolesGuard) @Roles(UserRole.PROVIDER)
 @ApiUnauthorizedResponse() @ApiForbiddenResponse() @ApiNotFoundResponse() @ApiConflictResponse() @Controller('provider')
@@ -24,6 +25,7 @@ export class ProviderSelfServiceConfigurationController {
   @Post('services') createService(@Req() req: { user: User }, @Body() dto: CreateProviderServiceDto) { return this.configuration.createService(req.user, dto); }
   @Patch('services/:id/activate') activateService(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.configuration.activateService(req.user, p.id); }
   @Patch('services/:id/deactivate') deactivateService(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.configuration.deactivateService(req.user, p.id); }
+  @Patch('services/:id/price') updateServicePrice(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto, @Body() dto: UpdateProviderServicePriceDto) { return this.configuration.updateServicePrice(req.user, p.id, dto); }
   @Post('services/:serviceId/locations/:locationId') link(@Req() req: { user: User }, @Param() p: ProviderServiceLocationParamsDto) { return this.configuration.linkLocation(req.user, p.serviceId, p.locationId); }
   @Delete('services/:serviceId/locations/:locationId') unlink(@Req() req: { user: User }, @Param() p: ProviderServiceLocationParamsDto) { return this.configuration.unlinkLocation(req.user, p.serviceId, p.locationId); }
 

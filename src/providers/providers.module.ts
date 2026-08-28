@@ -62,6 +62,7 @@ import { AdminDashboardService } from "./admin-dashboard.service";
 import { RewardsModule } from '../rewards/rewards.module';
 import { CareServiceDefinition } from './entities/care-service-definition.entity';
 import { ProviderCareService } from './entities/provider-care-service.entity';
+import { ProviderCareServiceDeliveryOption } from './entities/provider-care-service-delivery-option.entity';
 import { AdminCareServicesController, ProviderCareServicesController, PublicFindCareController } from './provider-care-services.controller';
 import { ProviderCareServicesService } from './provider-care-services.service';
 import { FindCareService } from './find-care.service';
@@ -96,6 +97,7 @@ import { ProviderCareEligibilityService } from './provider-care-eligibility.serv
       UserCredential,
       CareServiceDefinition,
       ProviderCareService,
+      ProviderCareServiceDeliveryOption,
     ]),
   ],
   controllers: [

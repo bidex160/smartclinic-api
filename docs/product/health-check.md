@@ -19,7 +19,9 @@ The resolved amount and currency are copied to the booking as an immutable quote
 
 ## Price management
 
-Operations will manage `PackagePrice` records through an authenticated, authorised admin capability. A price may start immediately or be scheduled for a future date. A normal price change closes the preceding active range at the new price's `effectiveFrom` date and creates a new historical row; it does not rewrite a historical amount. Prices can be deactivated without deletion.
+Admin manages Health Check package definitions and catalogue metadata. Each Provider configures an explicit non-negative minor-unit price and currency on its exact `ProviderService` (Provider + package + fulfilment mode); zero means free. Legacy `PackagePrice` rows are retained only as migration input/history and are not exposed as the live catalogue or booking price authority.
+
+Before a new booking can be funded, the backend runs the existing eligibility query and commercially binds the booking to one deterministic eligible ProviderService. `Booking.quotedAmount/currency` snapshot that Provider price. Payment and later matching remain provider-neutral operationally, but matching is constrained to the bound provider/service and cannot silently substitute a differently priced Provider.
 
 Changing catalogue pricing does not require a deployment. The management API is available only to authenticated `ADMIN` and `OPERATIONS` users; unauthenticated and regular-user requests are denied.
 

@@ -9,9 +9,6 @@ import { FulfilmentModesController } from "./fulfilment-modes.controller";
 import { FulfilmentModesService } from "./fulfilment-modes.service";
 import { HealthCheckPackagesController } from "./health-check-packages.controller";
 import { HealthCheckPackagesService } from "./health-check-packages.service";
-import { PackagePricingService } from "./package-pricing.service";
-import { PackagePricesService } from "./package-prices.service";
-import { AdminPackagePricesController } from "./admin-package-prices.controller";
 import { ProvidersModule } from "../providers/providers.module";
 import { Booking } from "../bookings/entities/booking.entity";
 import { BookingStatusHistory } from "../bookings/entities/booking-status-history.entity";
@@ -62,7 +59,6 @@ import { RewardsModule } from '../rewards/rewards.module';
   controllers: [
     HealthCheckPackagesController,
     FulfilmentModesController,
-    AdminPackagePricesController,
     ProviderHealthCheckEncountersController,
     MeHealthResultsController,
     AdminHealthResultAccessController,
@@ -72,13 +68,11 @@ import { RewardsModule } from '../rewards/rewards.module';
   providers: [
     HealthCheckPackagesService,
     FulfilmentModesService,
-    PackagePricingService,
-    PackagePricesService,
     ProviderHealthCheckEncountersService,
     HealthResultAccessService,
     PatientHealthCheckHistoryService,
     PatientPortalProfileService,
   ],
-  exports: [PackagePricingService, HealthResultAccessService],
+  exports: [HealthResultAccessService],
 })
 export class HealthChecksModule {}

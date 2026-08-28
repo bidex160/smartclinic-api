@@ -86,6 +86,7 @@ export class PaymentFlowService {
       const booking = await manager.getRepository(Booking).findOne({ where: { bookingReference: reference }, lock: { mode: "pessimistic_write" } });
       if (!booking || !booking.quotedAmount || !booking.currency) throw new NotFoundException("Booking not found");
       if (booking.status !== BookingStatus.AWAITING_FUNDING) throw new ConflictException("Booking is not eligible for reward redemption");
+      if (booking.commercialProviderId === null || booking.commercialProviderServiceId === null) throw new ConflictException('Booking requires provider commercial binding before funding');
       const redemptionRepository = manager.getRepository(RewardBookingRedemption);
       if (await redemptionRepository.findOne({ where: { bookingId: booking.id, status: RewardBookingRedemptionStatus.RESERVED }, lock: { mode: "pessimistic_write" } })) throw new ConflictException("Booking already has an active reward redemption");
       const user = await manager.getRepository(User).findOne({ where: { id: userId }, lock: { mode: "pessimistic_write" } });
@@ -162,6 +163,7 @@ export class PaymentFlowService {
         throw new BadRequestException(
           "Booking does not have a complete server quote",
         );
+      if (booking.commercialProviderId === null || booking.commercialProviderServiceId === null) throw new ConflictException('Booking requires provider commercial binding before funding');
       const payerContact = booking.bookerUserId
         ? null
         : await manager
@@ -546,6 +548,7 @@ private async applyVerification(
     if (!booking) {
       throw new NotFoundException("Booking not found");
     }
+    if (booking.commercialProviderId === null || booking.commercialProviderServiceId === null) throw new ConflictException('Booking requires provider commercial binding before settlement');
     const redemption = await this.findRedemption(manager, booking.id, true);
 
 

@@ -14,6 +14,8 @@ import { BookingContact } from './booking-contact.entity';
 import { BookingStatusHistory } from './booking-status-history.entity';
 import { PublicBookingSession } from './public-booking-session.entity';
 import { BookingVisitAddress } from './booking-visit-address.entity';
+import { ProviderService } from '../../providers/entities/provider-service.entity';
+import { Provider } from '../../providers/entities/provider.entity';
 
 @Entity('bookings')
 @Index('UQ_bookings_booking_reference', ['bookingReference'], { unique: true })
@@ -87,6 +89,11 @@ export class Booking {
 
   @Column({ name: 'currency', type: 'char', length: 3, nullable: true })
   currency!: string | null;
+
+  @Column({ name: 'commercial_provider_id', type: 'uuid', nullable: true }) commercialProviderId!: string | null;
+  @ManyToOne(() => Provider, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'commercial_provider_id' }) commercialProvider!: Provider | null;
+  @Column({ name: 'commercial_provider_service_id', type: 'uuid', nullable: true }) commercialProviderServiceId!: string | null;
+  @ManyToOne(() => ProviderService, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'commercial_provider_service_id' }) commercialProviderService!: ProviderService | null;
 
   @Column({ name: 'preferred_date', type: 'date', nullable: true })
   preferredDate!: string | null;

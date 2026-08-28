@@ -12,7 +12,7 @@ describe('ProviderCareEligibilityService', () => {
   const input = { careServiceDefinitionId: 'definition', providerReference: 'SCPR-ABCDEF0123456789', countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', deliveryMode: CareDeliveryMode.VIRTUAL };
   let offering: any; let provider: any; let definition: any; let candidateQb: any; let locationQb: any; let manager: any; let subject: ProviderCareEligibilityService;
   beforeEach(() => {
-    offering = { id: 'offering', providerId: 'provider', careServiceDefinitionId: 'definition', isActive: true, supportsAppointmentRequests: true, deliveryModes: [CareDeliveryMode.IN_PERSON, CareDeliveryMode.VIRTUAL] };
+    offering = { id: 'offering', providerId: 'provider', careServiceDefinitionId: 'definition', isActive: true, supportsAppointmentRequests: true, deliveryOptions: [{ deliveryMode: CareDeliveryMode.IN_PERSON, priceMinor: '1500', currency: 'NGN' }, { deliveryMode: CareDeliveryMode.VIRTUAL, priceMinor: '1000', currency: 'NGN' }] };
     provider = { id: 'provider', providerReference: input.providerReference, status: ProviderStatus.ACTIVE, onboardingStatus: ProviderOnboardingStatus.APPROVED, deletedAt: null, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja' };
     definition = { id: 'definition', isActive: true };
     candidateQb = {}; for (const method of ['innerJoin', 'where', 'andWhere']) candidateQb[method] = jest.fn().mockReturnValue(candidateQb); candidateQb.getOne = jest.fn().mockResolvedValue(offering);
@@ -31,7 +31,7 @@ describe('ProviderCareEligibilityService', () => {
     ['inactive provider', () => provider.status = ProviderStatus.INACTIVE], ['unapproved provider', () => provider.onboardingStatus = ProviderOnboardingStatus.SUBMITTED],
     ['deleted provider', () => provider.deletedAt = new Date()], ['inactive definition', () => definition.isActive = false],
   ])('rejects %s', async (_label, mutate) => { mutate(); await expect(subject.requireEligible(input, manager)).rejects.toBeInstanceOf(ConflictException); });
-  it('rejects an offering that does not support the requested delivery mode', async () => { offering.deliveryModes = [CareDeliveryMode.IN_PERSON]; await expect(subject.requireEligible(input, manager)).rejects.toBeInstanceOf(ConflictException); });
+  it('returns the selected delivery price and rejects an unsupported mode', async () => { await expect(subject.requireEligible(input, manager)).resolves.toMatchObject({ selectedDeliveryOption: { priceMinor: '1000', currency: 'NGN' } }); offering.deliveryOptions = offering.deliveryOptions.filter((option: any) => option.deliveryMode !== CareDeliveryMode.VIRTUAL); await expect(subject.requireEligible(input, manager)).rejects.toBeInstanceOf(ConflictException); });
   it('rejects a provider without the selected service', async () => { candidateQb.getOne.mockResolvedValue(null); await expect(subject.requireEligible(input, manager)).rejects.toBeInstanceOf(ConflictException); });
   it('requires coherent authoritative geography', async () => { provider.city = 'Lekki'; locationQb.getExists.mockResolvedValue(false); await expect(subject.requireEligible(input, manager)).rejects.toBeInstanceOf(ConflictException); });
 });

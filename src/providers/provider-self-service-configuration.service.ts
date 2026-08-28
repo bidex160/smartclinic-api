@@ -19,6 +19,7 @@ import { ProviderCapabilitiesService } from './provider-capabilities.service';
 import { ProviderConfigurationContextService } from './provider-configuration-context.service';
 import { ProviderServiceAreasService } from './provider-service-areas.service';
 import { CreateProviderServiceAreaDto, UpdateProviderServiceAreaDto } from './dto/provider-service-area.dto';
+import { UpdateProviderServicePriceDto } from './dto/update-provider-service-price.dto';
 
 @Injectable()
 export class ProviderSelfServiceConfigurationService {
@@ -38,6 +39,7 @@ export class ProviderSelfServiceConfigurationService {
   async createService(user: User, dto: CreateProviderServiceDto) { const provider = await this.context.resolve(user, true); return this.capabilities.createService(provider.id, dto); }
   async activateService(user: User, id: string) { await this.ownService(user, id, true); return this.capabilities.activateService(id); }
   async deactivateService(user: User, id: string) { await this.ownService(user, id, true); return this.capabilities.deactivateService(id); }
+  async updateServicePrice(user: User, id: string, dto: UpdateProviderServicePriceDto) { await this.ownService(user, id, true); return this.capabilities.updateServicePrice(id, dto); }
 
   async listLocations(user: User) { const provider = await this.context.resolve(user); return this.capabilities.listLocations(provider.id); }
   async createLocation(user: User, dto: CreateProviderLocationDto) { const provider = await this.context.resolve(user, true); return this.capabilities.createLocation(provider.id, dto); }

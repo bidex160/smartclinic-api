@@ -26,7 +26,7 @@ describe('ProviderSelfServiceConfigurationService', () => {
   });
 
   it('derives provider identity for capability creation and activation', async () => {
-    await subject.createService(user, { healthCheckPackageId: 'package-1', fulfilmentModeId: 'mode-1' });
+    await subject.createService(user, { healthCheckPackageId: 'package-1', fulfilmentModeId: 'mode-1', priceMinor: 4500000, currency: 'NGN' });
     await subject.activateService(user, 'service-1');
     expect(capabilities.createService).toHaveBeenCalledWith('provider-1', expect.any(Object));
     expect(services.findOne).toHaveBeenCalledWith({ where: { id: 'service-1', providerId: 'provider-1' } });

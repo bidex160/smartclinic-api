@@ -25,7 +25,7 @@ describe('CareAppointmentsService', () => {
     appointmentRepo = { exists: jest.fn().mockResolvedValue(false), createQueryBuilder: jest.fn().mockReturnValue(qb), create: jest.fn((value) => ({ id: 'appointment-id', ...value })), save: jest.fn(async (value) => value) };
     providerRepo = { findOne: jest.fn().mockResolvedValue(provider) };
     careRepo = { findOne: jest.fn().mockResolvedValue(care), save: jest.fn(async (value) => value) };
-    offeringRepo = { findOne: jest.fn().mockResolvedValue({ id: 'offering-id', providerId: provider.id, careServiceDefinitionId: 'definition-id', isActive: true, supportsAppointmentRequests: true, deliveryModes: [CareDeliveryMode.IN_PERSON, CareDeliveryMode.VIRTUAL, CareDeliveryMode.HOME_VISIT], definition: { isActive: true } }) };
+    offeringRepo = { findOne: jest.fn().mockResolvedValue({ id: 'offering-id', providerId: provider.id, careServiceDefinitionId: 'definition-id', isActive: true, supportsAppointmentRequests: true, deliveryOptions: [CareDeliveryMode.IN_PERSON, CareDeliveryMode.VIRTUAL, CareDeliveryMode.HOME_VISIT].map((deliveryMode) => ({ deliveryMode })), definition: { isActive: true } }) };
     locationRepo = { findOne: jest.fn().mockResolvedValue({ id: 'location-id', providerId: provider.id, isActive: true, locationReference: dto.providerLocationReference }) };
     appointmentHistory = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) }; requestHistory = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) };
     manager = { transaction: jest.fn(async (work) => work(manager)), getRepository: jest.fn((entity) => entity === CareAppointment ? appointmentRepo : entity === Provider ? providerRepo : entity === CareRequest ? careRepo : entity === ProviderCareService ? offeringRepo : entity === ProviderLocation ? locationRepo : entity === CareAppointmentStatusHistory ? appointmentHistory : entity === CareRequestStatusHistory ? requestHistory : {}) };
@@ -51,7 +51,7 @@ describe('CareAppointmentsService', () => {
 
   it('revalidates that the exact offering still supports the requested mode', async () => {
     care.deliveryMode = CareDeliveryMode.VIRTUAL;
-    offeringRepo.findOne.mockResolvedValue({ id: 'offering-id', providerId: provider.id, careServiceDefinitionId: 'definition-id', isActive: true, supportsAppointmentRequests: true, deliveryModes: [CareDeliveryMode.IN_PERSON], definition: { isActive: true } });
+    offeringRepo.findOne.mockResolvedValue({ id: 'offering-id', providerId: provider.id, careServiceDefinitionId: 'definition-id', isActive: true, supportsAppointmentRequests: true, deliveryOptions: [{ deliveryMode: CareDeliveryMode.IN_PERSON }], definition: { isActive: true } });
     await expect(subject.schedule(user, care.reference, { ...dto, providerLocationReference: null })).rejects.toBeInstanceOf(ConflictException);
   });
 

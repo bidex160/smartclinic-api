@@ -30,12 +30,15 @@ import { PatientAccountLinkingService } from './patient-account-linking.service'
 import { BookingVisitAddress } from './entities/booking-visit-address.entity';
 import { MeHealthCheckBookingsController } from './me-health-check-bookings.controller';
 import { MeHealthCheckPaymentsController, MeHealthCheckRewardsController } from './me-health-check-payments.controller';
+import { ProvidersModule } from '../providers/providers.module';
+import { ProviderService } from '../providers/entities/provider-service.entity';
 
 @Module({
   imports: [
     HealthChecksModule,
     AuthModule,
     PaymentsModule,
+    ProvidersModule,
     TypeOrmModule.forFeature([
       Booking,
       BookingVisitAddress,
@@ -52,6 +55,7 @@ import { MeHealthCheckPaymentsController, MeHealthCheckRewardsController } from 
       ProviderBookingReservation,
       PublicBookingSession,
       HealthResultAccessGrant,
+      ProviderService,
     ]),
   ],
   controllers: [BookingsController, PublicBookingsController, AdminBookingLifecycleController, MePatientLinkingController, MeHealthCheckBookingsController, MeHealthCheckPaymentsController, MeHealthCheckRewardsController],

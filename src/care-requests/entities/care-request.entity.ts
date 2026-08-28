@@ -21,6 +21,9 @@ import { CareDeliveryMode } from '../../providers/enums/care-delivery-mode.enum'
 @Check('CHK_care_requests_country_code', `"country_code" ~ '^[A-Z]{2}$'`)
 @Check('CHK_care_requests_assigned_pair', '("assigned_provider_id" IS NULL AND "assigned_provider_care_service_id" IS NULL) OR ("assigned_provider_id" IS NOT NULL AND "assigned_provider_care_service_id" IS NOT NULL)')
 @Check('CHK_care_requests_preferred_pair', '("preferred_provider_id" IS NULL AND "preferred_provider_care_service_id" IS NULL) OR ("preferred_provider_id" IS NOT NULL AND "preferred_provider_care_service_id" IS NOT NULL)')
+@Check('CHK_care_requests_service_price_pair', '("service_price_minor" IS NULL AND "service_currency" IS NULL) OR ("service_price_minor" IS NOT NULL AND "service_currency" IS NOT NULL)')
+@Check('CHK_care_requests_service_price_nonnegative', '"service_price_minor" IS NULL OR "service_price_minor" >= 0')
+@Check('CHK_care_requests_service_currency', '"service_currency" IS NULL OR "service_currency" ~ \'^[A-Z]{3}$\'')
 export class CareRequest {
   @PrimaryGeneratedColumn('uuid') id!: string;
   @Column({ type: 'varchar', length: 32 }) reference!: string;
@@ -42,6 +45,8 @@ export class CareRequest {
   @Column({ name: 'state_or_region', type: 'varchar', length: 120 }) stateOrRegion!: string;
   @Column({ type: 'varchar', length: 120 }) city!: string;
   @Column({ name: 'delivery_mode', type: 'enum', enum: CareDeliveryMode, enumName: 'general_care_delivery_mode_enum', default: CareDeliveryMode.IN_PERSON }) deliveryMode!: CareDeliveryMode;
+  @Column({ name: 'service_price_minor', type: 'bigint', nullable: true }) servicePriceMinor!: string | null;
+  @Column({ name: 'service_currency', type: 'char', length: 3, nullable: true }) serviceCurrency!: string | null;
   @Column({ type: 'text', nullable: true }) notes!: string | null;
   @Column({ name: 'preferred_date', type: 'date', nullable: true }) preferredDate!: string | null;
   @Column({ name: 'preferred_time', type: 'time', nullable: true }) preferredTime!: string | null;

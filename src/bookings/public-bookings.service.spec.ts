@@ -5,6 +5,7 @@ import { BookingStatusHistory } from './entities/booking-status-history.entity';
 import { Booking } from './entities/booking.entity';
 import { CreatePublicBookingDto, PublicBookingRelationship } from './dto/create-public-booking.dto';
 import { PublicBookingsService } from './public-bookings.service';
+import { ProviderService } from '../providers/entities/provider-service.entity';
 
 describe('PublicBookingsService', () => {
   const createPublicBookingDto: CreatePublicBookingDto = {
@@ -64,6 +65,7 @@ describe('PublicBookingsService', () => {
         if (entity === Booking) return bookingTransactionRepository;
         if (entity === BookingContact) return contactRepository;
         if (entity === BookingStatusHistory) return historyRepository;
+        if (entity === ProviderService) return { findOne: jest.fn().mockResolvedValue({ id: 'provider-service', providerId: 'provider-1', healthCheckPackageId: createPublicBookingDto.booking.healthCheckPackageId, fulfilmentModeId: createPublicBookingDto.booking.fulfilmentModeId, priceMinor: '1250000', currency: 'NGN', isActive: true }) };
         return patientRepository;
       }),
     };
@@ -86,19 +88,15 @@ describe('PublicBookingsService', () => {
         participant: { givenName: 'Ada', familyName: 'Okafor' },
       } as Booking),
     };
-    const healthCheckPackageRepository = { exists: jest.fn().mockResolvedValue(options.packageExists ?? true) };
+    const healthCheckPackageRepository = { exists: jest.fn().mockResolvedValue(options.packageExists ?? true), findOne: jest.fn().mockResolvedValue({ id: createPublicBookingDto.booking.healthCheckPackageId, isActive: true, estimatedDurationMinutes: 30 }) };
     const fulfilmentModeRepository = { exists: jest.fn().mockResolvedValue(options.modeExists ?? true), findOne: jest.fn().mockResolvedValue({ code: 'PROVIDER_LOCATION' }) };
-    const packagePricingService = {
-      resolveCurrentPrice: options.priceError
-        ? jest.fn().mockRejectedValue(options.priceError)
-        : jest.fn().mockResolvedValue({ amount: '12500.00', currency: 'NGN' }),
-    };
+    const providerCapabilities = { findEligibleProviders: options.priceError ? jest.fn().mockRejectedValue(options.priceError) : jest.fn().mockResolvedValue([{ id: 'provider-service', providerId: 'provider-1', priceMinor: 1250000, currency: 'NGN' }]) };
     const sessions = { create: jest.fn().mockResolvedValue('raw-session-token') };
     const service = new PublicBookingsService(
       bookingRepository as never,
       healthCheckPackageRepository as never,
       fulfilmentModeRepository as never,
-      packagePricingService as never,
+      providerCapabilities as never,
       sessions as never,
     );
 
@@ -109,7 +107,7 @@ describe('PublicBookingsService', () => {
       bookingTransactionRepository,
       contactRepository,
       historyRepository,
-      packagePricingService,
+      packagePricingService: providerCapabilities,
       fulfilmentModeRepository,
     };
   }

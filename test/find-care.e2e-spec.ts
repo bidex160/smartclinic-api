@@ -35,18 +35,22 @@ describe('Find Care API authorization (e2e)', () => {
   });
 
   it('requires PROVIDER and derives service ownership from JWT context', async () => {
-    const body = { careServiceDefinitionId: definitionId, priceMinor: 250000, currency: 'NGN', deliveryModes: [CareDeliveryMode.IN_PERSON, CareDeliveryMode.VIRTUAL] };
+    const body = { careServiceDefinitionId: definitionId, deliveryOptions: [{ deliveryMode: CareDeliveryMode.IN_PERSON, priceMinor: 250000, currency: 'NGN' }, { deliveryMode: CareDeliveryMode.VIRTUAL, priceMinor: 180000, currency: 'NGN' }] };
     await request(app.getHttpServer()).post('/api/v1/provider/care-services').send(body).expect(401);
     await request(app.getHttpServer()).post('/api/v1/provider/care-services').set('Authorization', 'Bearer user').send(body).expect(403);
     await request(app.getHttpServer()).post('/api/v1/provider/care-services').set('Authorization', 'Bearer provider').send({ ...body, providerId: 'spoofed', isActive: false }).expect(201);
     expect(services.createMine).toHaveBeenCalledWith(expect.objectContaining({ id: 'provider-user' }), body);
+    await request(app.getHttpServer()).post('/api/v1/provider/care-services').set('Authorization', 'Bearer provider').send({ ...body, deliveryOptions: [] }).expect(400);
+    await request(app.getHttpServer()).post('/api/v1/provider/care-services').set('Authorization', 'Bearer provider').send({ ...body, deliveryOptions: [{ deliveryMode: 'VIRTUAL', priceMinor: -1, currency: 'NGN' }] }).expect(400);
+    await request(app.getHttpServer()).post('/api/v1/provider/care-services').set('Authorization', 'Bearer provider').send({ ...body, deliveryOptions: [body.deliveryOptions[0], body.deliveryOptions[0]] }).expect(400);
   });
 
   it('allows ADMIN/OPERATIONS catalogue and support management only', async () => {
     const definition = { code: 'GENERAL_CONSULTATION', name: 'General consultation' };
     await request(app.getHttpServer()).post('/api/v1/admin/care-service-definitions').set('Authorization', 'Bearer provider').send(definition).expect(403);
     for (const token of ['admin', 'operations']) await request(app.getHttpServer()).post('/api/v1/admin/care-service-definitions').set('Authorization', `Bearer ${token}`).send(definition).expect(201);
-    await request(app.getHttpServer()).post(`/api/v1/admin/providers/${providerId}/care-services`).set('Authorization', 'Bearer admin').send({ careServiceDefinitionId: definitionId }).expect(201);
-    expect(services.createForProvider).toHaveBeenCalledWith(providerId, { careServiceDefinitionId: definitionId });
+    const deliveryOptions = [{ deliveryMode: CareDeliveryMode.IN_PERSON, priceMinor: 250000, currency: 'NGN' }];
+    await request(app.getHttpServer()).post(`/api/v1/admin/providers/${providerId}/care-services`).set('Authorization', 'Bearer admin').send({ careServiceDefinitionId: definitionId, deliveryOptions }).expect(201);
+    expect(services.createForProvider).toHaveBeenCalledWith(providerId, { careServiceDefinitionId: definitionId, deliveryOptions });
   });
 });

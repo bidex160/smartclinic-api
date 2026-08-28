@@ -4,7 +4,6 @@ import { Repository } from 'typeorm';
 
 import { FulfilmentMode } from '../health-checks/entities/fulfilment-mode.entity';
 import { HealthCheckPackage } from '../health-checks/entities/health-check-package.entity';
-import { PackagePricingService } from '../health-checks/package-pricing.service';
 import { Organisation } from '../organisations/entities/organisation.entity';
 import { Patient } from '../patients/entities/patient.entity';
 import { User } from '../users/entities/user.entity';
@@ -23,6 +22,9 @@ import { validateBookingSchedulingPreference } from './booking-scheduling';
 import { CreateSelfBookingDto } from './dto/create-self-booking.dto';
 import { PatientStatus } from '../patients/enums/patient-status.enum';
 import { UserStatus } from '../users/enums/user-status.enum';
+import { ProviderCapabilitiesService } from '../providers/provider-capabilities.service';
+import { deriveAppointmentEndTime } from '../providers/booking-availability-context';
+import { ProviderService } from '../providers/entities/provider-service.entity';
 
 
 @Injectable()
@@ -40,7 +42,7 @@ export class BookingsService {
     private readonly healthCheckPackageRepository: Repository<HealthCheckPackage>,
     @InjectRepository(FulfilmentMode)
     private readonly fulfilmentModeRepository: Repository<FulfilmentMode>,
-    private readonly packagePricingService: PackagePricingService,
+    private readonly providerCapabilities: ProviderCapabilitiesService,
   ) {}
 
   async createSelf(user: User, dto: CreateSelfBookingDto): Promise<BookingResponseDto> {
@@ -68,6 +70,7 @@ export class BookingsService {
     validateBookingSchedulingPreference(createBookingDto);
     await this.validateReferences(createBookingDto);
     await this.validateVisitAddress(createBookingDto.fulfilmentModeId, createBookingDto.visitAddress);
+    const capability = await this.selectCommercialCapability(createBookingDto);
 
     for (let attempt = 0; attempt < MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS; attempt += 1) {
       try {
@@ -75,19 +78,17 @@ export class BookingsService {
           const bookingRepository = manager.getRepository(Booking);
           const historyRepository = manager.getRepository(BookingStatusHistory);
           const addressRepository = manager.getRepository(BookingVisitAddress);
-          const quote = await this.packagePricingService.resolveCurrentPrice(
-            createBookingDto.healthCheckPackageId,
-            createBookingDto.fulfilmentModeId,
-            new Date(),
-            manager,
-          );
+          const providerService = await manager.getRepository(ProviderService).findOne({ where: { id: capability.id, providerId: capability.providerId, healthCheckPackageId: createBookingDto.healthCheckPackageId, fulfilmentModeId: createBookingDto.fulfilmentModeId, isActive: true }, lock: { mode: 'pessimistic_read' } });
+          if (!providerService) throw new ConflictException('Selected provider Health Check offering is no longer available');
           const { visitAddress: _visitAddress, ...bookingInput } = createBookingDto;
           const booking = bookingRepository.create({
             ...bookingInput,
             bookingReference: generateBookingReference(),
             organisationContextId: createBookingDto.organisationContextId ?? null,
-            quotedAmount: quote.amount,
-            currency: quote.currency,
+            quotedAmount: this.fromMinor(providerService.priceMinor),
+            currency: providerService.currency,
+            commercialProviderId: providerService.providerId,
+            commercialProviderServiceId: providerService.id,
             preferredDate: createBookingDto.preferredDate ?? null,
             preferredTimeWindowStart: createBookingDto.preferredTimeWindowStart ?? null,
             preferredTimeWindowEnd: null,
@@ -162,6 +163,18 @@ export class BookingsService {
       throw new BadRequestException('One or more booking references are invalid or unavailable');
     }
   }
+
+  private async selectCommercialCapability(dto: CreateBookingDto) {
+    const healthPackage = await this.healthCheckPackageRepository.findOne({ where: { id: dto.healthCheckPackageId, isActive: true } });
+    const end = healthPackage?.estimatedDurationMinutes ? deriveAppointmentEndTime(dto.preferredTimeWindowStart, healthPackage.estimatedDurationMinutes) : null;
+    if (!end) throw new BadRequestException('Health Check package has no valid appointment duration');
+    const address = dto.visitAddress ? this.normalizedAddress(dto.visitAddress) : null;
+    const eligible = await this.providerCapabilities.findEligibleProviders(dto.healthCheckPackageId, dto.fulfilmentModeId, { requestedDate: dto.preferredDate, requestedStartTime: dto.preferredTimeWindowStart, requestedEndTime: end, requestedTimezone: dto.preferredTimezone, visitAddress: address });
+    const capability = eligible[0];
+    if (!capability) throw new ConflictException('No eligible priced Provider is currently available for this Health Check');
+    return capability;
+  }
+  private fromMinor(value: string) { const minor = BigInt(value); return `${minor / 100n}.${(minor % 100n).toString().padStart(2, '0')}`; }
 
   private selfBookingNotFound(): never {
     throw new NotFoundException('Health Check was not found for the authenticated patient');

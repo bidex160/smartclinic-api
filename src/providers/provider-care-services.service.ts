@@ -1,13 +1,13 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { CareServiceDefinition } from './entities/care-service-definition.entity';
 import { ProviderCareService } from './entities/provider-care-service.entity';
 import { Provider } from './entities/provider.entity';
-import { CreateCareServiceDefinitionDto, CreateProviderCareServiceDto, UpdateCareServiceDefinitionDto, UpdateProviderCareServiceDto } from './dto/care-service.dto';
+import { CreateCareServiceDefinitionDto, CreateProviderCareServiceDto, ProviderCareServiceDeliveryOptionDto, UpdateCareServiceDefinitionDto, UpdateProviderCareServiceDto } from './dto/care-service.dto';
 import { CurrentProviderService } from './current-provider.service';
-import { CareDeliveryMode } from './enums/care-delivery-mode.enum';
+import { ProviderCareServiceDeliveryOption } from './entities/provider-care-service-delivery-option.entity';
 
 @Injectable()
 export class ProviderCareServicesService {
@@ -43,39 +43,42 @@ export class ProviderCareServicesService {
 
   async listForProvider(providerId: string) {
     await this.requireProvider(providerId);
-    return this.services.find({ where: { providerId }, relations: { definition: true }, order: { createdAt: 'ASC' } });
+    return this.services.find({ where: { providerId }, relations: { definition: true, deliveryOptions: true }, order: { createdAt: 'ASC', deliveryOptions: { deliveryMode: 'ASC' } } });
   }
 
   async createForProvider(providerId: string, dto: CreateProviderCareServiceDto) {
     await this.requireProvider(providerId);
-    const definition = await this.definitions.findOne({ where: { id: dto.careServiceDefinitionId, isActive: true } });
-    if (!definition) throw new ConflictException('Care service definition is not active');
-    if (await this.services.exists({ where: { providerId, careServiceDefinitionId: definition.id } })) throw new ConflictException('Provider already offers this care service');
-    this.validatePrice(dto.priceMinor, dto.currency);
+    this.validateDeliveryOptions(dto.deliveryOptions);
     this.validateFastTrack(dto.supportsFastTrack ?? false, dto.fastTrackFeeMinor, dto.fastTrackCurrency);
-    const deliveryModes = this.validateDeliveryModes(dto.deliveryModes ?? [CareDeliveryMode.IN_PERSON]);
-    const entity = this.services.create({ providerId, careServiceDefinitionId: definition.id, descriptionOverride: dto.description ?? null, priceMinor: dto.priceMinor == null ? null : String(dto.priceMinor), currency: dto.priceMinor == null ? null : dto.currency!, supportsAppointmentRequests: dto.supportsAppointmentRequests ?? true, deliveryModes, supportsFastTrack: dto.supportsFastTrack ?? false, fastTrackFeeMinor: dto.supportsFastTrack ? String(dto.fastTrackFeeMinor) : null, fastTrackCurrency: dto.supportsFastTrack ? dto.fastTrackCurrency! : null, isActive: true });
-    return this.services.save(entity);
+    return this.services.manager.transaction(async (manager) => {
+      const definition = await manager.getRepository(CareServiceDefinition).findOne({ where: { id: dto.careServiceDefinitionId, isActive: true }, lock: { mode: 'pessimistic_read' } });
+      if (!definition) throw new ConflictException('Care service definition is not active');
+      if (await manager.getRepository(ProviderCareService).exists({ where: { providerId, careServiceDefinitionId: definition.id } })) throw new ConflictException('Provider already offers this care service');
+      const services = manager.getRepository(ProviderCareService);
+      const entity = await services.save(services.create({ providerId, careServiceDefinitionId: definition.id, descriptionOverride: dto.description ?? null, supportsAppointmentRequests: dto.supportsAppointmentRequests ?? true, supportsFastTrack: dto.supportsFastTrack ?? false, fastTrackFeeMinor: dto.supportsFastTrack ? String(dto.fastTrackFeeMinor) : null, fastTrackCurrency: dto.supportsFastTrack ? dto.fastTrackCurrency! : null, isActive: true }));
+      await this.replaceDeliveryOptions(manager, entity.id, dto.deliveryOptions);
+      return this.load(manager, entity.id, providerId);
+    });
   }
 
   async updateForProvider(providerId: string, id: string, dto: UpdateProviderCareServiceDto) {
-    const service = await this.owned(providerId, id);
-    const nextPrice = dto.priceMinor !== undefined ? dto.priceMinor : service.priceMinor == null ? null : Number(service.priceMinor);
-    const nextCurrency = dto.currency !== undefined ? dto.currency : service.currency;
-    this.validatePrice(nextPrice, nextCurrency);
-    const nextFastTrack = dto.supportsFastTrack ?? service.supportsFastTrack;
-    const nextFastTrackFee = nextFastTrack ? (dto.fastTrackFeeMinor !== undefined ? dto.fastTrackFeeMinor : service.fastTrackFeeMinor == null ? null : Number(service.fastTrackFeeMinor)) : null;
-    const nextFastTrackCurrency = nextFastTrack ? (dto.fastTrackCurrency !== undefined ? dto.fastTrackCurrency : service.fastTrackCurrency) : null;
-    this.validateFastTrack(nextFastTrack, nextFastTrackFee, nextFastTrackCurrency);
-    if (dto.description !== undefined) service.descriptionOverride = dto.description;
-    if (dto.priceMinor !== undefined) service.priceMinor = dto.priceMinor == null ? null : String(dto.priceMinor);
-    if (dto.currency !== undefined || dto.priceMinor === null) service.currency = nextPrice == null ? null : nextCurrency;
-    if (dto.supportsAppointmentRequests !== undefined) service.supportsAppointmentRequests = dto.supportsAppointmentRequests;
-    if (dto.deliveryModes !== undefined) service.deliveryModes = this.validateDeliveryModes(dto.deliveryModes);
-    service.supportsFastTrack = nextFastTrack;
-    service.fastTrackFeeMinor = nextFastTrack ? String(nextFastTrackFee) : null;
-    service.fastTrackCurrency = nextFastTrack ? nextFastTrackCurrency : null;
-    return this.services.save(service);
+    if (dto.deliveryOptions !== undefined) this.validateDeliveryOptions(dto.deliveryOptions);
+    return this.services.manager.transaction(async (manager) => {
+      const service = await manager.getRepository(ProviderCareService).findOne({ where: { id, providerId }, lock: { mode: 'pessimistic_write' } });
+      if (!service) throw new NotFoundException('Provider care service was not found');
+      const nextFastTrack = dto.supportsFastTrack ?? service.supportsFastTrack;
+      const nextFastTrackFee = nextFastTrack ? (dto.fastTrackFeeMinor !== undefined ? dto.fastTrackFeeMinor : service.fastTrackFeeMinor == null ? null : Number(service.fastTrackFeeMinor)) : null;
+      const nextFastTrackCurrency = nextFastTrack ? (dto.fastTrackCurrency !== undefined ? dto.fastTrackCurrency : service.fastTrackCurrency) : null;
+      this.validateFastTrack(nextFastTrack, nextFastTrackFee, nextFastTrackCurrency);
+      if (dto.description !== undefined) service.descriptionOverride = dto.description;
+      if (dto.supportsAppointmentRequests !== undefined) service.supportsAppointmentRequests = dto.supportsAppointmentRequests;
+      service.supportsFastTrack = nextFastTrack;
+      service.fastTrackFeeMinor = nextFastTrack ? String(nextFastTrackFee) : null;
+      service.fastTrackCurrency = nextFastTrack ? nextFastTrackCurrency : null;
+      await manager.getRepository(ProviderCareService).save(service);
+      if (dto.deliveryOptions !== undefined) await this.replaceDeliveryOptions(manager, service.id, dto.deliveryOptions);
+      return this.load(manager, service.id, providerId);
+    });
   }
 
   async setActive(providerId: string, id: string, active: boolean) {
@@ -85,17 +88,21 @@ export class ProviderCareServicesService {
     return this.services.save(service);
   }
 
-  private validatePrice(priceMinor: number | null | undefined, currency: string | null | undefined) {
-    if (priceMinor == null && currency != null) throw new ConflictException('Currency is only valid with a price');
-    if (priceMinor != null && !currency) throw new ConflictException('Currency is required with a price');
-  }
   private validateFastTrack(enabled: boolean, feeMinor: number | null | undefined, currency: string | null | undefined) {
     if (!enabled && (feeMinor != null || currency != null)) throw new ConflictException('FastTrack fee is only valid when FastTrack is enabled');
     if (enabled && (!feeMinor || !currency)) throw new ConflictException('FastTrack requires a positive fee and currency');
   }
-  private validateDeliveryModes(modes: CareDeliveryMode[]) {
-    if (!modes.length || new Set(modes).size !== modes.length || modes.some((mode) => !Object.values(CareDeliveryMode).includes(mode))) throw new ConflictException('At least one unique valid care delivery mode is required');
-    return [...modes];
+  private validateDeliveryOptions(options: ProviderCareServiceDeliveryOptionDto[]) {
+    if (!options?.length || new Set(options.map((option) => option.deliveryMode)).size !== options.length) throw new ConflictException('At least one unique care delivery option is required');
+    if (options.some((option) => !Number.isSafeInteger(option.priceMinor) || option.priceMinor < 0 || !/^[A-Z]{3}$/.test(option.currency))) throw new ConflictException('Every delivery option requires a valid non-negative minor-unit price and currency');
+  }
+  private async replaceDeliveryOptions(manager: EntityManager, providerCareServiceId: string, options: ProviderCareServiceDeliveryOptionDto[]) {
+    const repository = manager.getRepository(ProviderCareServiceDeliveryOption);
+    await repository.delete({ providerCareServiceId });
+    await repository.save(options.map((option) => repository.create({ providerCareServiceId, deliveryMode: option.deliveryMode, priceMinor: String(option.priceMinor), currency: option.currency })));
+  }
+  private load(manager: EntityManager, id: string, providerId: string) {
+    return manager.getRepository(ProviderCareService).findOneOrFail({ where: { id, providerId }, relations: { definition: true, deliveryOptions: true }, order: { deliveryOptions: { deliveryMode: 'ASC' } } });
   }
   private async owned(providerId: string, id: string) {
     const service = await this.services.findOne({ where: { id, providerId }, relations: { definition: true } });

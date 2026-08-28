@@ -32,7 +32,7 @@ Discovery filters service code, Provider type, and exact normalized country/stat
 
 Public provider responses use the immutable server-generated `providerReference`, never the internal UUID. They expose display name, Provider type, safe location data, and active public services only. Email, phone, professional reference, user identity, onboarding review data, availability internals, Health Check assignments, and financial internals are excluded.
 
-A null service price means price on request. Otherwise the amount is stored and returned in integer minor units with an ISO-style three-letter currency. SmartClinic does not assume uniform Provider pricing.
+Each `ProviderCareService` owns one relational delivery option for every supported mode. Every option has an explicit non-negative integer minor-unit price and ISO-style three-letter currency; zero explicitly means free and price-on-request is not supported. Public discovery returns `deliveryOptions`, and a delivery-mode filter requires an exact configured option. Providers may set different prices per mode and SmartClinic does not assume uniform pricing between Providers.
 
 Care Requests, appointment processing, FastTrack flags/requests, queue behavior, private access codes, and Find Care payments remain deferred.
 # FastTrack discovery

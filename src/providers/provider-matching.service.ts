@@ -81,7 +81,7 @@ export class ProviderMatchingService {
       booking.fulfilmentModeId,
       context,
     );
-    const capability = eligible.find((service) => service.providerId === providerId);
+    const capability = eligible.find((service) => service.providerId === providerId && (!booking.commercialProviderServiceId || service.id === booking.commercialProviderServiceId));
     if (!capability)
       throw new ConflictException("Selected provider is not currently eligible for this booking");
     return this.createOfferForProvider(booking, providerId, this.locationForOffer(booking, capability.providerLocationIds), context, actorUserId, "MANUAL_PROVIDER_ASSIGNED", null, now, false);
@@ -98,6 +98,7 @@ export class ProviderMatchingService {
     if (reasonNote.length < 3) throw new BadRequestException("Override reason is required");
     const booking = await this.requireBookingByReference(bookingReference);
     this.assertCanStartMatching(booking);
+    if (booking.commercialProviderId && booking.commercialProviderId !== providerId) throw new ConflictException('Commercially bound bookings cannot be assigned to a different provider');
     const context = this.requireAvailabilityContext(booking);
     if (booking.fulfilmentMode.code === "PROVIDER_LOCATION")
       throw new ConflictException(
@@ -121,6 +122,7 @@ export class ProviderMatchingService {
     const reasonNote = reason.trim();
     if (reasonNote.length < 3) throw new BadRequestException("Reassignment reason is required");
     const target = await this.requireBookingByReference(bookingReference);
+    if (providerId && target.commercialProviderId && target.commercialProviderId !== providerId) throw new ConflictException('Reassignment cannot change the commercially bound provider');
     await this.assignments.manager.transaction(async (manager) => {
       const bookingRepository = manager.getRepository(Booking);
       const assignmentRepository = manager.getRepository(ProviderAssignment);
@@ -247,7 +249,7 @@ export class ProviderMatchingService {
               lockedContext.window,
               assignment.id,
             );
-            const capability = eligible.find((service) => service.providerId === providerId);
+            const capability = eligible.find((service) => service.providerId === providerId && (!lockedBooking.commercialProviderServiceId || service.id === lockedBooking.commercialProviderServiceId));
             if (!capability)
               throw new ConflictException(
                 "Provider is no longer eligible or has conflicting reserved capacity",
@@ -659,7 +661,7 @@ private addMinutesToTime(
       previous.map((assignment) => assignment.providerId),
     );
     const candidate = eligible.find(
-      (service) => !previousProviderIds.has(service.providerId),
+      (service) => (!booking.commercialProviderServiceId || service.id === booking.commercialProviderServiceId) && (!booking.commercialProviderId || service.providerId === booking.commercialProviderId) && !previousProviderIds.has(service.providerId),
     );
 
     return this.createOfferForProvider(

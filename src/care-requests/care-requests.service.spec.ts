@@ -26,7 +26,7 @@ describe('CareRequestsService', () => {
     manager = { getRepository: (entity: any) => repositories.get(entity), transaction: jest.fn(async (fn) => fn(manager)) };
     (patientRepo as any).manager = manager;
     requests = { manager };
-    eligibility = { requireEligible: jest.fn().mockResolvedValue({ id: 'offering-1', providerId: provider.id, provider }) };
+    eligibility = { requireEligible: jest.fn().mockResolvedValue({ id: 'offering-1', providerId: provider.id, provider, selectedDeliveryOption: { deliveryMode: CareDeliveryMode.IN_PERSON, priceMinor: '1500000', currency: 'NGN' } }) };
     current = { resolveOperational: jest.fn().mockResolvedValue(provider) };
     subject = new CareRequestsService(requests, patientRepo as any, eligibility, current);
     (subject as any).getMapped = jest.fn(async (_manager: any, id: string) => ({ reference: rows.find((row) => row.id === id)?.reference, status: rows.find((row) => row.id === id)?.status }));
@@ -36,6 +36,7 @@ describe('CareRequestsService', () => {
     const result: any = await subject.create(user, dto);
     expect(result.status).toBe(CareRequestStatus.MATCHING); expect(rows[0].assignedProviderId).toBeNull(); expect(eligibility.requireEligible).not.toHaveBeenCalled();
     expect(rows[0].deliveryMode).toBe(CareDeliveryMode.IN_PERSON);
+    expect(rows[0]).toMatchObject({ servicePriceMinor: null, serviceCurrency: null });
     expect(histories).toEqual([expect.objectContaining({ fromStatus: null, toStatus: CareRequestStatus.MATCHING, actorUserId: user.id, reasonCode: 'MATCHING_REQUESTED' })]);
     expect(manager.transaction).toHaveBeenCalledTimes(1);
   });
@@ -48,7 +49,7 @@ describe('CareRequestsService', () => {
   it('routes an eligible preferred provider and exact offering for response', async () => {
     const result: any = await subject.create(user, { ...dto, preferredProviderReference: provider.providerReference });
     expect(result.status).toBe(CareRequestStatus.AWAITING_PROVIDER_RESPONSE);
-    expect(rows[0]).toMatchObject({ preferredProviderId: provider.id, preferredProviderCareServiceId: 'offering-1', assignedProviderId: provider.id, assignedProviderCareServiceId: 'offering-1' });
+    expect(rows[0]).toMatchObject({ preferredProviderId: provider.id, preferredProviderCareServiceId: 'offering-1', assignedProviderId: provider.id, assignedProviderCareServiceId: 'offering-1', servicePriceMinor: '1500000', serviceCurrency: 'NGN' });
   });
 
   it('rejects an inactive/unknown service', async () => { manager.getRepository(CareServiceDefinition).findOne.mockResolvedValue(null); await expect(subject.create(user, dto)).rejects.toBeInstanceOf(ConflictException); expect(rows).toHaveLength(0); });
@@ -58,7 +59,7 @@ describe('CareRequestsService', () => {
   it('prevents cancellation after provider acceptance', async () => { manager.getRepository(CareRequest).findOne.mockResolvedValue({ id: 'request', status: CareRequestStatus.PROVIDER_ACCEPTED }); await expect(subject.cancelMine(user, 'SC-CARE-ABCDEF123456')).rejects.toBeInstanceOf(ConflictException); });
 
   it('lets only the assigned provider accept and revalidates eligibility under lock', async () => {
-    const request: any = { id: 'request', reference: 'SC-CARE-ABCDEF123456', status: CareRequestStatus.AWAITING_PROVIDER_RESPONSE, assignedProviderId: provider.id, careServiceDefinitionId: definition.id, deliveryMode: CareDeliveryMode.VIRTUAL, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja' }; rows.push(request); manager.getRepository(CareRequest).findOne.mockResolvedValue(request);
+    const request: any = { id: 'request', reference: 'SC-CARE-ABCDEF123456', status: CareRequestStatus.AWAITING_PROVIDER_RESPONSE, assignedProviderId: provider.id, careServiceDefinitionId: definition.id, deliveryMode: CareDeliveryMode.VIRTUAL, servicePriceMinor: '1000000', serviceCurrency: 'NGN', countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja' }; rows.push(request); manager.getRepository(CareRequest).findOne.mockResolvedValue(request);
     await expect(subject.providerRespond(user, request.reference, true, null)).resolves.toMatchObject({ status: CareRequestStatus.PROVIDER_ACCEPTED });
     expect(eligibility.requireEligible).toHaveBeenCalledWith(expect.objectContaining({ providerId: provider.id, deliveryMode: CareDeliveryMode.VIRTUAL }), manager); expect(histories.at(-1)).toMatchObject({ toStatus: CareRequestStatus.PROVIDER_ACCEPTED, reasonCode: 'PROVIDER_ACCEPTED' });
   });
@@ -102,7 +103,13 @@ describe('CareRequestsService', () => {
   it('admin assigns the exact eligible offering and records history', async () => {
     const request: any = { id: 'request', status: CareRequestStatus.MATCHING, assignedProviderId: null, careServiceDefinitionId: definition.id, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja' }; rows.push(request); manager.getRepository(CareRequest).findOne.mockResolvedValue(request);
     await subject.assign('SC-CARE-ABCDEF123456', 'admin-user', { providerReference: provider.providerReference });
-    expect(request).toMatchObject({ assignedProviderId: provider.id, assignedProviderCareServiceId: 'offering-1', status: CareRequestStatus.AWAITING_PROVIDER_RESPONSE }); expect(histories.at(-1)).toMatchObject({ actorUserId: 'admin-user', reasonCode: 'PROVIDER_ASSIGNED' });
+    expect(request).toMatchObject({ assignedProviderId: provider.id, assignedProviderCareServiceId: 'offering-1', servicePriceMinor: '1500000', serviceCurrency: 'NGN', status: CareRequestStatus.AWAITING_PROVIDER_RESPONSE }); expect(histories.at(-1)).toMatchObject({ actorUserId: 'admin-user', reasonCode: 'PROVIDER_ASSIGNED' });
+  });
+  it('does not rewrite a committed snapshot when catalogue pricing changes before acceptance', async () => {
+    const request: any = { id: 'request', reference: 'SC-CARE-ABCDEF123456', status: CareRequestStatus.AWAITING_PROVIDER_RESPONSE, assignedProviderId: provider.id, careServiceDefinitionId: definition.id, deliveryMode: CareDeliveryMode.IN_PERSON, servicePriceMinor: '1500000', serviceCurrency: 'NGN', countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja' }; rows.push(request); manager.getRepository(CareRequest).findOne.mockResolvedValue(request);
+    eligibility.requireEligible.mockResolvedValue({ id: 'offering-1', providerId: provider.id, selectedDeliveryOption: { priceMinor: '2500000', currency: 'NGN' } });
+    await subject.providerRespond(user, request.reference, true, null);
+    expect(request).toMatchObject({ servicePriceMinor: '1500000', serviceCurrency: 'NGN', status: CareRequestStatus.PROVIDER_ACCEPTED });
   });
   it('rejects assignment after acceptance', async () => { manager.getRepository(CareRequest).findOne.mockResolvedValue({ id: 'request', status: CareRequestStatus.PROVIDER_ACCEPTED }); await expect(subject.assign('SC-CARE-ABCDEF123456', 'admin', { providerReference: provider.providerReference })).rejects.toBeInstanceOf(ConflictException); });
 });

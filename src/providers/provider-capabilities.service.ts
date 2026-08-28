@@ -21,6 +21,7 @@ import { ProviderService } from "./entities/provider-service.entity";
 import { Provider } from "./entities/provider.entity";
 import { ProviderStatus } from "./enums/provider-status.enum";
 import { DayOfWeek } from "./enums/day-of-week.enum";
+import { UpdateProviderServicePriceDto } from './dto/update-provider-service-price.dto';
 
 export const PROVIDER_LOCATION_MODE = "PROVIDER_LOCATION";
 export interface AvailabilityWindow {
@@ -103,7 +104,7 @@ export class ProviderCapabilitiesService {
     try {
       return ProviderServiceResponseDto.fromEntity(
         await this.services.save(
-          this.services.create({ providerId, ...dto, isActive: true }),
+          this.services.create({ providerId, healthCheckPackageId: dto.healthCheckPackageId, fulfilmentModeId: dto.fulfilmentModeId, priceMinor: String(dto.priceMinor), currency: dto.currency, isActive: true }),
         ),
       );
     } catch (error) {
@@ -142,6 +143,12 @@ export class ProviderCapabilitiesService {
     return ProviderServiceResponseDto.fromEntity(
       await this.services.save(service),
     );
+  }
+  async updateServicePrice(id: string, dto: UpdateProviderServicePriceDto): Promise<ProviderServiceResponseDto> {
+    const service = await this.requireService(id);
+    service.priceMinor = String(dto.priceMinor);
+    service.currency = dto.currency;
+    return ProviderServiceResponseDto.fromEntity(await this.services.save(service));
   }
 
   async listLocations(
@@ -434,6 +441,8 @@ export class ProviderCapabilitiesService {
       },
     )
     .andWhere('service.isActive = true')
+    .andWhere('service.priceMinor >= 0')
+    .andWhere("service.currency ~ '^[A-Z]{3}$'")
     .andWhere('provider.status = :status', {
       status: ProviderStatus.ACTIVE,
     })

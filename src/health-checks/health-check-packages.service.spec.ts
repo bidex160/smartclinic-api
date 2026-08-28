@@ -69,21 +69,11 @@ describe('HealthCheckPackagesService', () => {
         description: null,
         benefits: ['Blood pressure measurement'],
         estimatedDurationMinutes: 30,
-        prices: [
-          {
-            fulfilmentModeId: '5d0c515e-3d85-48a2-96a8-5e3d72221aa0',
-            fulfilmentModeCode: 'HOME_VISIT',
-            fulfilmentModeName: 'Home visit',
-            amount: '12500.00',
-            currency: 'NGN',
-          },
-        ],
         isActive: true,
       },
     ]);
     expect(healthCheckPackageRepository.find).toHaveBeenCalledWith({
       where: { isActive: true },
-      relations: { packagePrices: { fulfilmentMode: true } },
       order: { name: 'ASC' },
     });
   });

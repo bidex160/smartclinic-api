@@ -16,6 +16,8 @@ The authoritative relationship is `User -> SELF Patient -> CareRequest -> CareSe
 
 When no Provider is preferred, the request is created atomically in `MATCHING`. V1 deliberately does not select the first database result or silently assign a candidate. Admin/Operations use the same deterministic eligibility rules as Find Care—active and approved Provider, active definition/offering, appointment requests enabled, and exact authoritative geography—to assign a Provider later.
 
+Preferred-provider requests snapshot the selected delivery option's price and currency during creation. No-preference requests begin with no fabricated commercial value; assignment snapshots (or, while still in the existing pre-acceptance assignable states, replaces) the selected Provider's exact mode price transactionally. Provider acceptance revalidates that the mode remains offered but never overwrites the committed snapshot after a catalogue price change. CareAppointment contains no duplicate pricing source.
+
 When a preferred Provider is supplied, that Provider and exact offering are revalidated inside the creation transaction. An eligible request enters `AWAITING_PROVIDER_RESPONSE`; an ineligible reference returns a conflict without creating a request.
 
 ## Lifecycle
