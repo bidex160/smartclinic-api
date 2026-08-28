@@ -15,6 +15,7 @@ import {
 import { PaymentAttemptStatus } from "../enums/payment-attempt-status.enum";
 import { PaymentTransaction } from "./payment-transaction.entity";
 import { FastTrackRequest } from '../../fasttrack/entities/fasttrack-request.entity';
+import { CareRequestFunding } from '../../care-requests/entities/care-request-funding.entity';
 
 @Entity("payment_attempts")
 @Index("UQ_payment_attempts_idempotency_key", ["idempotencyKey"], {
@@ -27,7 +28,8 @@ import { FastTrackRequest } from '../../fasttrack/entities/fasttrack-request.ent
 )
 @Index("IDX_payment_attempts_funding_status", ["bookingFundingId", "status"])
 @Index("IDX_payment_attempts_fasttrack_status", ["fastTrackRequestId", "status"])
-@Check('CHK_payment_attempts_obligation', '("booking_funding_id" IS NOT NULL AND "fasttrack_request_id" IS NULL) OR ("booking_funding_id" IS NULL AND "fasttrack_request_id" IS NOT NULL)')
+@Index("IDX_payment_attempts_care_request_funding_status", ["careRequestFundingId", "status"])
+@Check('CHK_payment_attempts_obligation', '(CASE WHEN "booking_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "fasttrack_request_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "care_request_funding_id" IS NULL THEN 0 ELSE 1 END) = 1')
 @Check("CHK_payment_attempts_amount_non_negative", '"amount" >= 0')
 @Check("CHK_payment_attempts_currency_format", "\"currency\" ~ '^[A-Z]{3}$'")
 export class PaymentAttempt {
@@ -45,6 +47,9 @@ export class PaymentAttempt {
 
   @Column({ name: 'fasttrack_request_id', type: 'uuid', nullable: true }) fastTrackRequestId!: string | null;
   @ManyToOne(() => FastTrackRequest, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'fasttrack_request_id' }) fastTrackRequest!: FastTrackRequest | null;
+
+  @Column({ name: 'care_request_funding_id', type: 'uuid', nullable: true }) careRequestFundingId!: string | null;
+  @ManyToOne(() => CareRequestFunding, funding => funding.paymentAttempts, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'care_request_funding_id' }) careRequestFunding!: CareRequestFunding | null;
 
   @Column({ type: "numeric", precision: 12, scale: 2 })
   amount!: string;

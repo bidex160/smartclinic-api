@@ -12,6 +12,7 @@ import { Provider } from '../providers/entities/provider.entity';
 import { RewardBookingRedemption } from '../rewards/entities/reward-booking-redemption.entity';
 import { RewardBookingRedemptionStatus } from '../rewards/enums/reward-booking-redemption-status.enum';
 import { User } from '../users/entities/user.entity';
+import { CareRequest } from '../care-requests/entities/care-request.entity';
 import { AdminProviderEarningListQueryDto, ProviderEarningListQueryDto } from './dto/provider-earning.dto';
 import { ProviderEarning } from './entities/provider-earning.entity';
 import { ProviderEarningStatusHistory } from './entities/provider-earning-status-history.entity';
@@ -46,6 +47,23 @@ export class ProviderEarningsService {
     const earning = await repository.save(repository.create({ providerId: booking.commercialProviderId, paymentTransactionId: paymentTransaction?.id ?? null, sourceType, sourceReference: booking.bookingReference, currency: booking.currency, grossAmountMinor: grossMinor.toString(), commissionBps: resolution.rateBasisPoints, commissionSource: resolution.source, commissionAmountMinor: calculation.commissionAmountMinor.toString(), providerShareMinor: calculation.providerShareMinor.toString(), status, payableAt: status === ProviderEarningStatus.PAYABLE ? now : null, settledAt: null }));
     await manager.getRepository(ProviderEarningStatusHistory).save({ providerEarningId: earning.id, fromStatus: null, toStatus: status, actorUserId: null, reasonCode: status === ProviderEarningStatus.PAYABLE ? 'HEALTH_CHECK_ALREADY_COMPLETED' : 'HEALTH_CHECK_PAYMENT_SETTLED', reasonNote: null });
     return earning;
+  }
+
+  async createHeldGeneralCareEarning(manager: EntityManager, care: CareRequest, paymentTransaction: PaymentTransaction): Promise<ProviderEarning> {
+    if (!care.assignedProviderId || care.servicePriceMinor == null || !care.serviceCurrency || BigInt(care.servicePriceMinor) <= 0n) throw new ConflictException('General Care request has no paid Provider commercial snapshot');
+    if (paymentTransaction.status !== PaymentTransactionStatus.SUCCEEDED || paymentTransaction.transactionType !== PaymentTransactionType.COLLECTION || paymentTransaction.currency !== care.serviceCurrency || this.toMinor(paymentTransaction.amount) !== BigInt(care.servicePriceMinor)) throw new ConflictException('Payment transaction does not match the General Care commercial snapshot');
+    const repository = manager.getRepository(ProviderEarning); const sourceType = ProviderEarningSourceType.GENERAL_CARE;
+    const existing = await repository.findOne({ where: { sourceType, sourceReference: care.reference }, lock: { mode: 'pessimistic_write' } });
+    if (existing) { if (existing.paymentTransactionId !== paymentTransaction.id) throw new ConflictException('General Care earning belongs to another payment transaction'); return existing; }
+    const resolution = await this.commissions.requireForProvider(care.assignedProviderId, manager); const calculation = calculateCommission(BigInt(care.servicePriceMinor), resolution.rateBasisPoints);
+    const earning = await repository.save(repository.create({ providerId: care.assignedProviderId, paymentTransactionId: paymentTransaction.id, sourceType, sourceReference: care.reference, currency: care.serviceCurrency, grossAmountMinor: care.servicePriceMinor, commissionBps: resolution.rateBasisPoints, commissionSource: resolution.source, commissionAmountMinor: calculation.commissionAmountMinor.toString(), providerShareMinor: calculation.providerShareMinor.toString(), status: ProviderEarningStatus.HELD, payableAt: null, settledAt: null }));
+    await manager.getRepository(ProviderEarningStatusHistory).save({ providerEarningId: earning.id, fromStatus: null, toStatus: ProviderEarningStatus.HELD, actorUserId: null, reasonCode: 'GENERAL_CARE_PAYMENT_SETTLED', reasonNote: null }); return earning;
+  }
+
+  async markGeneralCarePayable(manager: EntityManager, careRequestReference: string, actorUserId: string): Promise<ProviderEarning | null> {
+    const repository = manager.getRepository(ProviderEarning); const earning = await repository.findOne({ where: { sourceType: ProviderEarningSourceType.GENERAL_CARE, sourceReference: careRequestReference }, lock: { mode: 'pessimistic_write' } });
+    if (!earning) return null; if ([ProviderEarningStatus.PAYABLE, ProviderEarningStatus.SETTLED].includes(earning.status)) return earning; if (earning.status !== ProviderEarningStatus.HELD) throw new ConflictException(`Provider earning in ${earning.status} cannot become payable`);
+    earning.status = ProviderEarningStatus.PAYABLE; earning.payableAt = new Date(); await repository.save(earning); await manager.getRepository(ProviderEarningStatusHistory).save({ providerEarningId: earning.id, fromStatus: ProviderEarningStatus.HELD, toStatus: ProviderEarningStatus.PAYABLE, actorUserId, reasonCode: 'GENERAL_CARE_COMPLETED', reasonNote: null }); return earning;
   }
 
   async markHealthCheckPayable(manager: EntityManager, bookingId: string, actorUserId: string): Promise<ProviderEarning | null> {

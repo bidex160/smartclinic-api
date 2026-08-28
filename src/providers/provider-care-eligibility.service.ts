@@ -34,8 +34,11 @@ export class ProviderCareEligibilityService {
     if (input.providerId) builder.andWhere('provider.id = :providerId', { providerId: input.providerId });
     const candidate = await builder.getOne();
     if (!candidate) return this.ineligible();
-    const service = await repository.findOne({ where: { id: candidate.id }, relations: { deliveryOptions: true }, lock: { mode: 'pessimistic_write' } });
-    const selectedDeliveryOption = service?.deliveryOptions.find((option) => option.deliveryMode === input.deliveryMode);
+    const service = await repository.findOne({ where: { id: candidate.id }, lock: { mode: 'pessimistic_write' } });
+    const selectedDeliveryOption = service ? await manager.getRepository(ProviderCareServiceDeliveryOption).findOne({
+      where: { providerCareServiceId: service.id, deliveryMode: input.deliveryMode },
+      lock: { mode: 'pessimistic_read' },
+    }) : null;
     if (!service || !service.isActive || !service.supportsAppointmentRequests || !selectedDeliveryOption) return this.ineligible();
     const [provider, definition] = await Promise.all([
       manager.getRepository(Provider).findOne({ where: { id: service.providerId }, withDeleted: true, lock: { mode: 'pessimistic_read' } }),

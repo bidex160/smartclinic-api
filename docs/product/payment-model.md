@@ -107,6 +107,8 @@ Before settlement, PAY_LATER can change to either collection option, and PAY_NOW
 
 For both provider checkout modes, only webhook or deliberate server-side verification can create the successful PaymentTransaction, settle funding, advance the booking, and trigger matching. Popup callbacks, redirects, hosted checkout pages, and possession of a checkout URL are never proof of payment. Webhook/manual verification races continue through the same locked idempotent settlement path.
 
+General Care uses a separate `CareRequestFunding` obligation rather than `BookingFunding`. An accepted, assigned request initializes Paystack only from its snapshotted service amount/currency, and the shared webhook/browser verification path atomically records collection, marks funding paid, and creates the HELD Provider earning. FastTrack, Health Check, and General Care remain exclusive PaymentAttempt source domains.
+
 V1 continues using the booking contact/responsible-user email when initializing Paystack; a person paying a shared link is not separately modeled. Pay-later expiry, explicit external-payer identity, wallet funding, organisation funding, refunds, and payment-link delivery remain deferred.
 
 Paystack receives amounts in currency subunits. The adapter converts decimal strings using integer arithmetic (`NGN 12500.00 → 1250000`) and never floating point. Paystack status `success` is the only success mapping; `failed`, `abandoned`, `ongoing`, `pending`, `processing`, `queued`, `reversed`, and unknown states remain non-successful until a later verified success.

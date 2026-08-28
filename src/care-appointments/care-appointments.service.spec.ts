@@ -11,13 +11,15 @@ import { CareAppointment } from './entities/care-appointment.entity';
 import { CareAppointmentStatus } from './enums/care-appointment-status.enum';
 import { CareAppointmentsService } from './care-appointments.service';
 import { CareDeliveryMode } from '../providers/enums/care-delivery-mode.enum';
+import { CareRequestFunding } from '../care-requests/entities/care-request-funding.entity';
+import { CareRequestFundingStatus } from '../care-requests/enums/care-request-funding-status.enum';
 
 describe('CareAppointmentsService', () => {
   const user: any = { id: 'provider-user' };
   const provider: any = { id: 'provider-id', status: 'ACTIVE', onboardingStatus: 'APPROVED', deletedAt: null };
-  const care: any = { id: 'care-id', reference: 'SC-CARE-ABCDEF123456', patientId: 'patient-id', assignedProviderId: provider.id, assignedProviderCareServiceId: 'offering-id', careServiceDefinitionId: 'definition-id', deliveryMode: CareDeliveryMode.IN_PERSON, status: CareRequestStatus.PROVIDER_ACCEPTED };
+  const care: any = { id: 'care-id', reference: 'SC-CARE-ABCDEF123456', patientId: 'patient-id', assignedProviderId: provider.id, assignedProviderCareServiceId: 'offering-id', careServiceDefinitionId: 'definition-id', deliveryMode: CareDeliveryMode.IN_PERSON, servicePriceMinor: '2000000', serviceCurrency: 'NGN', status: CareRequestStatus.PROVIDER_ACCEPTED };
   const dto: any = { scheduledDate: '2099-09-10', scheduledTimeFrom: '10:30', scheduledTimeTo: '11:00', timezone: 'Africa/Lagos', providerLocationReference: 'SCPL-ABCDEF0123456789' };
-  let manager: any; let appointmentRepo: any; let providerRepo: any; let careRepo: any; let offeringRepo: any; let locationRepo: any; let appointmentHistory: any; let requestHistory: any; let overlap: boolean; let subject: CareAppointmentsService;
+  let manager: any; let appointmentRepo: any; let providerRepo: any; let careRepo: any; let fundingRepo: any; let offeringRepo: any; let locationRepo: any; let appointmentHistory: any; let requestHistory: any; let overlap: boolean; let subject: CareAppointmentsService;
   beforeEach(() => {
     care.status = CareRequestStatus.PROVIDER_ACCEPTED; care.deliveryMode = CareDeliveryMode.IN_PERSON;
     overlap = false;
@@ -28,8 +30,9 @@ describe('CareAppointmentsService', () => {
     offeringRepo = { findOne: jest.fn().mockResolvedValue({ id: 'offering-id', providerId: provider.id, careServiceDefinitionId: 'definition-id', isActive: true, supportsAppointmentRequests: true, deliveryOptions: [CareDeliveryMode.IN_PERSON, CareDeliveryMode.VIRTUAL, CareDeliveryMode.HOME_VISIT].map((deliveryMode) => ({ deliveryMode })), definition: { isActive: true } }) };
     locationRepo = { findOne: jest.fn().mockResolvedValue({ id: 'location-id', providerId: provider.id, isActive: true, locationReference: dto.providerLocationReference }) };
     appointmentHistory = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) }; requestHistory = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) };
-    manager = { transaction: jest.fn(async (work) => work(manager)), getRepository: jest.fn((entity) => entity === CareAppointment ? appointmentRepo : entity === Provider ? providerRepo : entity === CareRequest ? careRepo : entity === ProviderCareService ? offeringRepo : entity === ProviderLocation ? locationRepo : entity === CareAppointmentStatusHistory ? appointmentHistory : entity === CareRequestStatusHistory ? requestHistory : {}) };
-    subject = new CareAppointmentsService({ manager } as any, { findOne: jest.fn() } as any, { resolveOperational: jest.fn().mockResolvedValue(provider) } as any);
+    fundingRepo = { findOne: jest.fn().mockResolvedValue({ careRequestId: care.id, amountMinor: care.servicePriceMinor, currency: 'NGN', status: CareRequestFundingStatus.PAID }), save: jest.fn(async value => value) };
+    manager = { transaction: jest.fn(async (work) => work(manager)), getRepository: jest.fn((entity) => entity === CareAppointment ? appointmentRepo : entity === Provider ? providerRepo : entity === CareRequest ? careRepo : entity === CareRequestFunding ? fundingRepo : entity === ProviderCareService ? offeringRepo : entity === ProviderLocation ? locationRepo : entity === CareAppointmentStatusHistory ? appointmentHistory : entity === CareRequestStatusHistory ? requestHistory : {}) };
+    subject = new CareAppointmentsService({ manager } as any, { findOne: jest.fn() } as any, { resolveOperational: jest.fn().mockResolvedValue(provider) } as any, { markGeneralCarePayable: jest.fn().mockResolvedValue(null) } as any);
     jest.spyOn(subject as any, 'getMapped').mockImplementation(async () => ({ appointmentReference: 'SC-APT-ABCDEF123456' }));
   });
 
@@ -40,6 +43,8 @@ describe('CareAppointmentsService', () => {
     expect(appointmentHistory.save).toHaveBeenCalledWith(expect.objectContaining({ fromStatus: null, toStatus: CareAppointmentStatus.SCHEDULED }));
     expect(requestHistory.save).toHaveBeenCalledWith(expect.objectContaining({ fromStatus: CareRequestStatus.PROVIDER_ACCEPTED, toStatus: CareRequestStatus.SCHEDULED }));
   });
+
+  it('gates paid scheduling on authoritative funding and permits explicit free satisfaction', async () => { fundingRepo.findOne.mockResolvedValueOnce({ status: CareRequestFundingStatus.PENDING }); await expect(subject.schedule(user, care.reference, dto)).rejects.toBeInstanceOf(ConflictException); care.servicePriceMinor = '0'; fundingRepo.findOne.mockResolvedValueOnce(null); await expect(subject.schedule(user, care.reference, dto)).resolves.toBeDefined(); expect(fundingRepo.save).toHaveBeenCalledWith(expect.objectContaining({ status: CareRequestFundingStatus.SATISFIED_FREE, amountMinor: '0' })); care.servicePriceMinor = '2000000'; });
 
   it.each([CareDeliveryMode.VIRTUAL, CareDeliveryMode.HOME_VISIT])('derives %s mode and rejects a provider location', async (deliveryMode) => {
     care.deliveryMode = deliveryMode;
@@ -105,5 +110,8 @@ describe('CareAppointmentsService', () => {
     expect(transitionAppointment.status).toBe(CareAppointmentStatus.IN_PROGRESS); expect(care.status).toBe(CareRequestStatus.IN_PROGRESS);
     await subject.complete(user, 'SC-APT-ABCDEF123456');
     expect(transitionAppointment.status).toBe(CareAppointmentStatus.COMPLETED); expect(care.status).toBe(CareRequestStatus.COMPLETED);
+    expect((subject as any).earnings.markGeneralCarePayable).toHaveBeenCalledWith(manager, care.reference, user.id);
   });
+
+  it('retains paid entitlement and HELD earning after cancellation/no-show', async () => { const transitionAppointment: any = { id: 'appointment-id', careRequestId: care.id, providerId: provider.id, patientId: 'patient-id', status: CareAppointmentStatus.SCHEDULED }; appointmentRepo.findOne = jest.fn().mockResolvedValue(transitionAppointment); care.status = CareRequestStatus.SCHEDULED; await subject.cancelProvider(user, 'SC-APT-ABCDEF123456', 'Reschedule'); expect(care.status).toBe(CareRequestStatus.PROVIDER_ACCEPTED); expect((subject as any).earnings.markGeneralCarePayable).not.toHaveBeenCalled(); transitionAppointment.status = CareAppointmentStatus.SCHEDULED; care.status = CareRequestStatus.SCHEDULED; await subject.noShow(user, 'SC-APT-ABCDEF123456', null); expect(care.status).toBe(CareRequestStatus.PROVIDER_ACCEPTED); });
 });

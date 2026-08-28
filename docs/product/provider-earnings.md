@@ -11,3 +11,5 @@ Health Check completion advances `HELD` to `PAYABLE` in the encounter-completion
 Providers can read only their own ledger and per-currency balance groups through `/api/v1/provider/earnings`. Admin and Operations have read-only cross-Provider access through `/api/v1/admin/provider-earnings`. Responses exclude internal IDs, patient information, and payment-provider metadata.
 
 The migration does not fabricate earnings for historical successful transactions. Those require a future explicit reconciliation process with an authoritative historical commission source.
+
+Paid General Care now creates a `GENERAL_CARE` earning from the immutable CareRequest service-price snapshot when its dedicated funding obligation settles. CareAppointment completion advances that earning to `PAYABLE`. Free CareRequests have an explicit satisfied funding obligation but no collection transaction or earning.

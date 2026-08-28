@@ -45,6 +45,16 @@ describe('Find Care API authorization (e2e)', () => {
     await request(app.getHttpServer()).post('/api/v1/provider/care-services').set('Authorization', 'Bearer provider').send({ ...body, deliveryOptions: [body.deliveryOptions[0], body.deliveryOptions[0]] }).expect(400);
   });
 
+  it('keeps provider-owned update and activation commands on the same offering contract', async () => {
+    const deliveryOptions = [{ deliveryMode: CareDeliveryMode.VIRTUAL, priceMinor: 2000000, currency: 'NGN' }];
+    await request(app.getHttpServer()).patch(`/api/v1/provider/care-services/${serviceId}`).set('Authorization', 'Bearer provider').send({ deliveryOptions }).expect(200);
+    await request(app.getHttpServer()).patch(`/api/v1/provider/care-services/${serviceId}/deactivate`).set('Authorization', 'Bearer provider').expect(200);
+    await request(app.getHttpServer()).patch(`/api/v1/provider/care-services/${serviceId}/activate`).set('Authorization', 'Bearer provider').expect(200);
+    expect(services.updateMine).toHaveBeenCalledWith(expect.objectContaining({ id: 'provider-user' }), serviceId, { deliveryOptions });
+    expect(services.deactivateMine).toHaveBeenCalledWith(expect.objectContaining({ id: 'provider-user' }), serviceId);
+    expect(services.activateMine).toHaveBeenCalledWith(expect.objectContaining({ id: 'provider-user' }), serviceId);
+  });
+
   it('allows ADMIN/OPERATIONS catalogue and support management only', async () => {
     const definition = { code: 'GENERAL_CONSULTATION', name: 'General consultation' };
     await request(app.getHttpServer()).post('/api/v1/admin/care-service-definitions').set('Authorization', 'Bearer provider').send(definition).expect(403);

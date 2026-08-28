@@ -1,4 +1,4 @@
-import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm';
 import { CareServiceDefinition } from '../../providers/entities/care-service-definition.entity';
 import { ProviderCareService } from '../../providers/entities/provider-care-service.entity';
 import { Provider } from '../../providers/entities/provider.entity';
@@ -9,6 +9,7 @@ import { CareRequestStatus } from '../enums/care-request-status.enum';
 import { CareRequestStatusHistory } from './care-request-status-history.entity';
 import { CareAppointment } from '../../care-appointments/entities/care-appointment.entity';
 import { CareDeliveryMode } from '../../providers/enums/care-delivery-mode.enum';
+import { CareRequestFunding } from './care-request-funding.entity';
 
 @Entity('care_requests')
 @Index('UQ_care_requests_reference', ['reference'], { unique: true })
@@ -56,4 +57,5 @@ export class CareRequest {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;
   @OneToMany(() => CareRequestStatusHistory, (history) => history.careRequest) statusHistory!: CareRequestStatusHistory[];
   @OneToMany(() => CareAppointment, (appointment) => appointment.careRequest) appointments!: CareAppointment[];
+  @OneToOne(() => CareRequestFunding, (funding) => funding.careRequest) funding!: CareRequestFunding | null;
 }

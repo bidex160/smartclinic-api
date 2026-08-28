@@ -47,6 +47,11 @@ import { FastTrackRequest } from '../fasttrack/entities/fasttrack-request.entity
 import { FastTrackRequestStatusHistory } from '../fasttrack/entities/fasttrack-request-status-history.entity';
 import { FastTrackStatus } from '../fasttrack/enums/fasttrack-status.enum';
 import { ProviderEarningsService } from '../earnings/provider-earnings.service';
+import { CareRequest } from '../care-requests/entities/care-request.entity';
+import { CareRequestFunding } from '../care-requests/entities/care-request-funding.entity';
+import { CareRequestFundingStatus } from '../care-requests/enums/care-request-funding-status.enum';
+import { CareRequestStatus } from '../care-requests/enums/care-request-status.enum';
+import { CommissionResolutionService } from '../commissions/commission-resolution.service';
 
 @Injectable()
 export class PaymentFlowService {
@@ -66,6 +71,8 @@ export class PaymentFlowService {
     private readonly rewards?: RewardWithdrawalsService,
     @Optional()
     private readonly earnings?: ProviderEarningsService,
+    @Optional()
+    private readonly commissions?: CommissionResolutionService,
   ) {}
 
   async previewRewardRedemption(reference: string, userId: string) {
@@ -395,8 +402,50 @@ export class PaymentFlowService {
     });
     if (!attempt) throw new NotFoundException("Payment attempt not found");
     if (attempt.fastTrackRequestId) return this.applyFastTrackVerification(attempt.id, null, verified) as never;
+    if (attempt.careRequestFundingId) return this.applyCareRequestVerification(attempt.id, null, verified) as never;
     return this.applyVerification(attempt.id, null, verified);
   }
+
+  async getCareRequestFunding(reference: string, userId: string) {
+    const care = await this.bookings.manager.getRepository(CareRequest).findOne({ where: { reference, userId } }); if (!care) throw new NotFoundException('Care Request was not found');
+    const funding = await this.bookings.manager.getRepository(CareRequestFunding).findOne({ where: { careRequestId: care.id } }); const attempt = funding ? await this.attempts.findOne({ where: { careRequestFundingId: funding.id }, order: { createdAt: 'DESC' } }) : null;
+    return this.careFundingResponse(care, funding, attempt);
+  }
+
+  async initializeCareRequestFunding(reference: string, userId: string) {
+    if (!this.commissions) throw new ConflictException('Provider commission is not available');
+    const prepared = await this.bookings.manager.transaction(async manager => {
+      const care = await manager.getRepository(CareRequest).findOne({ where: { reference, userId }, relations: { user: true }, lock: { mode: 'pessimistic_write', tables: ['care_requests'] } });
+      if (!care) throw new NotFoundException('Care Request was not found');
+      if (care.status !== CareRequestStatus.PROVIDER_ACCEPTED || !care.assignedProviderId || !care.assignedProviderCareServiceId || care.servicePriceMinor == null || !care.serviceCurrency) throw new ConflictException('Care Request is not commercially ready for payment');
+      let funding = await manager.getRepository(CareRequestFunding).findOne({ where: { careRequestId: care.id }, lock: { mode: 'pessimistic_write' } });
+      if (BigInt(care.servicePriceMinor) === 0n) { if (!funding) funding = await manager.getRepository(CareRequestFunding).save({ careRequestId: care.id, amountMinor: '0', currency: care.serviceCurrency, status: CareRequestFundingStatus.SATISFIED_FREE, paidAt: null }); return { care, funding, free: true }; }
+      await this.commissions!.requireForProvider(care.assignedProviderId, manager);
+      if (!funding) funding = await manager.getRepository(CareRequestFunding).save({ careRequestId: care.id, amountMinor: care.servicePriceMinor, currency: care.serviceCurrency, status: CareRequestFundingStatus.PENDING, paidAt: null });
+      if (funding.amountMinor !== care.servicePriceMinor || funding.currency !== care.serviceCurrency) throw new ConflictException('Care Request funding does not match its commercial snapshot');
+      return { care, funding, free: false };
+    });
+    if (prepared.free || prepared.funding.status === CareRequestFundingStatus.PAID) return this.careFundingResponse(prepared.care, prepared.funding, null);
+    const active = await this.attempts.findOne({ where: { careRequestFundingId: prepared.funding.id, status: In([PaymentAttemptStatus.CREATED, PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION, PaymentAttemptStatus.PENDING_CONFIRMATION]) }, order: { createdAt: 'DESC' } }); if (active) return this.careFundingResponse(prepared.care, prepared.funding, active);
+    if (!prepared.care.user?.email || !isEmail(prepared.care.user.email)) throw new BadRequestException('A valid account email is required to initialize payment');
+    const idempotencyKey = `GENERAL-CARE-${randomBytes(16).toString('hex')}`; const paymentReference = `SC-PAY-${randomBytes(12).toString('hex')}`;
+    const initialized = await this.provider.initializePayment({ amount: this.fromMinor(BigInt(prepared.funding.amountMinor)), currency: prepared.funding.currency, idempotencyKey, bookingReference: reference, customerEmail: prepared.care.user.email, paymentReference, callbackUrl: this.callbackUrl(reference, true) });
+    return this.bookings.manager.transaction(async manager => { const funding = await manager.getRepository(CareRequestFunding).findOne({ where: { id: prepared.funding.id }, lock: { mode: 'pessimistic_write' } }); if (!funding || funding.status !== CareRequestFundingStatus.PENDING) throw new ConflictException('Care Request funding is no longer payable'); const repo = manager.getRepository(PaymentAttempt); const raced = await repo.findOne({ where: { careRequestFundingId: funding.id, status: In([PaymentAttemptStatus.CREATED, PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION, PaymentAttemptStatus.PENDING_CONFIRMATION]) } }); if (raced) return this.careFundingResponse(prepared.care, funding, raced); const attempt = await repo.save(repo.create({ bookingFundingId: null, fastTrackRequestId: null, careRequestFundingId: funding.id, amount: this.fromMinor(BigInt(funding.amountMinor)), currency: funding.currency, status: initialized.status, idempotencyKey, providerCode: initialized.providerCode, providerReference: initialized.providerReference, checkoutUrl: initialized.checkoutUrl, accessCode: initialized.accessCode })); return this.careFundingResponse(prepared.care, funding, attempt); });
+  }
+
+  async verifyLatestCareRequestFunding(reference: string, userId: string) {
+    const care = await this.bookings.manager.getRepository(CareRequest).findOne({ where: { reference, userId } }); if (!care) throw new NotFoundException('Care Request was not found'); const funding = await this.bookings.manager.getRepository(CareRequestFunding).findOne({ where: { careRequestId: care.id } }); if (!funding) throw new ConflictException('Care Request funding has not been initialized'); if (funding.status !== CareRequestFundingStatus.PENDING) return this.getCareRequestFunding(reference, userId);
+    const attempt = await this.attempts.findOne({ where: { careRequestFundingId: funding.id }, order: { createdAt: 'DESC' } }); if (!attempt?.providerReference) throw new ConflictException('No General Care payment attempt is available to verify'); if (attempt.status !== PaymentAttemptStatus.SUCCEEDED) { await this.claimVerification(attempt.id); const verified = await this.provider.verifyPayment(attempt.providerReference); await this.applyCareRequestVerification(attempt.id, userId, verified); } return this.getCareRequestFunding(reference, userId);
+  }
+
+  private async applyCareRequestVerification(attemptId: string, actorUserId: string | null, verified: VerifyPaymentResult) {
+    if (!this.earnings) throw new ConflictException('Provider earnings accounting is not available');
+    return this.bookings.manager.transaction(async manager => { const attemptRepo = manager.getRepository(PaymentAttempt); const attempt = await attemptRepo.findOne({ where: { id: attemptId }, lock: { mode: 'pessimistic_write' } }); if (!attempt?.careRequestFundingId) throw new NotFoundException('General Care payment attempt was not found'); const fundingRepo = manager.getRepository(CareRequestFunding); const funding = await fundingRepo.findOne({ where: { id: attempt.careRequestFundingId }, lock: { mode: 'pessimistic_write' } }); if (!funding) throw new NotFoundException('Care Request funding was not found'); const care = await manager.getRepository(CareRequest).findOne({ where: { id: funding.careRequestId }, lock: { mode: 'pessimistic_write' } }); if (!care) throw new NotFoundException('Care Request was not found'); if (attempt.status === PaymentAttemptStatus.SUCCEEDED && funding.status === CareRequestFundingStatus.PAID) return this.careFundingResponse(care, funding, attempt);
+      const expected = this.fromMinor(BigInt(funding.amountMinor)); if (verified.providerReference !== attempt.providerReference || verified.amount !== attempt.amount || verified.currency !== attempt.currency || attempt.amount !== expected || attempt.currency !== funding.currency || funding.amountMinor !== care.servicePriceMinor || funding.currency !== care.serviceCurrency) { attempt.status = PaymentAttemptStatus.FAILED; await attemptRepo.save(attempt); return this.careFundingResponse(care, funding, attempt); } if (!verified.succeeded || verified.status !== PaymentAttemptStatus.SUCCEEDED) { attempt.status = verified.status; await attemptRepo.save(attempt); return this.careFundingResponse(care, funding, attempt); }
+      const txRepo = manager.getRepository(PaymentTransaction); let transaction = await txRepo.findOne({ where: { providerReference: verified.providerReference } }); if (transaction && transaction.paymentAttemptId !== attempt.id) throw new ConflictException('Verified provider transaction belongs to another payment attempt'); if (!transaction) transaction = await txRepo.save(txRepo.create({ paymentAttemptId: attempt.id, parentTransactionId: null, transactionType: PaymentTransactionType.COLLECTION, status: PaymentTransactionStatus.SUCCEEDED, amount: verified.amount, currency: verified.currency, providerReference: verified.providerReference, occurredAt: verified.occurredAt })); await this.earnings!.createHeldGeneralCareEarning(manager, care, transaction); attempt.status = PaymentAttemptStatus.SUCCEEDED; await attemptRepo.save(attempt); funding.status = CareRequestFundingStatus.PAID; funding.paidAt = verified.occurredAt; await fundingRepo.save(funding); return this.careFundingResponse(care, funding, attempt); });
+  }
+
+  private careFundingResponse(care: CareRequest, funding: CareRequestFunding | null, attempt: PaymentAttempt | null) { const free = care.servicePriceMinor === '0'; return { careRequestReference: care.reference, fundingRequired: !free, amountMinor: care.servicePriceMinor === null ? null : Number(care.servicePriceMinor), currency: care.serviceCurrency, fundingStatus: funding?.status ?? null, paid: funding?.status === CareRequestFundingStatus.PAID || funding?.status === CareRequestFundingStatus.SATISFIED_FREE, initializationAllowed: care.status === CareRequestStatus.PROVIDER_ACCEPTED && Boolean(care.assignedProviderId && care.assignedProviderCareServiceId && care.servicePriceMinor != null), paymentAttemptStatus: attempt?.status ?? null, paymentReference: attempt?.providerReference ?? null, checkoutUrl: attempt?.checkoutUrl ?? null, accessCode: attempt?.accessCode ?? null, paidAt: funding?.paidAt ?? null }; }
 
   async initializeFastTrackPayment(reference: string, userId: string) {
     const existingRequest = await this.bookings.manager.getRepository(FastTrackRequest).findOne({ where: { reference, userId }, relations: { user: true } });

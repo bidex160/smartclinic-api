@@ -8,9 +8,10 @@ import { CareRequestStatusHistory } from './entities/care-request-status-history
 import { AdminCareRequestsController, MeCareRequestsController, ProviderCareRequestsController } from './care-requests.controller';
 import { CareRequestsService } from './care-requests.service';
 import { User } from '../users/entities/user.entity';
+import { CareRequestFunding } from './entities/care-request-funding.entity';
 
 @Module({
-  imports: [AuthModule, ProvidersModule, TypeOrmModule.forFeature([CareRequest, CareRequestStatusHistory, Patient, User])],
+  imports: [AuthModule, ProvidersModule, TypeOrmModule.forFeature([CareRequest, CareRequestFunding, CareRequestStatusHistory, Patient, User])],
   controllers: [MeCareRequestsController, ProviderCareRequestsController, AdminCareRequestsController],
   providers: [CareRequestsService],
   exports: [CareRequestsService],

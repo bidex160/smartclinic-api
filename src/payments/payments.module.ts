@@ -25,12 +25,17 @@ import { RewardPointsLedger } from "../rewards/entities/reward-points-ledger.ent
 import { FastTrackRequest } from '../fasttrack/entities/fasttrack-request.entity';
 import { FastTrackRequestStatusHistory } from '../fasttrack/entities/fasttrack-request-status-history.entity';
 import { EarningsModule } from '../earnings/earnings.module';
+import { CommissionsModule } from '../commissions/commissions.module';
+import { CareRequest } from '../care-requests/entities/care-request.entity';
+import { CareRequestFunding } from '../care-requests/entities/care-request-funding.entity';
+import { MeCareRequestFundingController } from './me-care-request-funding.controller';
 @Module({
   imports: [
     AuthModule,
     ProvidersModule,
     RewardsModule,
     EarningsModule,
+    CommissionsModule,
     TypeOrmModule.forFeature([
       PaymentAttempt,
       PaymentTransaction,
@@ -44,9 +49,11 @@ import { EarningsModule } from '../earnings/earnings.module';
       RewardPointsLedger
       ,FastTrackRequest,
       FastTrackRequestStatusHistory
+      ,CareRequest,
+      CareRequestFunding
     ]),
   ],
-  controllers: [AdminPaymentFlowController, PaystackWebhookController],
+  controllers: [AdminPaymentFlowController, PaystackWebhookController, MeCareRequestFundingController],
   providers: [
     PaymentFlowService,
     TestPaymentProviderAdapter,

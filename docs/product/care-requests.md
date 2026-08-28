@@ -1,5 +1,13 @@
 # Care Requests
 
+## Funding
+
+Provider acceptance is the General Care commercial commitment point. Paid requests create one `care_request_funding` obligation from the immutable `servicePriceMinor/serviceCurrency` snapshot and use the existing Paystack attempt, verification, webhook, and transaction infrastructure. Commission readiness is checked before checkout. Payment state does not become a CareRequest lifecycle state.
+
+Zero-price care is represented by `SATISFIED_FREE`; it never manufactures a Paystack transaction or Provider earning. Providers may schedule only after funding is `PAID` or `SATISFIED_FREE`. Chat remains available after acceptance independent of funding.
+
+Cancelling or recording no-show on a satisfied appointment leaves its funding and HELD earning intact and returns the CareRequest to `PROVIDER_ACCEPTED`, allowing a later replacement appointment without another payment. Completion alone makes the earning payable. Refunds and Provider substitution remain deferred.
+
 After provider acceptance, the provider explicitly creates a distinct Care Appointment. Patient preferred date/time remains a preference, not a confirmed schedule. See [Care Appointments](care-appointments.md).
 
 Patient and provider Care Request detail responses include `appointment`. It is `null` before scheduling; otherwise it contains the authoritative appointment public reference, status, schedule, timezone, and safe provider-location summary. Detail reads prefer an active appointment (`SCHEDULED`, `CONFIRMED`, or `IN_PROGRESS`); when none is active, they return the most recently created historical appointment deterministically. Care Request list responses remain lightweight and do not join appointments.

@@ -16,11 +16,14 @@ import {
   ProviderCareAppointmentsController,
 } from "./care-appointments.controller";
 import { User } from "../users/entities/user.entity";
+import { CareRequestFunding } from '../care-requests/entities/care-request-funding.entity';
+import { EarningsModule } from '../earnings/earnings.module';
 
 @Module({
   imports: [
     AuthModule,
     ProvidersModule,
+    EarningsModule,
     TypeOrmModule.forFeature([
       CareAppointment,
       CareAppointmentStatusHistory,
@@ -31,6 +34,7 @@ import { User } from "../users/entities/user.entity";
       ProviderCareService,
       ProviderLocation,
       User,
+      CareRequestFunding,
     ]),
   ],
   controllers: [
