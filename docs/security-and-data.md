@@ -8,6 +8,8 @@ Public referral ranking is explicit opt-in and defaults to disabled. Opt-out rem
 
 Find Care publishes only active, approved, non-deleted Providers with active centrally defined care services. Provider self-management resolves ownership from the authenticated linked Provider and uses provider-scoped mutations; caller-supplied Provider identity is not accepted. Public DTOs omit contact details, professional references, internal IDs, review metadata, and operational records.
 
+Care Chat is never public. Patient access resolves JWT User to SELF Patient and the owned Care Request; Provider access resolves JWT User to the currently assigned active/approved Provider. Reassignment removes the old Provider's authority even when historical messages remain. Chat responses omit sender User IDs and internal entity IDs, and Provider participant identity is minimized to patient given name plus family initial. Message bodies are stored as plain text and are not logged or copied into notifications.
+
 Care Request authority is relationship-based. Patient APIs resolve JWT User to the active SELF Patient; a public Care Request reference is never sufficient authority. Provider access requires the linked active/approved Provider and a preferred/assigned relationship. Provider responses exclude Patient contact and account identifiers. Assignment and acceptance revalidate the exact ProviderCareService and use transactional row locks; Admin/Operations actions retain actor/reason history.
 
 - Authenticate callers before access to protected resources.

@@ -18,6 +18,7 @@ import { RewardsModule } from './rewards/rewards.module';
 import { CareRequestsModule } from './care-requests/care-requests.module';
 import { FastTrackModule } from './fasttrack/fasttrack.module';
 import { CareAppointmentsModule } from './care-appointments/care-appointments.module';
+import { CareChatModule } from './care-chat/care-chat.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -34,6 +35,7 @@ const persistenceDomainModules = configuration.database.enabled
       CareRequestsModule,
       FastTrackModule,
       CareAppointmentsModule,
+      CareChatModule,
     ]
   : [];
 
