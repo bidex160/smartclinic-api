@@ -10,6 +10,7 @@ import { CareChatService } from './care-chat.service';
 import { MeCareChatController, ProviderCareChatController } from './care-chat.controller';
 import { CareConversation } from './entities/care-conversation.entity';
 import { CareMessage } from './entities/care-message.entity';
+import { User } from '../users/entities/user.entity';
 
-@Module({ imports: [AuthModule, ProvidersModule, TypeOrmModule.forFeature([CareConversation, CareMessage, CareRequest, CareAppointment, Patient, Provider])], controllers: [MeCareChatController, ProviderCareChatController], providers: [CareChatService], exports: [CareChatService] })
+@Module({ imports: [AuthModule, ProvidersModule, TypeOrmModule.forFeature([CareConversation, CareMessage, CareRequest, CareAppointment, Patient, Provider, User])], controllers: [MeCareChatController, ProviderCareChatController], providers: [CareChatService], exports: [CareChatService] })
 export class CareChatModule {}

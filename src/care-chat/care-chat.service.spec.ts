@@ -28,7 +28,7 @@ describe('CareChatService', () => {
     const appointmentQb: any = {}; for (const method of ['where', 'orderBy', 'addOrderBy', 'setParameter']) appointmentQb[method] = jest.fn().mockReturnValue(appointmentQb); appointmentQb.getOne = jest.fn().mockResolvedValue(null);
     const appointmentRepo = { createQueryBuilder: jest.fn().mockReturnValue(appointmentQb) };
     manager = { transaction: jest.fn(async (work) => work(manager)), getRepository: jest.fn((entity) => entity === CareRequest ? careRepo : entity === CareConversation ? conversationRepo : entity === CareMessage ? messageRepo : entity === Provider ? providerRepo : entity === Patient ? patientRepo : entity === CareAppointment ? appointmentRepo : {}) };
-    subject = new CareChatService({ manager } as any, patientRepo as any, { resolve: jest.fn(async (user) => user.id === providerUser.id ? provider : { ...provider, id: 'old-provider' }) } as any);
+    subject = new CareChatService({ manager } as any, patientRepo as any, { resolveOperational: jest.fn(async (user) => user.id === providerUser.id ? provider : { ...provider, id: 'old-provider' }) } as any);
   });
 
   it('lazily creates exactly one conversation for the accepted patient/provider without requiring an appointment', async () => {

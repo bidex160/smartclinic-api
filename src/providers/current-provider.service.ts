@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { Provider } from './entities/provider.entity';
 import { ProviderStatus } from './enums/provider-status.enum';
+import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 
 @Injectable()
 export class CurrentProviderService {
@@ -13,6 +14,14 @@ export class CurrentProviderService {
     const provider = await this.providers.findOne({ where: { userId: user.id }, withDeleted: true });
     if (!provider || provider.status !== ProviderStatus.ACTIVE || provider.deletedAt) {
       throw new ForbiddenException('Active provider access is required');
+    }
+    return provider;
+  }
+
+  async resolveOperational(user: User): Promise<Provider> {
+    const provider = await this.resolve(user);
+    if (provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED) {
+      throw new ForbiddenException('Active approved provider access is required');
     }
     return provider;
   }

@@ -29,7 +29,7 @@ describe('CareAppointmentsService', () => {
     locationRepo = { findOne: jest.fn().mockResolvedValue({ id: 'location-id', providerId: provider.id, isActive: true, locationReference: dto.providerLocationReference }) };
     appointmentHistory = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) }; requestHistory = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) };
     manager = { transaction: jest.fn(async (work) => work(manager)), getRepository: jest.fn((entity) => entity === CareAppointment ? appointmentRepo : entity === Provider ? providerRepo : entity === CareRequest ? careRepo : entity === ProviderCareService ? offeringRepo : entity === ProviderLocation ? locationRepo : entity === CareAppointmentStatusHistory ? appointmentHistory : entity === CareRequestStatusHistory ? requestHistory : {}) };
-    subject = new CareAppointmentsService({ manager } as any, { findOne: jest.fn() } as any, { resolve: jest.fn().mockResolvedValue(provider) } as any);
+    subject = new CareAppointmentsService({ manager } as any, { findOne: jest.fn() } as any, { resolveOperational: jest.fn().mockResolvedValue(provider) } as any);
     jest.spyOn(subject as any, 'getMapped').mockImplementation(async () => ({ appointmentReference: 'SC-APT-ABCDEF123456' }));
   });
 

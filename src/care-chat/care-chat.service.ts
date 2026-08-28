@@ -8,7 +8,6 @@ import { Patient } from '../patients/entities/patient.entity';
 import { PatientStatus } from '../patients/enums/patient-status.enum';
 import { CurrentProviderService } from '../providers/current-provider.service';
 import { Provider } from '../providers/entities/provider.entity';
-import { ProviderOnboardingStatus } from '../providers/enums/provider-onboarding-status.enum';
 import { User } from '../users/entities/user.entity';
 import { careChatPolicy } from './care-chat-policy';
 import { generateCareConversationReference, generateCareMessageReference } from './care-chat-reference';
@@ -117,5 +116,5 @@ export class CareChatService {
   private mapMessage(message: CareMessage) { return { reference: message.reference, senderType: message.senderType, body: message.body, createdAt: message.createdAt, readAt: message.readAt }; }
   private patientDisplayName(patient: Patient) { const familyInitial = patient.familyName.trim().charAt(0); return familyInitial ? `${patient.givenName.trim()} ${familyInitial}.` : patient.givenName.trim(); }
   private async patientActor(user: User): Promise<ChatActor> { const patient = await this.patients.findOne({ where: { userId: user.id }, withDeleted: true }); if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE) throw new NotFoundException('Patient profile was not found'); return { type: CareMessageSenderType.PATIENT, userId: user.id, patientId: patient.id }; }
-  private async providerActor(user: User): Promise<ChatActor> { const provider = await this.currentProvider.resolve(user); if (provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED) throw new ConflictException('Provider onboarding is not approved'); return { type: CareMessageSenderType.PROVIDER, userId: user.id, providerId: provider.id }; }
+  private async providerActor(user: User): Promise<ChatActor> { const provider = await this.currentProvider.resolveOperational(user); return { type: CareMessageSenderType.PROVIDER, userId: user.id, providerId: provider.id }; }
 }

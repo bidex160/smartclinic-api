@@ -7,7 +7,6 @@ import { CareServiceDefinition } from '../providers/entities/care-service-defini
 import { Provider } from '../providers/entities/provider.entity';
 import { CurrentProviderService } from '../providers/current-provider.service';
 import { ProviderCareEligibilityService } from '../providers/provider-care-eligibility.service';
-import { ProviderOnboardingStatus } from '../providers/enums/provider-onboarding-status.enum';
 import { User } from '../users/entities/user.entity';
 import { AdminCareRequestQueryDto, AssignCareRequestDto, CareRequestListQueryDto, CreateCareRequestDto } from './dto/care-request.dto';
 import { CareRequest } from './entities/care-request.entity';
@@ -149,7 +148,7 @@ export class CareRequestsService {
   private detailBuilder(manager: EntityManager = this.requests.manager) { return this.readBuilder(manager).leftJoinAndSelect('request.appointments', 'appointment').leftJoinAndSelect('appointment.providerLocation', 'appointmentLocation'); }
   private async page(builder: ReturnType<CareRequestsService['readBuilder']>, page: number, limit: number, providerView = false) { builder.orderBy('request.createdAt', 'DESC').addOrderBy('request.reference', 'DESC').skip((page - 1) * limit).take(limit); const [rows, total] = await builder.getManyAndCount(); return { items: rows.map((row) => this.map(row, providerView)), page, limit, total, totalPages: total ? Math.ceil(total / limit) : 0 }; }
   private async requirePatient(userId: string, manager: EntityManager = this.patients.manager) { const patient = await manager.getRepository(Patient).findOne({ where: { userId }, withDeleted: true }); if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE) throw new NotFoundException('Patient profile was not found'); return patient; }
-  private async requireOperationalProvider(user: User) { const provider = await this.currentProvider.resolve(user); if (provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED) throw new ConflictException('Provider onboarding is not approved'); return provider; }
+  private requireOperationalProvider(user: User) { return this.currentProvider.resolveOperational(user); }
   private async locked(manager: EntityManager, reference: string) { const request = await manager.getRepository(CareRequest).findOne({ where: { reference }, lock: { mode: 'pessimistic_write' } }); if (!request) this.notFound(); return request; }
   private async transition(manager: EntityManager, request: CareRequest, toStatus: CareRequestStatus, actorUserId: string | null, reasonCode: string, reasonNote: string | null) { const fromStatus = request.status; request.status = toStatus; await manager.getRepository(CareRequest).save(request); await this.history(manager, request.id, fromStatus, toStatus, actorUserId, reasonCode, reasonNote); }
   private async history(manager: EntityManager, careRequestId: string, fromStatus: CareRequestStatus | null, toStatus: CareRequestStatus, actorUserId: string | null, reasonCode: string, reasonNote: string | null) { const repository = manager.getRepository(CareRequestStatusHistory); await repository.save(repository.create({ careRequestId, fromStatus, toStatus, actorUserId, reasonCode, reasonNote })); }

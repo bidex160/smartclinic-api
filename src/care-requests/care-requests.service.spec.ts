@@ -27,7 +27,7 @@ describe('CareRequestsService', () => {
     (patientRepo as any).manager = manager;
     requests = { manager };
     eligibility = { requireEligible: jest.fn().mockResolvedValue({ id: 'offering-1', providerId: provider.id, provider }) };
-    current = { resolve: jest.fn().mockResolvedValue(provider) };
+    current = { resolveOperational: jest.fn().mockResolvedValue(provider) };
     subject = new CareRequestsService(requests, patientRepo as any, eligibility, current);
     (subject as any).getMapped = jest.fn(async (_manager: any, id: string) => ({ reference: rows.find((row) => row.id === id)?.reference, status: rows.find((row) => row.id === id)?.status }));
   });

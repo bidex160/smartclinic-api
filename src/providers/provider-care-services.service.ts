@@ -7,7 +7,6 @@ import { ProviderCareService } from './entities/provider-care-service.entity';
 import { Provider } from './entities/provider.entity';
 import { CreateCareServiceDefinitionDto, CreateProviderCareServiceDto, UpdateCareServiceDefinitionDto, UpdateProviderCareServiceDto } from './dto/care-service.dto';
 import { CurrentProviderService } from './current-provider.service';
-import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 import { CareDeliveryMode } from './enums/care-delivery-mode.enum';
 
 @Injectable()
@@ -109,8 +108,6 @@ export class ProviderCareServicesService {
     return provider;
   }
   private async operationalProvider(user: User) {
-    const provider = await this.currentProvider.resolve(user);
-    if (provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED) throw new ConflictException('Provider onboarding is not approved');
-    return provider;
+    return this.currentProvider.resolveOperational(user);
   }
 }
