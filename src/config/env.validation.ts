@@ -55,6 +55,12 @@ class EnvironmentVariables {
   @Type(() => Number) @IsInt() @Min(300)
   HEALTH_RESULT_ACCESS_TTL = 604800;
 
+  @IsIn(['none', 'cloudinary']) CLINICAL_ATTACHMENT_STORAGE_PROVIDER = 'none';
+  @IsOptional() @IsString() CLOUDINARY_CLOUD_NAME?: string;
+  @IsOptional() @IsString() CLOUDINARY_API_KEY?: string;
+  @IsOptional() @IsString() CLOUDINARY_API_SECRET?: string;
+  @Type(() => Number) @IsInt() @Min(60) CLINICAL_ATTACHMENT_ACCESS_TTL_SECONDS = 300;
+
   @IsOptional() @IsUrl({ require_tld: false }) PROVIDER_INVITATION_FRONTEND_URL?: string;
   @IsIn(['none', 'test', 'resend']) EMAIL_PROVIDER = process.env.NODE_ENV === 'test' ? 'test' : 'none';
   @IsOptional() @IsString() EMAIL_FROM_ADDRESS: string | undefined = process.env.NODE_ENV === 'test' ? 'no-reply@smartclinic.invalid' : undefined;
@@ -98,6 +104,7 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
   if (validatedConfig.NODE_ENV === 'production' && validatedConfig.EMAIL_PROVIDER === 'test') throw new Error('Invalid environment configuration: EMAIL_PROVIDER=test is not allowed in production');
   if (validatedConfig.EMAIL_PROVIDER !== 'none' && !validatedConfig.EMAIL_FROM_ADDRESS) throw new Error('Invalid environment configuration: EMAIL_FROM_ADDRESS is required when email delivery is configured');
   if (validatedConfig.EMAIL_PROVIDER === 'resend' && !validatedConfig.RESEND_API_KEY) throw new Error('Invalid environment configuration: RESEND_API_KEY is required when EMAIL_PROVIDER=resend');
+  if (validatedConfig.CLINICAL_ATTACHMENT_STORAGE_PROVIDER === 'cloudinary' && (!validatedConfig.CLOUDINARY_CLOUD_NAME || !validatedConfig.CLOUDINARY_API_KEY || !validatedConfig.CLOUDINARY_API_SECRET)) throw new Error('Invalid environment configuration: Cloudinary clinical attachment credentials are required when CLINICAL_ATTACHMENT_STORAGE_PROVIDER=cloudinary');
 
   return validatedConfig;
 }

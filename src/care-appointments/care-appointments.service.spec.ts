@@ -13,13 +13,17 @@ import { CareAppointmentsService } from './care-appointments.service';
 import { CareDeliveryMode } from '../providers/enums/care-delivery-mode.enum';
 import { CareRequestFunding } from '../care-requests/entities/care-request-funding.entity';
 import { CareRequestFundingStatus } from '../care-requests/enums/care-request-funding-status.enum';
+import { CareServiceDefinition } from '../providers/entities/care-service-definition.entity';
+import { ClinicalRecord } from '../clinical-records/entities/clinical-record.entity';
+import { ClinicalRecordStatus } from '../clinical-records/enums/clinical-record-status.enum';
+import { ClinicalRecordType } from '../clinical-records/enums/clinical-record-type.enum';
 
 describe('CareAppointmentsService', () => {
   const user: any = { id: 'provider-user' };
   const provider: any = { id: 'provider-id', status: 'ACTIVE', onboardingStatus: 'APPROVED', deletedAt: null };
   const care: any = { id: 'care-id', reference: 'SC-CARE-ABCDEF123456', patientId: 'patient-id', assignedProviderId: provider.id, assignedProviderCareServiceId: 'offering-id', careServiceDefinitionId: 'definition-id', deliveryMode: CareDeliveryMode.IN_PERSON, servicePriceMinor: '2000000', serviceCurrency: 'NGN', status: CareRequestStatus.PROVIDER_ACCEPTED };
   const dto: any = { scheduledDate: '2099-09-10', scheduledTimeFrom: '10:30', scheduledTimeTo: '11:00', timezone: 'Africa/Lagos', providerLocationReference: 'SCPL-ABCDEF0123456789' };
-  let manager: any; let appointmentRepo: any; let providerRepo: any; let careRepo: any; let fundingRepo: any; let offeringRepo: any; let locationRepo: any; let appointmentHistory: any; let requestHistory: any; let overlap: boolean; let subject: CareAppointmentsService;
+  let manager: any; let appointmentRepo: any; let providerRepo: any; let careRepo: any; let fundingRepo: any; let offeringRepo: any; let locationRepo: any; let definitionRepo: any; let clinicalRecordRepo: any; let appointmentHistory: any; let requestHistory: any; let overlap: boolean; let subject: CareAppointmentsService;
   beforeEach(() => {
     care.status = CareRequestStatus.PROVIDER_ACCEPTED; care.deliveryMode = CareDeliveryMode.IN_PERSON;
     overlap = false;
@@ -31,8 +35,10 @@ describe('CareAppointmentsService', () => {
     locationRepo = { findOne: jest.fn().mockResolvedValue({ id: 'location-id', providerId: provider.id, isActive: true, locationReference: dto.providerLocationReference }) };
     appointmentHistory = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) }; requestHistory = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) };
     fundingRepo = { findOne: jest.fn().mockResolvedValue({ careRequestId: care.id, amountMinor: care.servicePriceMinor, currency: 'NGN', status: CareRequestFundingStatus.PAID }), save: jest.fn(async value => value) };
-    manager = { transaction: jest.fn(async (work) => work(manager)), getRepository: jest.fn((entity) => entity === CareAppointment ? appointmentRepo : entity === Provider ? providerRepo : entity === CareRequest ? careRepo : entity === CareRequestFunding ? fundingRepo : entity === ProviderCareService ? offeringRepo : entity === ProviderLocation ? locationRepo : entity === CareAppointmentStatusHistory ? appointmentHistory : entity === CareRequestStatusHistory ? requestHistory : {}) };
-    subject = new CareAppointmentsService({ manager } as any, { findOne: jest.fn() } as any, { resolveOperational: jest.fn().mockResolvedValue(provider) } as any, { markGeneralCarePayable: jest.fn().mockResolvedValue(null) } as any);
+    definitionRepo = { findOne: jest.fn().mockResolvedValue({ id: care.careServiceDefinitionId, clinicalRecordType: null }) };
+    clinicalRecordRepo = { findOne: jest.fn().mockResolvedValue(null) };
+    manager = { transaction: jest.fn(async (work) => work(manager)), getRepository: jest.fn((entity) => entity === CareAppointment ? appointmentRepo : entity === Provider ? providerRepo : entity === CareRequest ? careRepo : entity === CareRequestFunding ? fundingRepo : entity === ProviderCareService ? offeringRepo : entity === ProviderLocation ? locationRepo : entity === CareServiceDefinition ? definitionRepo : entity === ClinicalRecord ? clinicalRecordRepo : entity === CareAppointmentStatusHistory ? appointmentHistory : entity === CareRequestStatusHistory ? requestHistory : {}) };
+    subject = new CareAppointmentsService({ manager } as any, { findOne: jest.fn() } as any, { resolveOperational: jest.fn().mockResolvedValue(provider) } as any, { markGeneralCarePayable: jest.fn().mockResolvedValue(null) } as any, { ensureDraftForStartedAppointment: jest.fn().mockResolvedValue(null) } as any);
     jest.spyOn(subject as any, 'getMapped').mockImplementation(async () => ({ appointmentReference: 'SC-APT-ABCDEF123456' }));
   });
 
@@ -108,10 +114,27 @@ describe('CareAppointmentsService', () => {
     appointmentRepo.findOne = jest.fn().mockResolvedValue(transitionAppointment); care.status = CareRequestStatus.SCHEDULED;
     await subject.start(user, 'SC-APT-ABCDEF123456');
     expect(transitionAppointment.status).toBe(CareAppointmentStatus.IN_PROGRESS); expect(care.status).toBe(CareRequestStatus.IN_PROGRESS);
+    expect((subject as any).clinicalRecords.ensureDraftForStartedAppointment).toHaveBeenCalledWith(manager, transitionAppointment, care, user.id);
+    await expect(subject.start(user, 'SC-APT-ABCDEF123456')).rejects.toThrow('cannot transition to IN_PROGRESS');
+    expect((subject as any).clinicalRecords.ensureDraftForStartedAppointment).toHaveBeenCalledTimes(1);
     await subject.complete(user, 'SC-APT-ABCDEF123456');
     expect(transitionAppointment.status).toBe(CareAppointmentStatus.COMPLETED); expect(care.status).toBe(CareRequestStatus.COMPLETED);
     expect((subject as any).earnings.markGeneralCarePayable).toHaveBeenCalledWith(manager, care.reference, user.id);
   });
 
-  it('retains paid entitlement and HELD earning after cancellation/no-show', async () => { const transitionAppointment: any = { id: 'appointment-id', careRequestId: care.id, providerId: provider.id, patientId: 'patient-id', status: CareAppointmentStatus.SCHEDULED }; appointmentRepo.findOne = jest.fn().mockResolvedValue(transitionAppointment); care.status = CareRequestStatus.SCHEDULED; await subject.cancelProvider(user, 'SC-APT-ABCDEF123456', 'Reschedule'); expect(care.status).toBe(CareRequestStatus.PROVIDER_ACCEPTED); expect((subject as any).earnings.markGeneralCarePayable).not.toHaveBeenCalled(); transitionAppointment.status = CareAppointmentStatus.SCHEDULED; care.status = CareRequestStatus.SCHEDULED; await subject.noShow(user, 'SC-APT-ABCDEF123456', null); expect(care.status).toBe(CareRequestStatus.PROVIDER_ACCEPTED); });
+  it('gates completion on the configured finalized clinical record without changing earning authority', async () => {
+    const transitionAppointment: any = { id: 'appointment-id', careRequestId: care.id, providerId: provider.id, patientId: 'patient-id', status: CareAppointmentStatus.IN_PROGRESS };
+    appointmentRepo.findOne = jest.fn().mockResolvedValue(transitionAppointment); care.status = CareRequestStatus.IN_PROGRESS;
+    definitionRepo.findOne.mockResolvedValue({ id: care.careServiceDefinitionId, clinicalRecordType: ClinicalRecordType.CONSULTATION });
+    await expect(subject.complete(user, 'SC-APT-ABCDEF123456')).rejects.toThrow('clinical record is required');
+    clinicalRecordRepo.findOne.mockResolvedValue({ recordType: ClinicalRecordType.CONSULTATION, status: ClinicalRecordStatus.DRAFT });
+    await expect(subject.complete(user, 'SC-APT-ABCDEF123456')).rejects.toThrow('must be finalized');
+    clinicalRecordRepo.findOne.mockResolvedValue({ recordType: ClinicalRecordType.LAB_RESULT, status: ClinicalRecordStatus.FINALIZED });
+    await expect(subject.complete(user, 'SC-APT-ABCDEF123456')).rejects.toThrow('type must be CONSULTATION');
+    clinicalRecordRepo.findOne.mockResolvedValue({ recordType: ClinicalRecordType.CONSULTATION, status: ClinicalRecordStatus.FINALIZED });
+    await expect(subject.complete(user, 'SC-APT-ABCDEF123456')).resolves.toBeDefined();
+    expect((subject as any).earnings.markGeneralCarePayable).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains paid entitlement and HELD earning after cancellation/no-show without creating clinical records', async () => { const transitionAppointment: any = { id: 'appointment-id', careRequestId: care.id, providerId: provider.id, patientId: 'patient-id', status: CareAppointmentStatus.SCHEDULED }; appointmentRepo.findOne = jest.fn().mockResolvedValue(transitionAppointment); care.status = CareRequestStatus.SCHEDULED; await subject.cancelProvider(user, 'SC-APT-ABCDEF123456', 'Reschedule'); expect(care.status).toBe(CareRequestStatus.PROVIDER_ACCEPTED); expect((subject as any).earnings.markGeneralCarePayable).not.toHaveBeenCalled(); transitionAppointment.status = CareAppointmentStatus.SCHEDULED; care.status = CareRequestStatus.SCHEDULED; await subject.noShow(user, 'SC-APT-ABCDEF123456', null); expect(care.status).toBe(CareRequestStatus.PROVIDER_ACCEPTED); expect((subject as any).clinicalRecords.ensureDraftForStartedAppointment).not.toHaveBeenCalled(); });
 });

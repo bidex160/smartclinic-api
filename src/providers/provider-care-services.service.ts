@@ -24,7 +24,7 @@ export class ProviderCareServicesService {
 
   async createDefinition(dto: CreateCareServiceDefinitionDto) {
     if (await this.definitions.exists({ where: { code: dto.code } })) throw new ConflictException('Care service code already exists');
-    return this.definitions.save(this.definitions.create({ code: dto.code, name: dto.name, description: dto.description ?? null, isActive: true }));
+    return this.definitions.save(this.definitions.create({ code: dto.code, name: dto.name, description: dto.description ?? null, clinicalRecordType: dto.clinicalRecordType ?? null, isActive: true }));
   }
 
   async updateDefinition(id: string, dto: UpdateCareServiceDefinitionDto) {

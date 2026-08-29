@@ -21,6 +21,7 @@ import { CareAppointmentsModule } from './care-appointments/care-appointments.mo
 import { CareChatModule } from './care-chat/care-chat.module';
 import { CommissionsModule } from './commissions/commissions.module';
 import { EarningsModule } from './earnings/earnings.module';
+import { ClinicalRecordsModule } from './clinical-records/clinical-records.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -40,6 +41,7 @@ const persistenceDomainModules = configuration.database.enabled
       CareChatModule,
       CommissionsModule,
       EarningsModule,
+      ClinicalRecordsModule,
     ]
   : [];
 

@@ -15,6 +15,13 @@ export interface AppConfiguration {
   providerMatching: { offerTtlMinutes: number };
   providerInvitations: { ttlSeconds: number; frontendUrl: string };
   healthResults: { guestAccessTtlSeconds: number };
+  clinicalAttachments: {
+    provider: 'none' | 'cloudinary';
+    cloudName?: string;
+    apiKey?: string;
+    apiSecret?: string;
+    accessTtlSeconds: number;
+  };
   email: {
     provider: "none" | "test" | "resend";
     fromAddress: string;
@@ -105,6 +112,13 @@ export function createAppConfiguration(
         environment.HEALTH_RESULT_ACCESS_TTL,
         60 * 60 * 24 * 7,
       ),
+    },
+    clinicalAttachments: {
+      provider: (environment.CLINICAL_ATTACHMENT_STORAGE_PROVIDER as 'none' | 'cloudinary' | undefined) ?? 'none',
+      cloudName: environment.CLOUDINARY_CLOUD_NAME,
+      apiKey: environment.CLOUDINARY_API_KEY,
+      apiSecret: environment.CLOUDINARY_API_SECRET,
+      accessTtlSeconds: getNumber(environment.CLINICAL_ATTACHMENT_ACCESS_TTL_SECONDS, 300),
     },
     email: {
       provider:

@@ -6,6 +6,7 @@ import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enu
 import { ProviderCareService } from './entities/provider-care-service.entity';
 import { ProviderCareServiceDeliveryOption } from './entities/provider-care-service-delivery-option.entity';
 import { CareServiceDefinition } from './entities/care-service-definition.entity';
+import { ClinicalRecordType } from '../clinical-records/enums/clinical-record-type.enum';
 
 describe('ProviderCareServicesService', () => {
   const provider = { id: '10000000-0000-4000-8000-000000000001', deletedAt: null, status: ProviderStatus.ACTIVE, onboardingStatus: ProviderOnboardingStatus.APPROVED };
@@ -32,6 +33,15 @@ describe('ProviderCareServicesService', () => {
     services.exists.mockResolvedValue(false);
     await subject.createForProvider(provider.id, { careServiceDefinitionId: definition.id, deliveryOptions: [{ deliveryMode: CareDeliveryMode.IN_PERSON, priceMinor: 1500000, currency: 'NGN' }, { deliveryMode: CareDeliveryMode.VIRTUAL, priceMinor: 1000000, currency: 'NGN' }] });
     expect(optionRepo.save).toHaveBeenLastCalledWith(expect.arrayContaining([expect.objectContaining({ deliveryMode: CareDeliveryMode.VIRTUAL, priceMinor: '1000000' })]));
+  });
+
+  it('persists the Admin-configured expected clinical record type on the service definition', async () => {
+    await subject.createDefinition({ code: 'GENERAL_CONSULTATION', name: 'General consultation', clinicalRecordType: ClinicalRecordType.CONSULTATION });
+    expect(definitions.save).toHaveBeenCalledWith(expect.objectContaining({ clinicalRecordType: ClinicalRecordType.CONSULTATION }));
+    const storedDefinition: any = { id: definition.id, code: 'GENERAL_CONSULTATION', name: 'General consultation', clinicalRecordType: null };
+    definitions.findOne = jest.fn().mockResolvedValue(storedDefinition);
+    await subject.updateDefinition(definition.id, { clinicalRecordType: ClinicalRecordType.LAB_RESULT });
+    expect(storedDefinition.clinicalRecordType).toBe(ClinicalRecordType.LAB_RESULT);
   });
 
   it('rejects empty, duplicate, negative, and invalid-currency options', async () => {

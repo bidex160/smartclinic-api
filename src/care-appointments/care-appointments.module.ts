@@ -18,12 +18,16 @@ import {
 import { User } from "../users/entities/user.entity";
 import { CareRequestFunding } from '../care-requests/entities/care-request-funding.entity';
 import { EarningsModule } from '../earnings/earnings.module';
+import { CareServiceDefinition } from '../providers/entities/care-service-definition.entity';
+import { ClinicalRecord } from '../clinical-records/entities/clinical-record.entity';
+import { ClinicalRecordsModule } from '../clinical-records/clinical-records.module';
 
 @Module({
   imports: [
     AuthModule,
     ProvidersModule,
     EarningsModule,
+    ClinicalRecordsModule,
     TypeOrmModule.forFeature([
       CareAppointment,
       CareAppointmentStatusHistory,
@@ -35,6 +39,8 @@ import { EarningsModule } from '../earnings/earnings.module';
       ProviderLocation,
       User,
       CareRequestFunding,
+      CareServiceDefinition,
+      ClinicalRecord,
     ]),
   ],
   controllers: [

@@ -3,11 +3,13 @@ import { Transform, Type } from 'class-transformer';
 import { ArrayNotEmpty, ArrayUnique, IsArray, IsBoolean, IsEnum, IsISO4217CurrencyCode, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { ProviderType } from '../enums/provider-type.enum';
 import { CareDeliveryMode } from '../enums/care-delivery-mode.enum';
+import { ClinicalRecordType } from '../../clinical-records/enums/clinical-record-type.enum';
 
 export class CreateCareServiceDefinitionDto {
   @ApiProperty({ example: 'GENERAL_CONSULTATION' }) @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z][A-Z0-9_]{1,79}$/) code!: string;
   @ApiProperty() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @MinLength(1) @MaxLength(160) name!: string;
   @ApiPropertyOptional({ nullable: true }) @Transform(({ value }) => typeof value === 'string' ? value.trim() || null : value) @IsOptional() @IsString() @MaxLength(4000) description?: string | null;
+  @ApiPropertyOptional({ enum: ClinicalRecordType, nullable: true }) @IsOptional() @IsEnum(ClinicalRecordType) clinicalRecordType?: ClinicalRecordType | null;
 }
 
 export class UpdateCareServiceDefinitionDto extends PartialType(CreateCareServiceDefinitionDto) {
