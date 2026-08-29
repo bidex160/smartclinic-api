@@ -18,7 +18,7 @@ describe('Clinical Records authorization (e2e)', () => {
   let app: INestApplication;
   const service = { createForAppointment: jest.fn().mockResolvedValue({ reference: 'SC-CLR-ABCDEF123456', status: ClinicalRecordStatus.DRAFT }), getForProvider: jest.fn(), updateForAppointment: jest.fn(), finalizeForAppointment: jest.fn(), listMine: jest.fn().mockResolvedValue({ items: [] }), getMine: jest.fn() };
   const attachments = { upload: jest.fn().mockResolvedValue({ reference: 'SC-CLA-ABCDEF123456', originalName: 'report.pdf', mimeType: 'application/pdf', sizeBytes: 8, resourceType: 'DOCUMENT' }), delete: jest.fn(), providerAccess: jest.fn().mockResolvedValue({ url: 'https://signed.example/private' }), patientAccess: jest.fn().mockResolvedValue({ url: 'https://signed.example/private' }) };
-  const access = { createGrant: jest.fn().mockResolvedValue({ reference: 'SC-CRG-ABCDEF123456' }), listGrants: jest.fn().mockResolvedValue({ items: [] }), getGrant: jest.fn(), revokeGrant: jest.fn(), listAudit: jest.fn().mockResolvedValue({ items: [] }), listShared: jest.fn().mockResolvedValue({ items: [] }), getShared: jest.fn().mockResolvedValue({ reference: 'SC-CLR-ABCDEF123456' }), sharedAttachmentAccess: jest.fn().mockResolvedValue({ url: 'https://signed.example/private' }) };
+  const access = { listEligibleProviders: jest.fn().mockResolvedValue({ items: [], page: 1, limit: 20, total: 0, totalPages: 0 }), createGrant: jest.fn().mockResolvedValue({ reference: 'SC-CRG-ABCDEF123456' }), listGrants: jest.fn().mockResolvedValue({ items: [] }), getGrant: jest.fn(), revokeGrant: jest.fn(), listAudit: jest.fn().mockResolvedValue({ items: [] }), listShared: jest.fn().mockResolvedValue({ items: [] }), getShared: jest.fn().mockResolvedValue({ reference: 'SC-CLR-ABCDEF123456' }), sharedAttachmentAccess: jest.fn().mockResolvedValue({ url: 'https://signed.example/private' }) };
   beforeAll(async () => {
     const module = await Test.createTestingModule({ controllers: [ProviderClinicalRecordsController, MeClinicalRecordsController, ProviderClinicalRecordAttachmentsController, MeClinicalRecordAttachmentsController, MeClinicalRecordAccessController, ProviderSharedClinicalRecordsController], providers: [RolesGuard, Reflector, { provide: ClinicalRecordsService, useValue: service }, { provide: ClinicalRecordAttachmentsService, useValue: attachments }, { provide: ClinicalRecordAccessService, useValue: access }] }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); const token = req.headers.authorization?.replace('Bearer ', ''); if (!token) throw new UnauthorizedException(); req.user = { id: `${token}-user`, roles: token === 'provider' ? [UserRole.PROVIDER] : [UserRole.USER] }; return true; } }).compile();
     app = module.createNestApplication(); app.setGlobalPrefix('api/v1'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true })); await app.init();
@@ -56,5 +56,12 @@ describe('Clinical Records authorization (e2e)', () => {
     await request(app.getHttpServer()).get('/api/v1/provider/shared-clinical-records').set('Authorization', 'Bearer patient').expect(403);
     await request(app.getHttpServer()).get('/api/v1/provider/shared-clinical-records').set('Authorization', 'Bearer provider').expect(200);
     await request(app.getHttpServer()).get('/api/v1/me/clinical-record-access-audit').set('Authorization', 'Bearer patient').expect(200);
+  });
+  it('keeps the Clinical Record Provider selector patient-authenticated', async () => {
+    const route = '/api/v1/me/clinical-record-access-providers?q=prime&page=1&limit=20';
+    await request(app.getHttpServer()).get(route).expect(401);
+    await request(app.getHttpServer()).get(route).set('Authorization', 'Bearer provider').expect(403);
+    await request(app.getHttpServer()).get(route).set('Authorization', 'Bearer patient').expect(200);
+    expect(access.listEligibleProviders).toHaveBeenCalledWith(expect.objectContaining({ id: 'patient-user' }), expect.objectContaining({ q: 'prime', page: 1, limit: 20 }));
   });
 });

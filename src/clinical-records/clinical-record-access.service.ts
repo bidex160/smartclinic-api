@@ -1,41 +1,556 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common'; import { InjectRepository } from '@nestjs/typeorm'; import { EntityManager, Repository } from 'typeorm';
-import { PRIVATE_ATTACHMENT_STORAGE, PrivateAttachmentStorage } from '../common/storage/private-attachment-storage'; import { createAppConfiguration } from '../config/environment'; import { Patient } from '../patients/entities/patient.entity'; import { PatientStatus } from '../patients/enums/patient-status.enum'; import { CurrentProviderService } from '../providers/current-provider.service'; import { Provider } from '../providers/entities/provider.entity'; import { ProviderOnboardingStatus } from '../providers/enums/provider-onboarding-status.enum'; import { ProviderStatus } from '../providers/enums/provider-status.enum'; import { User } from '../users/entities/user.entity';
-import { generateClinicalRecordGrantReference } from './clinical-record-access-reference'; import { ClinicalAccessListQueryDto, CreateClinicalRecordAccessGrantDto } from './dto/clinical-record-access.dto'; import { ClinicalRecordAccessAudit } from './entities/clinical-record-access-audit.entity'; import { ClinicalRecordAccessGrant } from './entities/clinical-record-access-grant.entity'; import { ClinicalRecordAttachment } from './entities/clinical-record-attachment.entity'; import { ClinicalRecord } from './entities/clinical-record.entity'; import { ClinicalRecordAccessAction } from './enums/clinical-record-access-action.enum'; import { ClinicalRecordAccessScope } from './enums/clinical-record-access-scope.enum'; import { ClinicalRecordStatus } from './enums/clinical-record-status.enum'; import { ClinicalRecordsService } from './clinical-records.service';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { EntityManager, Repository } from "typeorm";
+import {
+  PRIVATE_ATTACHMENT_STORAGE,
+  PrivateAttachmentStorage,
+} from "../common/storage/private-attachment-storage";
+import { createAppConfiguration } from "../config/environment";
+import { Patient } from "../patients/entities/patient.entity";
+import { PatientStatus } from "../patients/enums/patient-status.enum";
+import { CurrentProviderService } from "../providers/current-provider.service";
+import { Provider } from "../providers/entities/provider.entity";
+import { ProviderOnboardingStatus } from "../providers/enums/provider-onboarding-status.enum";
+import { ProviderStatus } from "../providers/enums/provider-status.enum";
+import { User } from "../users/entities/user.entity";
+import { generateClinicalRecordGrantReference } from "./clinical-record-access-reference";
+import {
+  ClinicalAccessListQueryDto,
+  ClinicalRecordAccessProviderListQueryDto,
+  CreateClinicalRecordAccessGrantDto,
+} from "./dto/clinical-record-access.dto";
+import { ClinicalRecordAccessAudit } from "./entities/clinical-record-access-audit.entity";
+import { ClinicalRecordAccessGrant } from "./entities/clinical-record-access-grant.entity";
+import { ClinicalRecordAttachment } from "./entities/clinical-record-attachment.entity";
+import { ClinicalRecord } from "./entities/clinical-record.entity";
+import { ClinicalRecordAccessAction } from "./enums/clinical-record-access-action.enum";
+import { ClinicalRecordAccessScope } from "./enums/clinical-record-access-scope.enum";
+import { ClinicalRecordStatus } from "./enums/clinical-record-status.enum";
+import { ClinicalRecordsService } from "./clinical-records.service";
 
 @Injectable()
 export class ClinicalRecordAccessService {
- constructor(@InjectRepository(ClinicalRecordAccessGrant) private readonly grants: Repository<ClinicalRecordAccessGrant>, @InjectRepository(ClinicalRecordAccessAudit) private readonly audits: Repository<ClinicalRecordAccessAudit>, @InjectRepository(Patient) private readonly patients: Repository<Patient>, private readonly currentProvider: CurrentProviderService, private readonly recordsService: ClinicalRecordsService, @Inject(PRIVATE_ATTACHMENT_STORAGE) private readonly storage: PrivateAttachmentStorage) {}
+  constructor(
+    @InjectRepository(ClinicalRecordAccessGrant)
+    private readonly grants: Repository<ClinicalRecordAccessGrant>,
+    @InjectRepository(ClinicalRecordAccessAudit)
+    private readonly audits: Repository<ClinicalRecordAccessAudit>,
+    @InjectRepository(Patient) private readonly patients: Repository<Patient>,
+    @InjectRepository(Provider)
+    private readonly providers: Repository<Provider>,
+    private readonly currentProvider: CurrentProviderService,
+    private readonly recordsService: ClinicalRecordsService,
+    @Inject(PRIVATE_ATTACHMENT_STORAGE)
+    private readonly storage: PrivateAttachmentStorage,
+  ) {}
 
- async createGrant(user: User, dto: CreateClinicalRecordAccessGrantDto) {
-  const patient = await this.patient(user.id); this.validateScope(dto); const expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null; if (expiresAt && expiresAt <= new Date()) throw new BadRequestException('expiresAt must be in the future');
-  return this.grants.manager.transaction(async manager => {
-   await manager.getRepository(Patient).findOneOrFail({ where: { id: patient.id }, lock: { mode: 'pessimistic_write' } });
-   const provider = await manager.getRepository(Provider).findOne({ where: { providerReference: dto.providerReference, status: ProviderStatus.ACTIVE, onboardingStatus: ProviderOnboardingStatus.APPROVED }, withDeleted: true });
-   if (!provider || provider.deletedAt) throw new NotFoundException('Provider was not found');
-   let record: ClinicalRecord | null = null;
-   if (dto.scope === ClinicalRecordAccessScope.SINGLE_RECORD) { record = await manager.getRepository(ClinicalRecord).findOne({ where: { reference: dto.clinicalRecordReference!, patientId: patient.id, status: ClinicalRecordStatus.FINALIZED } }); if (!record) throw new NotFoundException('Clinical Record was not found'); }
-   const duplicate = await manager.getRepository(ClinicalRecordAccessGrant).createQueryBuilder('grant').where('grant.patientId = :patientId', { patientId: patient.id }).andWhere('grant.granteeProviderId = :providerId', { providerId: provider.id }).andWhere('grant.scope = :scope', { scope: dto.scope }).andWhere(dto.recordType ? 'grant.recordType = :recordType' : 'grant.recordType IS NULL', { recordType: dto.recordType }).andWhere(record ? 'grant.clinicalRecordId = :recordId' : 'grant.clinicalRecordId IS NULL', { recordId: record?.id }).andWhere('grant.revokedAt IS NULL').andWhere('(grant.expiresAt IS NULL OR grant.expiresAt > CURRENT_TIMESTAMP)').getOne();
-   if (duplicate) throw new ConflictException('An equivalent active Clinical Record access grant already exists');
-   const now = new Date(); const repository = manager.getRepository(ClinicalRecordAccessGrant); const grant = await repository.save(repository.create({ reference: generateClinicalRecordGrantReference(), patientId: patient.id, granteeProviderId: provider.id, scope: dto.scope, recordType: dto.scope === ClinicalRecordAccessScope.RECORD_TYPE ? dto.recordType! : null, clinicalRecordId: record?.id ?? null, grantedByUserId: user.id, grantedAt: now, expiresAt, revokedAt: null }));
-   grant.granteeProvider = provider; grant.clinicalRecord = record; return this.mapGrant(grant);
-  });
- }
- async listGrants(user: User, query: ClinicalAccessListQueryDto) { const patient = await this.patient(user.id); const [rows, total] = await this.grants.createQueryBuilder('grant').innerJoinAndSelect('grant.granteeProvider', 'provider').leftJoinAndSelect('grant.clinicalRecord', 'record').where('grant.patientId = :patientId', { patientId: patient.id }).orderBy('grant.createdAt', 'DESC').addOrderBy('grant.reference', 'DESC').skip((query.page - 1) * query.limit).take(query.limit).getManyAndCount(); return this.page(rows.map(row => this.mapGrant(row)), query, total); }
- async getGrant(user: User, reference: string) { const patient = await this.patient(user.id); const row = await this.grants.createQueryBuilder('grant').innerJoinAndSelect('grant.granteeProvider', 'provider').leftJoinAndSelect('grant.clinicalRecord', 'record').where('grant.reference = :reference', { reference }).andWhere('grant.patientId = :patientId', { patientId: patient.id }).getOne(); if (!row) this.notFoundGrant(); return this.mapGrant(row); }
- async revokeGrant(user: User, reference: string) { const patient = await this.patient(user.id); return this.grants.manager.transaction(async manager => { const row = await manager.getRepository(ClinicalRecordAccessGrant).findOne({ where: { reference, patientId: patient.id }, relations: { granteeProvider: true, clinicalRecord: true }, lock: { mode: 'pessimistic_write' } }); if (!row) this.notFoundGrant(); if (!row.revokedAt) { row.revokedAt = new Date(); await manager.getRepository(ClinicalRecordAccessGrant).save(row); } return this.mapGrant(row); }); }
+  async listEligibleProviders(
+    user: User,
+    query: ClinicalRecordAccessProviderListQueryDto,
+  ) {
+    await this.patient(user.id);
+    const builder = this.eligibleProviderQuery(this.providers).select([
+      "provider.providerReference",
+      "provider.displayName",
+      "provider.providerType",
+      "provider.countryCode",
+      "provider.stateOrRegion",
+      "provider.city",
+    ]);
+    if (query.q) {
+      builder.andWhere("provider.displayName ILIKE :search", {
+        search: `%${query.q}%`,
+      });
+    }
+    builder
+      .orderBy("provider.displayName", "ASC")
+      .addOrderBy("provider.providerReference", "ASC")
+      .skip((query.page - 1) * query.limit)
+      .take(query.limit);
+    const [rows, total] = await builder.getManyAndCount();
+    return this.page(
+      rows.map((row) => this.providerDirectoryItem(row)),
+      query,
+      total,
+    );
+  }
 
- async listShared(user: User, query: ClinicalAccessListQueryDto) { const provider = await this.currentProvider.resolveOperational(user); const builder = this.grants.manager.getRepository(ClinicalRecord).createQueryBuilder('record').innerJoinAndSelect('record.provider', 'originProvider').innerJoinAndSelect('record.patient', 'patient').leftJoinAndSelect('record.careServiceDefinition', 'definition').where('record.status = :finalized', { finalized: ClinicalRecordStatus.FINALIZED }).andWhere(`EXISTS (SELECT 1 FROM clinical_record_access_grants grant WHERE grant.patient_id = record.patient_id AND grant.grantee_provider_id = :providerId AND grant.revoked_at IS NULL AND (grant.expires_at IS NULL OR grant.expires_at > CURRENT_TIMESTAMP) AND (grant.scope = 'ALL_RECORDS' OR (grant.scope = 'RECORD_TYPE' AND grant.record_type = record.record_type) OR (grant.scope = 'SINGLE_RECORD' AND grant.clinical_record_id = record.id)))`, { providerId: provider.id }).orderBy('record.occurredAt', 'DESC').addOrderBy('record.reference', 'DESC').skip((query.page - 1) * query.limit).take(query.limit); const [rows, total] = await builder.getManyAndCount(); return this.page(rows.map(row => this.sharedSummary(row)), query, total); }
- async getShared(user: User, reference: string) { const provider = await this.currentProvider.resolveOperational(user); return this.grants.manager.transaction(async manager => { const record = await this.recordsService.sharedReadBuilder(manager).where('record.reference = :reference', { reference }).andWhere('record.status = :status', { status: ClinicalRecordStatus.FINALIZED }).getOne(); if (!record) this.notFoundRecord(); const grant = await this.coveringGrant(manager, provider.id, record); if (!grant) this.notFoundRecord(); await this.audit(manager, record, provider.id, user.id, grant.id, ClinicalRecordAccessAction.VIEW); return { ...this.recordsService.projectRecord(record), patient: { displayName: this.patientName(record.patient) } }; }); }
- async sharedAttachmentAccess(user: User, recordReference: string, attachmentReference: string) { const provider = await this.currentProvider.resolveOperational(user); return this.grants.manager.transaction(async manager => { const record = await manager.getRepository(ClinicalRecord).findOne({ where: { reference: recordReference, status: ClinicalRecordStatus.FINALIZED }, relations: { patient: true }, lock: { mode: 'pessimistic_read' } }); if (!record) this.notFoundRecord(); const grant = await this.coveringGrant(manager, provider.id, record); if (!grant) this.notFoundRecord(); const attachment = await manager.getRepository(ClinicalRecordAttachment).findOne({ where: { reference: attachmentReference, clinicalRecordId: record.id } }); if (!attachment) throw new NotFoundException('Clinical Record attachment was not found'); await this.audit(manager, record, provider.id, user.id, grant.id, ClinicalRecordAccessAction.ATTACHMENT_ACCESS); const expiresAt = new Date(Date.now() + createAppConfiguration().clinicalAttachments.accessTtlSeconds * 1000); const url = await this.storage.createAccessUrl({ publicId: attachment.storagePublicId, storageResourceType: attachment.storageResourceType, version: attachment.storageVersion, format: attachment.storageFormat }, expiresAt); return { url, expiresAt }; }); }
- async listAudit(user: User, query: ClinicalAccessListQueryDto) { const patient = await this.patient(user.id); const [rows, total] = await this.audits.createQueryBuilder('audit').innerJoinAndSelect('audit.provider', 'provider').innerJoinAndSelect('audit.clinicalRecord', 'record').where('audit.patientId = :patientId', { patientId: patient.id }).orderBy('audit.createdAt', 'DESC').addOrderBy('audit.id', 'DESC').skip((query.page - 1) * query.limit).take(query.limit).getManyAndCount(); return this.page(rows.map(row => ({ provider: this.provider(row.provider), clinicalRecord: { reference: row.clinicalRecord.reference, title: row.clinicalRecord.title, recordType: row.clinicalRecord.recordType }, action: row.action, createdAt: row.createdAt })), query, total); }
+  async createGrant(user: User, dto: CreateClinicalRecordAccessGrantDto) {
+    const patient = await this.patient(user.id);
+    this.validateScope(dto);
+    const expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
+    if (expiresAt && expiresAt <= new Date())
+      throw new BadRequestException("expiresAt must be in the future");
+    return this.grants.manager.transaction(async (manager) => {
+      await manager
+        .getRepository(Patient)
+        .findOneOrFail({
+          where: { id: patient.id },
+          lock: { mode: "pessimistic_write" },
+        });
+      const provider = await this.eligibleProviderQuery(
+        manager.getRepository(Provider),
+      )
+        .andWhere("provider.providerReference = :providerReference", {
+          providerReference: dto.providerReference,
+        })
+        .getOne();
+      if (!provider)
+        throw new NotFoundException("Provider was not found");
+      let record: ClinicalRecord | null = null;
+      if (dto.scope === ClinicalRecordAccessScope.SINGLE_RECORD) {
+        record = await manager
+          .getRepository(ClinicalRecord)
+          .findOne({
+            where: {
+              reference: dto.clinicalRecordReference!,
+              patientId: patient.id,
+              status: ClinicalRecordStatus.FINALIZED,
+            },
+          });
+        if (!record)
+          throw new NotFoundException("Clinical Record was not found");
+      }
+      const duplicate = await manager
+        .getRepository(ClinicalRecordAccessGrant)
+        .createQueryBuilder("grant")
+        .where("grant.patientId = :patientId", { patientId: patient.id })
+        .andWhere("grant.granteeProviderId = :providerId", {
+          providerId: provider.id,
+        })
+        .andWhere("grant.scope = :scope", { scope: dto.scope })
+        .andWhere(
+          dto.recordType
+            ? "grant.recordType = :recordType"
+            : "grant.recordType IS NULL",
+          { recordType: dto.recordType },
+        )
+        .andWhere(
+          record
+            ? "grant.clinicalRecordId = :recordId"
+            : "grant.clinicalRecordId IS NULL",
+          { recordId: record?.id },
+        )
+        .andWhere("grant.revokedAt IS NULL")
+        .andWhere(
+          "(grant.expiresAt IS NULL OR grant.expiresAt > CURRENT_TIMESTAMP)",
+        )
+        .getOne();
+      if (duplicate)
+        throw new ConflictException(
+          "An equivalent active Clinical Record access grant already exists",
+        );
+      const now = new Date();
+      const repository = manager.getRepository(ClinicalRecordAccessGrant);
+      const grant = await repository.save(
+        repository.create({
+          reference: generateClinicalRecordGrantReference(),
+          patientId: patient.id,
+          granteeProviderId: provider.id,
+          scope: dto.scope,
+          recordType:
+            dto.scope === ClinicalRecordAccessScope.RECORD_TYPE
+              ? dto.recordType!
+              : null,
+          clinicalRecordId: record?.id ?? null,
+          grantedByUserId: user.id,
+          grantedAt: now,
+          expiresAt,
+          revokedAt: null,
+        }),
+      );
+      grant.granteeProvider = provider;
+      grant.clinicalRecord = record;
+      return this.mapGrant(grant);
+    });
+  }
+  async listGrants(user: User, query: ClinicalAccessListQueryDto) {
+    const patient = await this.patient(user.id);
+    const [rows, total] = await this.grants
+      .createQueryBuilder("grant")
+      .innerJoinAndSelect("grant.granteeProvider", "provider")
+      .leftJoinAndSelect("grant.clinicalRecord", "record")
+      .where("grant.patientId = :patientId", { patientId: patient.id })
+      .orderBy("grant.createdAt", "DESC")
+      .addOrderBy("grant.reference", "DESC")
+      .skip((query.page - 1) * query.limit)
+      .take(query.limit)
+      .getManyAndCount();
+    return this.page(
+      rows.map((row) => this.mapGrant(row)),
+      query,
+      total,
+    );
+  }
+  async getGrant(user: User, reference: string) {
+    const patient = await this.patient(user.id);
+    const row = await this.grants
+      .createQueryBuilder("grant")
+      .innerJoinAndSelect("grant.granteeProvider", "provider")
+      .leftJoinAndSelect("grant.clinicalRecord", "record")
+      .where("grant.reference = :reference", { reference })
+      .andWhere("grant.patientId = :patientId", { patientId: patient.id })
+      .getOne();
+    if (!row) this.notFoundGrant();
+    return this.mapGrant(row);
+  }
+  async revokeGrant(user: User, reference: string) {
+    const patient = await this.patient(user.id);
+    return this.grants.manager.transaction(async (manager) => {
+      const row = await manager
+        .getRepository(ClinicalRecordAccessGrant)
+        .findOne({
+          where: { reference, patientId: patient.id },
+          relations: { granteeProvider: true, clinicalRecord: true },
+          lock: { mode: "pessimistic_write" },
+        });
+      if (!row) this.notFoundGrant();
+      if (!row.revokedAt) {
+        row.revokedAt = new Date();
+        await manager.getRepository(ClinicalRecordAccessGrant).save(row);
+      }
+      return this.mapGrant(row);
+    });
+  }
 
- private async coveringGrant(manager: EntityManager, providerId: string, record: ClinicalRecord) { return manager.getRepository(ClinicalRecordAccessGrant).createQueryBuilder('grant').where('grant.patientId = :patientId', { patientId: record.patientId }).andWhere('grant.granteeProviderId = :providerId', { providerId }).andWhere('grant.revokedAt IS NULL').andWhere('(grant.expiresAt IS NULL OR grant.expiresAt > CURRENT_TIMESTAMP)').andWhere(`(grant.scope = 'ALL_RECORDS' OR (grant.scope = 'RECORD_TYPE' AND grant.recordType = :recordType) OR (grant.scope = 'SINGLE_RECORD' AND grant.clinicalRecordId = :recordId))`, { recordType: record.recordType, recordId: record.id }).orderBy('grant.createdAt', 'ASC').addOrderBy('grant.reference', 'ASC').getOne(); }
- private async audit(manager: EntityManager, record: ClinicalRecord, providerId: string, userId: string, grantId: string, action: ClinicalRecordAccessAction) { const repo = manager.getRepository(ClinicalRecordAccessAudit); await repo.save(repo.create({ patientId: record.patientId, clinicalRecordId: record.id, providerId, userId, grantId, action })); }
- private validateScope(dto: CreateClinicalRecordAccessGrantDto) { const valid = (dto.scope === ClinicalRecordAccessScope.ALL_RECORDS && !dto.recordType && !dto.clinicalRecordReference) || (dto.scope === ClinicalRecordAccessScope.RECORD_TYPE && !!dto.recordType && !dto.clinicalRecordReference) || (dto.scope === ClinicalRecordAccessScope.SINGLE_RECORD && !dto.recordType && !!dto.clinicalRecordReference); if (!valid) throw new BadRequestException('Grant scope fields are inconsistent'); }
- private mapGrant(row: ClinicalRecordAccessGrant) { const now = new Date(); const status = row.revokedAt ? 'REVOKED' : row.expiresAt && row.expiresAt <= now ? 'EXPIRED' : 'ACTIVE'; return { reference: row.reference, provider: this.provider(row.granteeProvider), scope: row.scope, recordType: row.recordType, clinicalRecord: row.clinicalRecord ? { reference: row.clinicalRecord.reference, title: row.clinicalRecord.title, recordType: row.clinicalRecord.recordType } : null, grantedAt: row.grantedAt, expiresAt: row.expiresAt, revokedAt: row.revokedAt, status, createdAt: row.createdAt, updatedAt: row.updatedAt }; }
- private sharedSummary(row: ClinicalRecord) { return { reference: row.reference, recordType: row.recordType, title: row.title, summary: row.summary, occurredAt: row.occurredAt, finalizedAt: row.finalizedAt, provider: this.provider(row.provider), patient: { displayName: this.patientName(row.patient) }, service: row.careServiceDefinition ? { code: row.careServiceDefinition.code, name: row.careServiceDefinition.name } : null }; }
- private provider(row: Provider) { return { providerReference: row.providerReference, displayName: row.displayName, providerType: row.providerType }; } private patientName(row: Patient) { const initial = row.familyName.trim().charAt(0); return initial ? `${row.givenName.trim()} ${initial}.` : row.givenName.trim(); }
- private page(items: unknown[], query: ClinicalAccessListQueryDto, total: number) { return { items, page: query.page, limit: query.limit, total, totalPages: total ? Math.ceil(total / query.limit) : 0 }; }
- private async patient(userId: string) { const patient = await this.patients.findOne({ where: { userId }, withDeleted: true }); if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE) throw new NotFoundException('Patient profile was not found'); return patient; }
- private notFoundGrant(): never { throw new NotFoundException('Clinical Record access grant was not found'); } private notFoundRecord(): never { throw new NotFoundException('Clinical Record was not found'); }
+async listShared(user: User, query: ClinicalAccessListQueryDto) {
+  const provider = await this.currentProvider.resolveOperational(user);
+
+  const builder = this.grants.manager
+    .getRepository(ClinicalRecord)
+    .createQueryBuilder('record')
+    .innerJoinAndSelect('record.provider', 'originProvider')
+    .innerJoinAndSelect('record.patient', 'patient')
+    .leftJoinAndSelect('record.careServiceDefinition', 'definition')
+    .where('record.status = :finalized', {
+      finalized: ClinicalRecordStatus.FINALIZED,
+    })
+    .andWhere(
+      `
+        EXISTS (
+          SELECT 1
+          FROM clinical_record_access_grants access_grant
+          WHERE access_grant.patient_id = record.patient_id
+            AND access_grant.grantee_provider_id = :providerId
+            AND access_grant.revoked_at IS NULL
+            AND (
+              access_grant.expires_at IS NULL
+              OR access_grant.expires_at > CURRENT_TIMESTAMP
+            )
+            AND (
+              access_grant.scope = 'ALL_RECORDS'
+
+              OR (
+                access_grant.scope = 'RECORD_TYPE'
+                AND access_grant.record_type = record.record_type
+              )
+
+              OR (
+                access_grant.scope = 'SINGLE_RECORD'
+                AND access_grant.clinical_record_id = record.id
+              )
+            )
+        )
+      `,
+      {
+        providerId: provider.id,
+      },
+    )
+    .orderBy('record.occurredAt', 'DESC')
+    .addOrderBy('record.reference', 'DESC')
+    .skip((query.page - 1) * query.limit)
+    .take(query.limit);
+
+  const [rows, total] = await builder.getManyAndCount();
+
+  return this.page(
+    rows.map((row) => this.sharedSummary(row)),
+    query,
+    total,
+  );
+}
+  async getShared(user: User, reference: string) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    return this.grants.manager.transaction(async (manager) => {
+      const record = await this.recordsService
+        .sharedReadBuilder(manager)
+        .where("record.reference = :reference", { reference })
+        .andWhere("record.status = :status", {
+          status: ClinicalRecordStatus.FINALIZED,
+        })
+        .getOne();
+      if (!record) this.notFoundRecord();
+      const grant = await this.coveringGrant(manager, provider.id, record);
+      if (!grant) this.notFoundRecord();
+      await this.audit(
+        manager,
+        record,
+        provider.id,
+        user.id,
+        grant.id,
+        ClinicalRecordAccessAction.VIEW,
+      );
+      return {
+        ...this.recordsService.projectRecord(record),
+        patient: { displayName: this.patientName(record.patient) },
+      };
+    });
+  }
+  async sharedAttachmentAccess(
+    user: User,
+    recordReference: string,
+    attachmentReference: string,
+  ) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    return this.grants.manager.transaction(async (manager) => {
+      const record = await manager
+        .getRepository(ClinicalRecord)
+        .findOne({
+          where: {
+            reference: recordReference,
+            status: ClinicalRecordStatus.FINALIZED,
+          },
+          relations: { patient: true },
+          lock: { mode: "pessimistic_read" },
+        });
+      if (!record) this.notFoundRecord();
+      const grant = await this.coveringGrant(manager, provider.id, record);
+      if (!grant) this.notFoundRecord();
+      const attachment = await manager
+        .getRepository(ClinicalRecordAttachment)
+        .findOne({
+          where: {
+            reference: attachmentReference,
+            clinicalRecordId: record.id,
+          },
+        });
+      if (!attachment)
+        throw new NotFoundException("Clinical Record attachment was not found");
+      await this.audit(
+        manager,
+        record,
+        provider.id,
+        user.id,
+        grant.id,
+        ClinicalRecordAccessAction.ATTACHMENT_ACCESS,
+      );
+      const expiresAt = new Date(
+        Date.now() +
+          createAppConfiguration().clinicalAttachments.accessTtlSeconds * 1000,
+      );
+      const url = await this.storage.createAccessUrl(
+        {
+          publicId: attachment.storagePublicId,
+          storageResourceType: attachment.storageResourceType,
+          version: attachment.storageVersion,
+          format: attachment.storageFormat,
+        },
+        expiresAt,
+      );
+      return { url, expiresAt };
+    });
+  }
+  async listAudit(user: User, query: ClinicalAccessListQueryDto) {
+    const patient = await this.patient(user.id);
+    const [rows, total] = await this.audits
+      .createQueryBuilder("audit")
+      .innerJoinAndSelect("audit.provider", "provider")
+      .innerJoinAndSelect("audit.clinicalRecord", "record")
+      .where("audit.patientId = :patientId", { patientId: patient.id })
+      .orderBy("audit.createdAt", "DESC")
+      .addOrderBy("audit.id", "DESC")
+      .skip((query.page - 1) * query.limit)
+      .take(query.limit)
+      .getManyAndCount();
+    return this.page(
+      rows.map((row) => ({
+        provider: this.provider(row.provider),
+        clinicalRecord: {
+          reference: row.clinicalRecord.reference,
+          title: row.clinicalRecord.title,
+          recordType: row.clinicalRecord.recordType,
+        },
+        action: row.action,
+        createdAt: row.createdAt,
+      })),
+      query,
+      total,
+    );
+  }
+
+  private async coveringGrant(
+    manager: EntityManager,
+    providerId: string,
+    record: ClinicalRecord,
+  ) {
+    return manager
+      .getRepository(ClinicalRecordAccessGrant)
+      .createQueryBuilder("grant")
+      .where("grant.patientId = :patientId", { patientId: record.patientId })
+      .andWhere("grant.granteeProviderId = :providerId", { providerId })
+      .andWhere("grant.revokedAt IS NULL")
+      .andWhere(
+        "(grant.expiresAt IS NULL OR grant.expiresAt > CURRENT_TIMESTAMP)",
+      )
+      .andWhere(
+        `(grant.scope = 'ALL_RECORDS' OR (grant.scope = 'RECORD_TYPE' AND grant.recordType = :recordType) OR (grant.scope = 'SINGLE_RECORD' AND grant.clinicalRecordId = :recordId))`,
+        { recordType: record.recordType, recordId: record.id },
+      )
+      .orderBy("grant.createdAt", "ASC")
+      .addOrderBy("grant.reference", "ASC")
+      .getOne();
+  }
+  private async audit(
+    manager: EntityManager,
+    record: ClinicalRecord,
+    providerId: string,
+    userId: string,
+    grantId: string,
+    action: ClinicalRecordAccessAction,
+  ) {
+    const repo = manager.getRepository(ClinicalRecordAccessAudit);
+    await repo.save(
+      repo.create({
+        patientId: record.patientId,
+        clinicalRecordId: record.id,
+        providerId,
+        userId,
+        grantId,
+        action,
+      }),
+    );
+  }
+  private validateScope(dto: CreateClinicalRecordAccessGrantDto) {
+    const valid =
+      (dto.scope === ClinicalRecordAccessScope.ALL_RECORDS &&
+        !dto.recordType &&
+        !dto.clinicalRecordReference) ||
+      (dto.scope === ClinicalRecordAccessScope.RECORD_TYPE &&
+        !!dto.recordType &&
+        !dto.clinicalRecordReference) ||
+      (dto.scope === ClinicalRecordAccessScope.SINGLE_RECORD &&
+        !dto.recordType &&
+        !!dto.clinicalRecordReference);
+    if (!valid)
+      throw new BadRequestException("Grant scope fields are inconsistent");
+  }
+  private mapGrant(row: ClinicalRecordAccessGrant) {
+    const now = new Date();
+    const status = row.revokedAt
+      ? "REVOKED"
+      : row.expiresAt && row.expiresAt <= now
+        ? "EXPIRED"
+        : "ACTIVE";
+    return {
+      reference: row.reference,
+      provider: this.provider(row.granteeProvider),
+      scope: row.scope,
+      recordType: row.recordType,
+      clinicalRecord: row.clinicalRecord
+        ? {
+            reference: row.clinicalRecord.reference,
+            title: row.clinicalRecord.title,
+            recordType: row.clinicalRecord.recordType,
+          }
+        : null,
+      grantedAt: row.grantedAt,
+      expiresAt: row.expiresAt,
+      revokedAt: row.revokedAt,
+      status,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+  private sharedSummary(row: ClinicalRecord) {
+    return {
+      reference: row.reference,
+      recordType: row.recordType,
+      title: row.title,
+      summary: row.summary,
+      occurredAt: row.occurredAt,
+      finalizedAt: row.finalizedAt,
+      provider: this.provider(row.provider),
+      patient: { displayName: this.patientName(row.patient) },
+      service: row.careServiceDefinition
+        ? {
+            code: row.careServiceDefinition.code,
+            name: row.careServiceDefinition.name,
+          }
+        : null,
+    };
+  }
+  private provider(row: Provider) {
+    return {
+      providerReference: row.providerReference,
+      displayName: row.displayName,
+      providerType: row.providerType,
+    };
+  }
+
+  private providerDirectoryItem(row: Provider) {
+    return {
+      providerReference: row.providerReference,
+      displayName: row.displayName,
+      providerType: row.providerType,
+      location: {
+        city: row.city,
+        stateOrRegion: row.stateOrRegion,
+        countryCode: row.countryCode,
+      },
+    };
+  }
+
+  private eligibleProviderQuery(repository: Repository<Provider>) {
+    return repository
+      .createQueryBuilder("provider")
+      .where("provider.status = :active", { active: ProviderStatus.ACTIVE })
+      .andWhere("provider.onboardingStatus = :approved", {
+        approved: ProviderOnboardingStatus.APPROVED,
+      })
+      .andWhere("provider.deletedAt IS NULL");
+  }
+  private patientName(row: Patient) {
+    const initial = row.familyName.trim().charAt(0);
+    return initial
+      ? `${row.givenName.trim()} ${initial}.`
+      : row.givenName.trim();
+  }
+  private page(
+    items: unknown[],
+    query: ClinicalAccessListQueryDto,
+    total: number,
+  ) {
+    return {
+      items,
+      page: query.page,
+      limit: query.limit,
+      total,
+      totalPages: total ? Math.ceil(total / query.limit) : 0,
+    };
+  }
+  private async patient(userId: string) {
+    const patient = await this.patients.findOne({
+      where: { userId },
+      withDeleted: true,
+    });
+    if (
+      !patient ||
+      patient.deletedAt ||
+      patient.status !== PatientStatus.ACTIVE
+    )
+      throw new NotFoundException("Patient profile was not found");
+    return patient;
+  }
+  private notFoundGrant(): never {
+    throw new NotFoundException("Clinical Record access grant was not found");
+  }
+  private notFoundRecord(): never {
+    throw new NotFoundException("Clinical Record was not found");
+  }
 }
