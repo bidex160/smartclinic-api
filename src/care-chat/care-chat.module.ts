@@ -11,6 +11,8 @@ import { MeCareChatController, ProviderCareChatController } from './care-chat.co
 import { CareConversation } from './entities/care-conversation.entity';
 import { CareMessage } from './entities/care-message.entity';
 import { User } from '../users/entities/user.entity';
+import { CareMessageAttachment } from './entities/care-message-attachment.entity';
+import { PrivateAttachmentStorageModule } from '../common/storage/private-attachment-storage.module';
 
-@Module({ imports: [AuthModule, ProvidersModule, TypeOrmModule.forFeature([CareConversation, CareMessage, CareRequest, CareAppointment, Patient, Provider, User])], controllers: [MeCareChatController, ProviderCareChatController], providers: [CareChatService], exports: [CareChatService] })
+@Module({ imports: [AuthModule, ProvidersModule, PrivateAttachmentStorageModule, TypeOrmModule.forFeature([CareConversation, CareMessage, CareMessageAttachment, CareRequest, CareAppointment, Patient, Provider, User])], controllers: [MeCareChatController, ProviderCareChatController], providers: [CareChatService], exports: [CareChatService] })
 export class CareChatModule {}

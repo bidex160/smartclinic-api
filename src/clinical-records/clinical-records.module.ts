@@ -13,15 +13,14 @@ import { MeClinicalRecordsController, ProviderClinicalRecordsController } from '
 import { ClinicalConsultationDetail } from './entities/clinical-consultation-detail.entity';
 import { ClinicalRecord } from './entities/clinical-record.entity';
 import { ClinicalRecordAttachment } from './entities/clinical-record-attachment.entity';
+import { PrivateAttachmentStorageModule } from '../common/storage/private-attachment-storage.module';
 import { ClinicalRecordAttachmentsService } from './clinical-record-attachments.service';
 import { MeClinicalRecordAttachmentsController, ProviderClinicalRecordAttachmentsController } from './clinical-record-attachments.controller';
-import { CLINICAL_ATTACHMENT_STORAGE } from './storage/clinical-attachment-storage';
-import { CloudinaryClinicalAttachmentStorage } from './storage/cloudinary-clinical-attachment.storage';
 
 @Module({
-  imports: [AuthModule, ProvidersModule, TypeOrmModule.forFeature([ClinicalRecord, ClinicalRecordAttachment, ClinicalConsultationDetail, CareAppointment, CareRequest, Patient, Provider, CareServiceDefinition, User])],
+  imports: [AuthModule, ProvidersModule, PrivateAttachmentStorageModule, TypeOrmModule.forFeature([ClinicalRecord, ClinicalRecordAttachment, ClinicalConsultationDetail, CareAppointment, CareRequest, Patient, Provider, CareServiceDefinition, User])],
   controllers: [ProviderClinicalRecordsController, MeClinicalRecordsController, ProviderClinicalRecordAttachmentsController, MeClinicalRecordAttachmentsController],
-  providers: [ClinicalRecordsService, ClinicalRecordAttachmentsService, CloudinaryClinicalAttachmentStorage, { provide: CLINICAL_ATTACHMENT_STORAGE, useExisting: CloudinaryClinicalAttachmentStorage }],
+  providers: [ClinicalRecordsService, ClinicalRecordAttachmentsService],
   exports: [ClinicalRecordsService],
 })
 export class ClinicalRecordsModule {}

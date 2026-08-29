@@ -13,7 +13,7 @@ describe('Care Chat API boundaries (e2e)', () => {
   let app: INestApplication;
   const reference = generateCareRequestReference();
   const chat = { conversationReference: 'SC-CHAT-ABCDEF123456', careRequestReference: reference, canSendMessages: true, unreadCount: 0 };
-  const service = { openPatient: jest.fn().mockResolvedValue(chat), messagesPatient: jest.fn().mockResolvedValue({ items: [] }), sendPatient: jest.fn().mockResolvedValue({ reference: 'SC-MSG-ABCDEF123456' }), readPatient: jest.fn().mockResolvedValue({ markedRead: 1 }), openProvider: jest.fn().mockResolvedValue(chat), messagesProvider: jest.fn().mockResolvedValue({ items: [] }), sendProvider: jest.fn().mockResolvedValue({ reference: 'SC-MSG-ABCDEF123456' }), readProvider: jest.fn().mockResolvedValue({ markedRead: 1 }) };
+  const service = { openPatient: jest.fn().mockResolvedValue(chat), messagesPatient: jest.fn().mockResolvedValue({ items: [] }), sendPatient: jest.fn().mockResolvedValue({ reference: 'SC-MSG-ABCDEF123456' }), uploadPatient: jest.fn().mockResolvedValue({ reference: 'SC-CMA-ABCDEF123456' }), accessPatient: jest.fn().mockResolvedValue({ url: 'https://signed.example' }), readPatient: jest.fn().mockResolvedValue({ markedRead: 1 }), openProvider: jest.fn().mockResolvedValue(chat), messagesProvider: jest.fn().mockResolvedValue({ items: [] }), sendProvider: jest.fn().mockResolvedValue({ reference: 'SC-MSG-ABCDEF123456' }), uploadProvider: jest.fn().mockResolvedValue({ reference: 'SC-CMA-ABCDEF123456' }), accessProvider: jest.fn().mockResolvedValue({ url: 'https://signed.example' }), readProvider: jest.fn().mockResolvedValue({ markedRead: 1 }) };
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({ controllers: [MeCareChatController, ProviderCareChatController], providers: [RolesGuard, Reflector, { provide: CareChatService, useValue: service }] })
@@ -26,14 +26,21 @@ describe('Care Chat API boundaries (e2e)', () => {
     await request(app.getHttpServer()).get(`/api/v1/me/care-requests/${reference}/chat`).expect(401);
     await request(app.getHttpServer()).get(`/api/v1/me/care-requests/${reference}/chat`).set('Authorization', 'Bearer provider').expect(403);
     await request(app.getHttpServer()).post(`/api/v1/me/care-requests/${reference}/chat/messages`).set('Authorization', 'Bearer user').send({ body: '  Hello Provider  ' }).expect(201);
-    expect(service.sendPatient).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-user' }), reference, 'Hello Provider');
+    expect(service.sendPatient).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-user' }), reference, 'Hello Provider', undefined);
   });
 
   it('requires PROVIDER authority and accepts no caller-controlled sender identity', async () => {
     await request(app.getHttpServer()).get(`/api/v1/provider/care-requests/${reference}/chat`).set('Authorization', 'Bearer user').expect(403);
     await request(app.getHttpServer()).post(`/api/v1/provider/care-requests/${reference}/chat/messages`).set('Authorization', 'Bearer provider').send({ body: 'Hello Patient', senderType: 'PATIENT', senderUserId: 'spoof' }).expect(400);
     await request(app.getHttpServer()).post(`/api/v1/provider/care-requests/${reference}/chat/messages`).set('Authorization', 'Bearer provider').send({ body: 'Hello Patient' }).expect(201);
-    expect(service.sendProvider).toHaveBeenCalledWith(expect.objectContaining({ id: 'provider-user' }), reference, 'Hello Patient');
+    expect(service.sendProvider).toHaveBeenCalledWith(expect.objectContaining({ id: 'provider-user' }), reference, 'Hello Patient', undefined);
+  });
+
+  it('supports attachment-only messages and provider/patient multipart upload boundaries', async () => {
+    await request(app.getHttpServer()).post(`/api/v1/me/care-requests/${reference}/chat/messages`).set('Authorization', 'Bearer user').send({ attachmentReferences: ['SC-CMA-ABCDEF123456'] }).expect(201);
+    await request(app.getHttpServer()).post(`/api/v1/me/care-requests/${reference}/chat/attachments`).set('Authorization', 'Bearer provider').attach('file', Buffer.from('%PDF-1.7'), { filename: 'report.pdf', contentType: 'application/pdf' }).expect(403);
+    await request(app.getHttpServer()).post(`/api/v1/provider/care-requests/${reference}/chat/attachments`).set('Authorization', 'Bearer provider').attach('file', Buffer.from([0xff, 0xd8, 0xff]), { filename: 'image.jpg', contentType: 'image/jpeg' }).expect(201);
+    await request(app.getHttpServer()).get(`/api/v1/me/care-requests/${reference}/chat/messages/SC-MSG-ABCDEF123456/attachments/SC-CMA-ABCDEF123456/access`).set('Authorization', 'Bearer user').expect(200);
   });
 
   it('rejects empty, whitespace-only, over-length bodies and malformed Care Request references', async () => {
