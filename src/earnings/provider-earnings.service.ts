@@ -66,6 +66,21 @@ export class ProviderEarningsService {
     earning.status = ProviderEarningStatus.PAYABLE; earning.payableAt = new Date(); await repository.save(earning); await manager.getRepository(ProviderEarningStatusHistory).save({ providerEarningId: earning.id, fromStatus: ProviderEarningStatus.HELD, toStatus: ProviderEarningStatus.PAYABLE, actorUserId, reasonCode: 'GENERAL_CARE_COMPLETED', reasonNote: null }); return earning;
   }
 
+  async createHeldPatientConnectionEarning(manager: EntityManager, input: { providerId: string; sourceType: ProviderEarningSourceType.PATIENT_REGISTRATION | ProviderEarningSourceType.PATIENT_LINKING; sourceReference: string; grossAmountMinor: string; currency: string; paymentTransaction: PaymentTransaction }): Promise<ProviderEarning> {
+    const repository = manager.getRepository(ProviderEarning);
+    const existing = await repository.findOne({ where: { sourceType: input.sourceType, sourceReference: input.sourceReference }, lock: { mode: 'pessimistic_write' } });
+    if (existing) { if (existing.paymentTransactionId !== input.paymentTransaction.id) throw new ConflictException('Patient connection earning belongs to another payment transaction'); return existing; }
+    if (input.paymentTransaction.status !== PaymentTransactionStatus.SUCCEEDED || input.paymentTransaction.transactionType !== PaymentTransactionType.COLLECTION || input.paymentTransaction.currency !== input.currency || this.toMinor(input.paymentTransaction.amount) !== BigInt(input.grossAmountMinor)) throw new ConflictException('Payment transaction does not match the Patient connection commercial snapshot');
+    const resolution = await this.commissions.requireForProvider(input.providerId, manager); const calculation = calculateCommission(BigInt(input.grossAmountMinor), resolution.rateBasisPoints);
+    const earning = await repository.save(repository.create({ providerId: input.providerId, paymentTransactionId: input.paymentTransaction.id, sourceType: input.sourceType, sourceReference: input.sourceReference, currency: input.currency, grossAmountMinor: input.grossAmountMinor, commissionBps: resolution.rateBasisPoints, commissionSource: resolution.source, commissionAmountMinor: calculation.commissionAmountMinor.toString(), providerShareMinor: calculation.providerShareMinor.toString(), status: ProviderEarningStatus.HELD, payableAt: null, settledAt: null }));
+    await manager.getRepository(ProviderEarningStatusHistory).save({ providerEarningId: earning.id, fromStatus: null, toStatus: ProviderEarningStatus.HELD, actorUserId: null, reasonCode: 'PATIENT_CONNECTION_PAYMENT_SETTLED', reasonNote: null }); return earning;
+  }
+
+  async markPatientConnectionPayable(manager: EntityManager, sourceReference: string, actorUserId: string): Promise<void> {
+    const repository = manager.getRepository(ProviderEarning); const rows = await repository.createQueryBuilder('earning').setLock('pessimistic_write').where('earning.sourceReference = :sourceReference', { sourceReference }).andWhere('earning.sourceType IN (:...types)', { types: [ProviderEarningSourceType.PATIENT_REGISTRATION, ProviderEarningSourceType.PATIENT_LINKING] }).getMany();
+    for (const earning of rows) { if ([ProviderEarningStatus.PAYABLE, ProviderEarningStatus.SETTLED].includes(earning.status)) continue; if (earning.status !== ProviderEarningStatus.HELD) throw new ConflictException(`Provider earning in ${earning.status} cannot become payable`); earning.status = ProviderEarningStatus.PAYABLE; earning.payableAt = new Date(); await repository.save(earning); await manager.getRepository(ProviderEarningStatusHistory).save({ providerEarningId: earning.id, fromStatus: ProviderEarningStatus.HELD, toStatus: ProviderEarningStatus.PAYABLE, actorUserId, reasonCode: 'PATIENT_CONNECTION_CONNECTED', reasonNote: null }); }
+  }
+
   async markHealthCheckPayable(manager: EntityManager, bookingId: string, actorUserId: string): Promise<ProviderEarning | null> {
     const booking = await manager.getRepository(Booking).findOne({ where: { id: bookingId }, lock: { mode: 'pessimistic_write' } });
     if (!booking || booking.status !== BookingStatus.COMPLETED) throw new ConflictException('Health Check must be completed before Provider earnings become payable');

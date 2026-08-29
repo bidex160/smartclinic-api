@@ -87,6 +87,19 @@ export class Provider {
   @Column({ name: 'commission_override_bps', type: 'smallint', nullable: true })
   commissionOverrideBps!: number | null;
 
+  @Column({ name: 'new_patient_registration_enabled', type: 'boolean', default: false })
+  newPatientRegistrationEnabled!: boolean;
+  @Column({ name: 'new_patient_registration_fee_minor', type: 'bigint', nullable: true })
+  newPatientRegistrationFeeMinor!: string | null;
+  @Column({ name: 'new_patient_registration_currency', type: 'char', length: 3, nullable: true })
+  newPatientRegistrationCurrency!: string | null;
+  @Column({ name: 'existing_patient_link_enabled', type: 'boolean', default: false })
+  existingPatientLinkEnabled!: boolean;
+  @Column({ name: 'existing_patient_link_fee_minor', type: 'bigint', nullable: true })
+  existingPatientLinkFeeMinor!: string | null;
+  @Column({ name: 'existing_patient_link_currency', type: 'char', length: 3, nullable: true })
+  existingPatientLinkCurrency!: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

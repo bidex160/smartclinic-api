@@ -29,6 +29,9 @@ import { CommissionsModule } from '../commissions/commissions.module';
 import { CareRequest } from '../care-requests/entities/care-request.entity';
 import { CareRequestFunding } from '../care-requests/entities/care-request-funding.entity';
 import { MeCareRequestFundingController } from './me-care-request-funding.controller';
+import { PatientProviderConnection } from '../patient-provider-connections/entities/patient-provider-connection.entity';
+import { PatientProviderConnectionFunding } from '../patient-provider-connections/entities/patient-provider-connection-funding.entity';
+import { PatientProviderConnectionHistory } from '../patient-provider-connections/entities/patient-provider-connection-history.entity';
 @Module({
   imports: [
     AuthModule,
@@ -51,6 +54,9 @@ import { MeCareRequestFundingController } from './me-care-request-funding.contro
       FastTrackRequestStatusHistory
       ,CareRequest,
       CareRequestFunding
+      ,PatientProviderConnection,
+      PatientProviderConnectionFunding,
+      PatientProviderConnectionHistory
     ]),
   ],
   controllers: [AdminPaymentFlowController, PaystackWebhookController, MeCareRequestFundingController],
