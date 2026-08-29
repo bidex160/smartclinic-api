@@ -14,13 +14,17 @@ import { ClinicalConsultationDetail } from './entities/clinical-consultation-det
 import { ClinicalRecord } from './entities/clinical-record.entity';
 import { ClinicalRecordAttachment } from './entities/clinical-record-attachment.entity';
 import { PrivateAttachmentStorageModule } from '../common/storage/private-attachment-storage.module';
+import { ClinicalRecordAccessGrant } from './entities/clinical-record-access-grant.entity';
+import { ClinicalRecordAccessAudit } from './entities/clinical-record-access-audit.entity';
+import { ClinicalRecordAccessService } from './clinical-record-access.service';
+import { MeClinicalRecordAccessController, ProviderSharedClinicalRecordsController } from './clinical-record-access.controller';
 import { ClinicalRecordAttachmentsService } from './clinical-record-attachments.service';
 import { MeClinicalRecordAttachmentsController, ProviderClinicalRecordAttachmentsController } from './clinical-record-attachments.controller';
 
 @Module({
-  imports: [AuthModule, ProvidersModule, PrivateAttachmentStorageModule, TypeOrmModule.forFeature([ClinicalRecord, ClinicalRecordAttachment, ClinicalConsultationDetail, CareAppointment, CareRequest, Patient, Provider, CareServiceDefinition, User])],
-  controllers: [ProviderClinicalRecordsController, MeClinicalRecordsController, ProviderClinicalRecordAttachmentsController, MeClinicalRecordAttachmentsController],
-  providers: [ClinicalRecordsService, ClinicalRecordAttachmentsService],
+  imports: [AuthModule, ProvidersModule, PrivateAttachmentStorageModule, TypeOrmModule.forFeature([ClinicalRecord, ClinicalRecordAttachment, ClinicalRecordAccessGrant, ClinicalRecordAccessAudit, ClinicalConsultationDetail, CareAppointment, CareRequest, Patient, Provider, CareServiceDefinition, User])],
+  controllers: [ProviderClinicalRecordsController, MeClinicalRecordsController, ProviderClinicalRecordAttachmentsController, MeClinicalRecordAttachmentsController, MeClinicalRecordAccessController, ProviderSharedClinicalRecordsController],
+  providers: [ClinicalRecordsService, ClinicalRecordAttachmentsService, ClinicalRecordAccessService],
   exports: [ClinicalRecordsService],
 })
 export class ClinicalRecordsModule {}

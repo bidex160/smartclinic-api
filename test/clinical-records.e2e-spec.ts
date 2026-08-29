@@ -11,13 +11,16 @@ import { ClinicalRecordType } from '../src/clinical-records/enums/clinical-recor
 import { UserRole } from '../src/users/enums/user-role.enum';
 import { MeClinicalRecordAttachmentsController, ProviderClinicalRecordAttachmentsController } from '../src/clinical-records/clinical-record-attachments.controller';
 import { ClinicalRecordAttachmentsService } from '../src/clinical-records/clinical-record-attachments.service';
+import { MeClinicalRecordAccessController, ProviderSharedClinicalRecordsController } from '../src/clinical-records/clinical-record-access.controller';
+import { ClinicalRecordAccessService } from '../src/clinical-records/clinical-record-access.service';
 
 describe('Clinical Records authorization (e2e)', () => {
   let app: INestApplication;
   const service = { createForAppointment: jest.fn().mockResolvedValue({ reference: 'SC-CLR-ABCDEF123456', status: ClinicalRecordStatus.DRAFT }), getForProvider: jest.fn(), updateForAppointment: jest.fn(), finalizeForAppointment: jest.fn(), listMine: jest.fn().mockResolvedValue({ items: [] }), getMine: jest.fn() };
   const attachments = { upload: jest.fn().mockResolvedValue({ reference: 'SC-CLA-ABCDEF123456', originalName: 'report.pdf', mimeType: 'application/pdf', sizeBytes: 8, resourceType: 'DOCUMENT' }), delete: jest.fn(), providerAccess: jest.fn().mockResolvedValue({ url: 'https://signed.example/private' }), patientAccess: jest.fn().mockResolvedValue({ url: 'https://signed.example/private' }) };
+  const access = { createGrant: jest.fn().mockResolvedValue({ reference: 'SC-CRG-ABCDEF123456' }), listGrants: jest.fn().mockResolvedValue({ items: [] }), getGrant: jest.fn(), revokeGrant: jest.fn(), listAudit: jest.fn().mockResolvedValue({ items: [] }), listShared: jest.fn().mockResolvedValue({ items: [] }), getShared: jest.fn().mockResolvedValue({ reference: 'SC-CLR-ABCDEF123456' }), sharedAttachmentAccess: jest.fn().mockResolvedValue({ url: 'https://signed.example/private' }) };
   beforeAll(async () => {
-    const module = await Test.createTestingModule({ controllers: [ProviderClinicalRecordsController, MeClinicalRecordsController, ProviderClinicalRecordAttachmentsController, MeClinicalRecordAttachmentsController], providers: [RolesGuard, Reflector, { provide: ClinicalRecordsService, useValue: service }, { provide: ClinicalRecordAttachmentsService, useValue: attachments }] }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); const token = req.headers.authorization?.replace('Bearer ', ''); if (!token) throw new UnauthorizedException(); req.user = { id: `${token}-user`, roles: token === 'provider' ? [UserRole.PROVIDER] : [UserRole.USER] }; return true; } }).compile();
+    const module = await Test.createTestingModule({ controllers: [ProviderClinicalRecordsController, MeClinicalRecordsController, ProviderClinicalRecordAttachmentsController, MeClinicalRecordAttachmentsController, MeClinicalRecordAccessController, ProviderSharedClinicalRecordsController], providers: [RolesGuard, Reflector, { provide: ClinicalRecordsService, useValue: service }, { provide: ClinicalRecordAttachmentsService, useValue: attachments }, { provide: ClinicalRecordAccessService, useValue: access }] }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); const token = req.headers.authorization?.replace('Bearer ', ''); if (!token) throw new UnauthorizedException(); req.user = { id: `${token}-user`, roles: token === 'provider' ? [UserRole.PROVIDER] : [UserRole.USER] }; return true; } }).compile();
     app = module.createNestApplication(); app.setGlobalPrefix('api/v1'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true })); await app.init();
   });
   afterAll(() => app.close());
@@ -43,5 +46,15 @@ describe('Clinical Records authorization (e2e)', () => {
     await request(app.getHttpServer()).post(upload).set('Authorization', 'Bearer provider').attach('file', Buffer.from('%PDF-1.7'), { filename: 'report.pdf', contentType: 'application/pdf' }).expect(201);
     expect(attachments.upload).toHaveBeenCalledWith(expect.objectContaining({ id: 'provider-user' }), 'SC-CLR-ABCDEF123456', expect.objectContaining({ mimetype: 'application/pdf' }));
     await request(app.getHttpServer()).get('/api/v1/me/clinical-records/SC-CLR-ABCDEF123456/attachments/SC-CLA-ABCDEF123456/access').set('Authorization', 'Bearer patient').expect(200);
+  });
+
+  it('keeps consent patient-controlled and shared reads provider-only', async () => {
+    const grant = '/api/v1/me/clinical-record-access-grants';
+    const body = { providerReference: 'SCPR-74A176AB04848BE2D3977F8493D29CE5', scope: 'ALL_RECORDS' };
+    await request(app.getHttpServer()).post(grant).set('Authorization', 'Bearer provider').send(body).expect(403);
+    await request(app.getHttpServer()).post(grant).set('Authorization', 'Bearer patient').send(body).expect(201);
+    await request(app.getHttpServer()).get('/api/v1/provider/shared-clinical-records').set('Authorization', 'Bearer patient').expect(403);
+    await request(app.getHttpServer()).get('/api/v1/provider/shared-clinical-records').set('Authorization', 'Bearer provider').expect(200);
+    await request(app.getHttpServer()).get('/api/v1/me/clinical-record-access-audit').set('Authorization', 'Bearer patient').expect(200);
   });
 });

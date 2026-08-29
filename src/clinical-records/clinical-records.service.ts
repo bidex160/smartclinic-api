@@ -107,6 +107,9 @@ export class ClinicalRecordsService {
     return this.map(row);
   }
 
+  sharedReadBuilder(manager: EntityManager = this.records.manager) { return this.readBuilder(manager).innerJoinAndSelect('record.patient', 'patient'); }
+  projectRecord(row: ClinicalRecord) { return this.map(row); }
+
   private async ownedAppointment(manager: EntityManager, reference: string, providerId: string, lock: 'pessimistic_read' | 'pessimistic_write') {
     const appointment = await manager.getRepository(CareAppointment).findOne({ where: { reference, providerId }, relations: { careRequest: true }, lock: { mode: lock, tables: ['care_appointments'] } });
     if (!appointment || appointment.careRequest.assignedProviderId !== providerId) throw new NotFoundException('Care Appointment was not found');

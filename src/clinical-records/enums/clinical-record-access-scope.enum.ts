@@ -1,0 +1,1 @@
+export enum ClinicalRecordAccessScope { ALL_RECORDS = 'ALL_RECORDS', RECORD_TYPE = 'RECORD_TYPE', SINGLE_RECORD = 'SINGLE_RECORD' }
