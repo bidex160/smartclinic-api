@@ -168,7 +168,10 @@ export class ClinicalOrderFulfillmentsService {
       })
       .getOne();
     if (!row) this.notFound();
-    return this.map(row);
+    return {
+      ...this.map(row),
+      ...(await this.operationalState(this.fulfillments.manager, row.id)),
+    };
   }
   async accept(user: User, reference: string) {
     const p = await this.currentProvider.resolveOperational(user);
@@ -570,6 +573,37 @@ export class ClinicalOrderFulfillmentsService {
       cancelledAt: f.cancelledAt,
       createdAt: f.createdAt,
       updatedAt: f.updatedAt,
+    };
+  }
+  private async operationalState(m: EntityManager, fulfillmentId: string) {
+    const funding = await m.getRepository(PharmacyFulfillmentFunding).findOne({
+      where: { fulfillmentId },
+      order: { createdAt: "DESC" },
+    });
+    const dispensing = await m.getRepository(PharmacyDispensing).findOne({
+      where: { fulfillmentId },
+    });
+    return {
+      funding: funding
+        ? {
+            status: funding.status,
+            amountMinor: Number(funding.grossAmountMinor),
+            currency: funding.currency,
+            satisfied: [
+              PharmacyFundingStatus.PAID,
+              PharmacyFundingStatus.SATISFIED_FREE,
+            ].includes(funding.status),
+          }
+        : null,
+      dispensing: dispensing
+        ? {
+            status: dispensing.status,
+            fulfillmentMethod: dispensing.fulfillmentMethod,
+            startedAt: dispensing.startedAt,
+            readyAt: dispensing.readyAt,
+            completedAt: dispensing.completedAt,
+          }
+        : null,
     };
   }
   private async page(
