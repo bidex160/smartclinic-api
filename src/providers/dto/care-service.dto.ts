@@ -4,6 +4,7 @@ import { ArrayNotEmpty, ArrayUnique, IsArray, IsBoolean, IsEnum, IsISO4217Curren
 import { ProviderType } from '../enums/provider-type.enum';
 import { CareDeliveryMode } from '../enums/care-delivery-mode.enum';
 import { ClinicalRecordType } from '../../clinical-records/enums/clinical-record-type.enum';
+import { ClinicalTemplateFieldType } from '../../clinical-records/clinical-documentation-template';
 
 export class CreateCareServiceDefinitionDto {
   @ApiProperty({ example: 'GENERAL_CONSULTATION' }) @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z][A-Z0-9_]{1,79}$/) code!: string;
@@ -39,6 +40,21 @@ export class UpdateProviderCareServiceDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() supportsFastTrack?: boolean;
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) fastTrackFeeMinor?: number | null;
   @ApiPropertyOptional({ nullable: true }) @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @IsOptional() @Matches(/^[A-Z]{3}$/) fastTrackCurrency?: string | null;
+}
+
+export class ClinicalTemplateFieldDto {
+  @ApiProperty() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @Matches(/^[A-Za-z][A-Za-z0-9_]{0,79}$/) key!: string;
+  @ApiProperty() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @MinLength(1) @MaxLength(160) label!: string;
+  @ApiProperty({ enum: ClinicalTemplateFieldType }) @IsEnum(ClinicalTemplateFieldType) type!: ClinicalTemplateFieldType;
+  @ApiProperty() @IsBoolean() required!: boolean;
+  @ApiProperty() @IsBoolean() core!: boolean;
+  @ApiPropertyOptional({ type: [String] }) @IsOptional() @IsArray() @ArrayNotEmpty() @ArrayUnique() @IsString({ each: true }) @MaxLength(160, { each: true }) options?: string[];
+  @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim() || undefined : value) @IsString() @MaxLength(500) placeholder?: string;
+  @ApiProperty() @Type(() => Number) @IsInt() @Min(0) @Max(1000) sortOrder!: number;
+}
+
+export class SaveProviderClinicalTemplateDto {
+  @ApiProperty({ type: [ClinicalTemplateFieldDto] }) @IsArray() @ArrayNotEmpty() @ValidateNested({ each: true }) @Type(() => ClinicalTemplateFieldDto) fields!: ClinicalTemplateFieldDto[];
 }
 
 export class FindCareQueryDto {

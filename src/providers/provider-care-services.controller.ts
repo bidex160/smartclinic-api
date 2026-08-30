@@ -5,7 +5,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../users/enums/user-role.enum';
-import { AdminProviderCareServiceParamsDto, CreateCareServiceDefinitionDto, CreateProviderCareServiceDto, FindCareQueryDto, PublicCareServiceCatalogueItemDto, PublicFindCareProviderDto, PublicFindCareProviderListDto, PublicProviderReferenceParamsDto, UpdateCareServiceDefinitionDto, UpdateProviderCareServiceDto } from './dto/care-service.dto';
+import { AdminProviderCareServiceParamsDto, CreateCareServiceDefinitionDto, CreateProviderCareServiceDto, FindCareQueryDto, PublicCareServiceCatalogueItemDto, PublicFindCareProviderDto, PublicFindCareProviderListDto, PublicProviderReferenceParamsDto, SaveProviderClinicalTemplateDto, UpdateCareServiceDefinitionDto, UpdateProviderCareServiceDto } from './dto/care-service.dto';
 import { ProviderIdParamsDto, ResourceIdParamsDto } from './dto/provider-params.dto';
 import { FindCareService } from './find-care.service';
 import { ProviderCareServicesService } from './provider-care-services.service';
@@ -29,6 +29,9 @@ export class ProviderCareServicesController {
   @Patch(':id') update(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto, @Body() dto: UpdateProviderCareServiceDto) { return this.services.updateMine(req.user, p.id, dto); }
   @Patch(':id/activate') activate(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.services.activateMine(req.user, p.id); }
   @Patch(':id/deactivate') deactivate(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.services.deactivateMine(req.user, p.id); }
+  @Get(':id/clinical-documentation') documentation(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.services.getClinicalDocumentationMine(req.user, p.id); }
+  @Patch(':id/clinical-documentation') saveDocumentation(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto, @Body() dto: SaveProviderClinicalTemplateDto) { return this.services.saveClinicalDocumentationMine(req.user, p.id, dto); }
+  @Post(':id/clinical-documentation/reset') resetDocumentation(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.services.resetClinicalDocumentationMine(req.user, p.id); }
 }
 
 @ApiTags('Admin Find Care services') @ApiBearerAuth() @UseGuards(JwtAuthGuard, RolesGuard) @Roles(UserRole.ADMIN, UserRole.OPERATIONS)

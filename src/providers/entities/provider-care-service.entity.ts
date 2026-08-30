@@ -2,6 +2,7 @@ import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, 
 import { Provider } from './provider.entity';
 import { CareServiceDefinition } from './care-service-definition.entity';
 import { ProviderCareServiceDeliveryOption } from './provider-care-service-delivery-option.entity';
+import { ProviderCareServiceClinicalTemplate } from './provider-care-service-clinical-template.entity';
 
 @Entity('provider_care_services')
 @Unique('UQ_provider_care_services_provider_definition', ['providerId', 'careServiceDefinitionId'])
@@ -19,6 +20,7 @@ export class ProviderCareService {
   @Column({ name: 'description_override', type: 'text', nullable: true }) descriptionOverride!: string | null;
   @Column({ name: 'supports_appointment_requests', type: 'boolean', default: true }) supportsAppointmentRequests!: boolean;
   @OneToMany(() => ProviderCareServiceDeliveryOption, (option) => option.providerCareService, { cascade: false }) deliveryOptions!: ProviderCareServiceDeliveryOption[];
+  @OneToMany(() => ProviderCareServiceClinicalTemplate, (template) => template.providerCareService, { cascade: false }) clinicalTemplates!: ProviderCareServiceClinicalTemplate[];
   @Column({ name: 'supports_fast_track', type: 'boolean', default: false }) supportsFastTrack!: boolean;
   @Column({ name: 'fast_track_fee_minor', type: 'bigint', nullable: true }) fastTrackFeeMinor!: string | null;
   @Column({ name: 'fast_track_currency', type: 'char', length: 3, nullable: true }) fastTrackCurrency!: string | null;

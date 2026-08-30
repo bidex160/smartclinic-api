@@ -9,6 +9,7 @@ import { ClinicalRecordStatus } from '../enums/clinical-record-status.enum';
 import { ClinicalRecordType } from '../enums/clinical-record-type.enum';
 import { ClinicalConsultationDetail } from './clinical-consultation-detail.entity';
 import { ClinicalRecordAttachment } from './clinical-record-attachment.entity';
+import { ClinicalDocumentationSnapshot } from '../clinical-documentation-template';
 
 @Entity('clinical_records')
 @Index('UQ_clinical_records_reference', ['reference'], { unique: true })
@@ -31,6 +32,8 @@ export class ClinicalRecord {
   @Column({ name: 'care_service_definition_id', type: 'uuid', nullable: true }) careServiceDefinitionId!: string | null;
   @ManyToOne(() => CareServiceDefinition, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'care_service_definition_id' }) careServiceDefinition!: CareServiceDefinition | null;
   @Column({ name: 'record_type', type: 'enum', enum: ClinicalRecordType, enumName: 'clinical_record_type_enum' }) recordType!: ClinicalRecordType;
+  @Column({ name: 'documentation_template_snapshot', type: 'jsonb', nullable: true }) documentationTemplateSnapshot!: ClinicalDocumentationSnapshot | null;
+  @Column({ name: 'structured_data', type: 'jsonb', nullable: true }) structuredData!: Record<string, unknown> | null;
   @Column({ type: 'varchar', length: 200 }) title!: string;
   @Column({ type: 'text', nullable: true }) summary!: string | null;
   @Column({ type: 'enum', enum: ClinicalRecordStatus, enumName: 'clinical_record_status_enum' }) status!: ClinicalRecordStatus;

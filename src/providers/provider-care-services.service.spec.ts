@@ -17,13 +17,13 @@ describe('ProviderCareServicesService', () => {
   beforeEach(() => {
     definitions = { find: jest.fn(), exists: jest.fn().mockResolvedValue(false), create: jest.fn((v) => v), save: jest.fn(async (v) => v) };
     const stored: any = { id: 'service-1', providerId: provider.id, careServiceDefinitionId: definition.id, isActive: true, supportsAppointmentRequests: true, supportsFastTrack: false, fastTrackFeeMinor: null, fastTrackCurrency: null, definition, deliveryOptions: [] };
-    services = { find: jest.fn(), exists: jest.fn().mockResolvedValue(false), findOne: jest.fn().mockResolvedValue(stored), findOneOrFail: jest.fn(async () => stored), create: jest.fn((v) => Object.assign(stored, v)), save: jest.fn(async (v) => v) };
+    services = { find: jest.fn().mockResolvedValue([]), exists: jest.fn().mockResolvedValue(false), findOne: jest.fn().mockResolvedValue(stored), findOneOrFail: jest.fn(async () => stored), create: jest.fn((v) => Object.assign(stored, v)), save: jest.fn(async (v) => v) };
     optionRepo = { delete: jest.fn(async () => undefined), create: jest.fn((v) => v), save: jest.fn(async (rows) => { stored.deliveryOptions = rows; return rows; }) };
     const repositories = new Map<any, any>([[CareServiceDefinition, { findOne: jest.fn().mockResolvedValue(definition) }], [ProviderCareService, services], [ProviderCareServiceDeliveryOption, optionRepo]]);
     manager = { getRepository: (entity: any) => repositories.get(entity), transaction: jest.fn(async (fn) => fn(manager)) };
     services.manager = manager;
     providers = { findOne: jest.fn().mockResolvedValue(provider) };
-    current = { resolveOperational: jest.fn().mockResolvedValue(provider) };
+    current = { resolve: jest.fn().mockResolvedValue(provider) };
     subject = new ProviderCareServicesService(definitions, services, providers, current);
   });
 
@@ -64,10 +64,18 @@ describe('ProviderCareServicesService', () => {
     await expect(subject.createForProvider(provider.id, { careServiceDefinitionId: definition.id, deliveryOptions: options, supportsFastTrack: true, fastTrackFeeMinor: 500000, fastTrackCurrency: 'NGN' })).resolves.toMatchObject({ supportsFastTrack: true, fastTrackFeeMinor: '500000' });
   });
 
-  it('scopes mutations and enforces operational self-service eligibility', async () => {
+  it('scopes mutations and enforces Provider configuration eligibility', async () => {
     services.findOne.mockResolvedValueOnce(null);
     await expect(subject.updateForProvider('other', 'service-1', {})).rejects.toBeInstanceOf(NotFoundException);
-    current.resolveOperational.mockRejectedValue(new ForbiddenException());
+    current.resolve.mockRejectedValue(new ForbiddenException());
     await expect(subject.createMine({ id: 'user-1' } as any, { careServiceDefinitionId: definition.id, deliveryOptions: options })).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('uses read and mutation setup semantics for self-service Care Service configuration', async () => {
+    await subject.listMine({ id: 'user-1' } as any);
+    expect(current.resolve).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'user-1' }), false);
+
+    await subject.updateMine({ id: 'user-1' } as any, 'service-1', {});
+    expect(current.resolve).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'user-1' }), true);
   });
 });

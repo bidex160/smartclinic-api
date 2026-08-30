@@ -5,9 +5,12 @@ import { User } from '../users/entities/user.entity';
 import { CareServiceDefinition } from './entities/care-service-definition.entity';
 import { ProviderCareService } from './entities/provider-care-service.entity';
 import { Provider } from './entities/provider.entity';
-import { CreateCareServiceDefinitionDto, CreateProviderCareServiceDto, ProviderCareServiceDeliveryOptionDto, UpdateCareServiceDefinitionDto, UpdateProviderCareServiceDto } from './dto/care-service.dto';
-import { CurrentProviderService } from './current-provider.service';
+import { CreateCareServiceDefinitionDto, CreateProviderCareServiceDto, ProviderCareServiceDeliveryOptionDto, SaveProviderClinicalTemplateDto, UpdateCareServiceDefinitionDto, UpdateProviderCareServiceDto } from './dto/care-service.dto';
+import { ProviderConfigurationContextService } from './provider-configuration-context.service';
 import { ProviderCareServiceDeliveryOption } from './entities/provider-care-service-delivery-option.entity';
+import { ProviderCareServiceClinicalTemplate } from './entities/provider-care-service-clinical-template.entity';
+import { ClinicalDocumentationTemplateMode, genericTemplate, isTemplateDrivenType, validateCustomTemplate } from '../clinical-records/clinical-documentation-template';
+import { ClinicalRecordType } from '../clinical-records/enums/clinical-record-type.enum';
 
 @Injectable()
 export class ProviderCareServicesService {
@@ -15,7 +18,7 @@ export class ProviderCareServicesService {
     @InjectRepository(CareServiceDefinition) private readonly definitions: Repository<CareServiceDefinition>,
     @InjectRepository(ProviderCareService) private readonly services: Repository<ProviderCareService>,
     @InjectRepository(Provider) private readonly providers: Repository<Provider>,
-    private readonly currentProvider: CurrentProviderService,
+    private readonly configurationContext: ProviderConfigurationContextService,
   ) {}
 
   listDefinitions(includeInactive = false) {
@@ -35,15 +38,19 @@ export class ProviderCareServicesService {
     return this.definitions.save(definition);
   }
 
-  async listMine(user: User) { const provider = await this.operationalProvider(user); return this.listForProvider(provider.id); }
-  async createMine(user: User, dto: CreateProviderCareServiceDto) { const provider = await this.operationalProvider(user); return this.createForProvider(provider.id, dto); }
-  async updateMine(user: User, id: string, dto: UpdateProviderCareServiceDto) { const provider = await this.operationalProvider(user); return this.updateForProvider(provider.id, id, dto); }
-  async activateMine(user: User, id: string) { const provider = await this.operationalProvider(user); return this.setActive(provider.id, id, true); }
-  async deactivateMine(user: User, id: string) { const provider = await this.operationalProvider(user); return this.setActive(provider.id, id, false); }
+  async listMine(user: User) { const provider = await this.configurationProvider(user); return this.listForProvider(provider.id); }
+  async createMine(user: User, dto: CreateProviderCareServiceDto) { const provider = await this.configurationProvider(user, true); return this.createForProvider(provider.id, dto); }
+  async updateMine(user: User, id: string, dto: UpdateProviderCareServiceDto) { const provider = await this.configurationProvider(user, true); return this.updateForProvider(provider.id, id, dto); }
+  async activateMine(user: User, id: string) { const provider = await this.configurationProvider(user, true); return this.setActive(provider.id, id, true); }
+  async deactivateMine(user: User, id: string) { const provider = await this.configurationProvider(user, true); return this.setActive(provider.id, id, false); }
+  async getClinicalDocumentationMine(user: User, id: string) { const provider = await this.configurationProvider(user); const service = await this.owned(provider.id, id); return this.documentation(service, true); }
+  async saveClinicalDocumentationMine(user: User, id: string, dto: SaveProviderClinicalTemplateDto) { const provider = await this.configurationProvider(user, true); return this.saveClinicalDocumentation(provider.id, id, dto); }
+  async resetClinicalDocumentationMine(user: User, id: string) { const provider = await this.configurationProvider(user, true); return this.resetClinicalDocumentation(provider.id, id); }
 
   async listForProvider(providerId: string) {
     await this.requireProvider(providerId);
-    return this.services.find({ where: { providerId }, relations: { definition: true, deliveryOptions: true }, order: { createdAt: 'ASC', deliveryOptions: { deliveryMode: 'ASC' } } });
+    const rows = await this.services.find({ where: { providerId }, relations: { definition: true, deliveryOptions: true, clinicalTemplates: true }, order: { createdAt: 'ASC', deliveryOptions: { deliveryMode: 'ASC' } } });
+    return rows.map((row) => ({ ...row, clinicalTemplates: undefined, clinicalDocumentation: this.documentation(row, false) }));
   }
 
   async createForProvider(providerId: string, dto: CreateProviderCareServiceDto) {
@@ -88,6 +95,31 @@ export class ProviderCareServicesService {
     return this.services.save(service);
   }
 
+  async saveClinicalDocumentation(providerId: string, id: string, dto: SaveProviderClinicalTemplateDto) {
+    return this.services.manager.transaction(async (manager) => {
+      const service = await manager.getRepository(ProviderCareService).findOne({ where: { id, providerId }, relations: { definition: true }, lock: { mode: 'pessimistic_write', tables: ['provider_care_services'] } });
+      if (!service) throw new NotFoundException('Provider care service was not found');
+      if (!isTemplateDrivenType(service.definition.clinicalRecordType)) throw new ConflictException('This care service does not support a custom clinical documentation template');
+      const fields = validateCustomTemplate(service.definition.clinicalRecordType, dto.fields);
+      const repository = manager.getRepository(ProviderCareServiceClinicalTemplate);
+      const latest = await repository.createQueryBuilder('template').select('MAX(template.version)', 'version').where('template.providerCareServiceId = :id', { id: service.id }).getRawOne<{ version: string | null }>();
+      await repository.update({ providerCareServiceId: service.id, isCurrent: true }, { isCurrent: false });
+      const template = await repository.save(repository.create({ providerCareServiceId: service.id, version: Number(latest?.version ?? 0) + 1, recordType: service.definition.clinicalRecordType, fields, isCurrent: true }));
+      service.clinicalTemplates = [template];
+      return this.documentation(service, true);
+    });
+  }
+
+  async resetClinicalDocumentation(providerId: string, id: string) {
+    return this.services.manager.transaction(async (manager) => {
+      const service = await manager.getRepository(ProviderCareService).findOne({ where: { id, providerId }, relations: { definition: true }, lock: { mode: 'pessimistic_write', tables: ['provider_care_services'] } });
+      if (!service) throw new NotFoundException('Provider care service was not found');
+      await manager.getRepository(ProviderCareServiceClinicalTemplate).update({ providerCareServiceId: service.id, isCurrent: true }, { isCurrent: false });
+      service.clinicalTemplates = [];
+      return this.documentation(service, true);
+    });
+  }
+
   private validateFastTrack(enabled: boolean, feeMinor: number | null | undefined, currency: string | null | undefined) {
     if (!enabled && (feeMinor != null || currency != null)) throw new ConflictException('FastTrack fee is only valid when FastTrack is enabled');
     if (enabled && (!feeMinor || !currency)) throw new ConflictException('FastTrack requires a positive fee and currency');
@@ -105,7 +137,7 @@ export class ProviderCareServicesService {
     return manager.getRepository(ProviderCareService).findOneOrFail({ where: { id, providerId }, relations: { definition: true, deliveryOptions: true }, order: { deliveryOptions: { deliveryMode: 'ASC' } } });
   }
   private async owned(providerId: string, id: string) {
-    const service = await this.services.findOne({ where: { id, providerId }, relations: { definition: true } });
+    const service = await this.services.findOne({ where: { id, providerId }, relations: { definition: true, clinicalTemplates: true } });
     if (!service) throw new NotFoundException('Provider care service was not found');
     return service;
   }
@@ -114,7 +146,15 @@ export class ProviderCareServicesService {
     if (!provider || provider.deletedAt) throw new NotFoundException('Provider was not found');
     return provider;
   }
-  private async operationalProvider(user: User) {
-    return this.currentProvider.resolveOperational(user);
+  private async configurationProvider(user: User, mutation = false) {
+    return this.configurationContext.resolve(user, mutation);
+  }
+
+  private documentation(service: ProviderCareService, includeFields: boolean) {
+    const type = service.definition.clinicalRecordType;
+    if (!type) return null;
+    if (type === ClinicalRecordType.CONSULTATION) return { clinicalRecordType: type, templateMode: 'STANDARD', templateVersion: null, ...(includeFields ? { fields: [] } : {}) };
+    const custom = (service.clinicalTemplates ?? []).filter((template) => template.isCurrent && template.recordType === type).sort((a, b) => b.version - a.version)[0];
+    return { clinicalRecordType: type, templateMode: custom ? ClinicalDocumentationTemplateMode.CUSTOM : ClinicalDocumentationTemplateMode.DEFAULT, templateVersion: custom?.version ?? null, ...(includeFields ? { fields: custom?.fields ?? genericTemplate(type) } : {}) };
   }
 }
