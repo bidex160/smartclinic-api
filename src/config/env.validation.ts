@@ -86,6 +86,7 @@ class EnvironmentVariables {
   @IsOptional() @IsString() PAYSTACK_CALLBACK_URL?: string;
   @IsOptional() @IsUrl({ require_tld: false }) PAYSTACK_PATIENT_CALLBACK_URL?: string;
   @IsOptional() @IsIn(['true', 'false']) PAYSTACK_WEBHOOK_ENABLED?: string;
+  @IsOptional() @IsString() PAYOUT_ACCOUNT_ENCRYPTION_KEY?: string;
 }
 
 export function validateEnvironment(config: Record<string, unknown>): EnvironmentVariables {
@@ -105,6 +106,7 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
   if (validatedConfig.EMAIL_PROVIDER !== 'none' && !validatedConfig.EMAIL_FROM_ADDRESS) throw new Error('Invalid environment configuration: EMAIL_FROM_ADDRESS is required when email delivery is configured');
   if (validatedConfig.EMAIL_PROVIDER === 'resend' && !validatedConfig.RESEND_API_KEY) throw new Error('Invalid environment configuration: RESEND_API_KEY is required when EMAIL_PROVIDER=resend');
   if (validatedConfig.CLINICAL_ATTACHMENT_STORAGE_PROVIDER === 'cloudinary' && (!validatedConfig.CLOUDINARY_CLOUD_NAME || !validatedConfig.CLOUDINARY_API_KEY || !validatedConfig.CLOUDINARY_API_SECRET)) throw new Error('Invalid environment configuration: Cloudinary clinical attachment credentials are required when CLINICAL_ATTACHMENT_STORAGE_PROVIDER=cloudinary');
+  if (validatedConfig.PAYOUT_ACCOUNT_ENCRYPTION_KEY && Buffer.from(validatedConfig.PAYOUT_ACCOUNT_ENCRYPTION_KEY, 'base64').length !== 32) throw new Error('Invalid environment configuration: PAYOUT_ACCOUNT_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
 
   return validatedConfig;
 }

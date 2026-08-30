@@ -16,6 +16,11 @@ import { ProviderPayoutEarning } from "./entities/provider-payout-earning.entity
 import { ProviderPayoutStatusHistory } from "./entities/provider-payout-status-history.entity";
 import { AdminProviderPayoutsController, ProviderPayoutsController } from "./provider-payouts.controller";
 import { ProviderPayoutsService } from "./provider-payouts.service";
+import { ProviderPayoutAccount } from "./entities/provider-payout-account.entity";
+import { ProviderPayoutAccountHistory } from "./entities/provider-payout-account-history.entity";
+import { AdminProviderPayoutAccountsController, ProviderPayoutAccountsController } from "./provider-payout-accounts.controller";
+import { ProviderPayoutAccountsService } from "./provider-payout-accounts.service";
+import { ProviderPayoutAccountCryptoService } from "./provider-payout-account-crypto.service";
 
 @Module({
   imports: [
@@ -28,11 +33,13 @@ import { ProviderPayoutsService } from "./provider-payouts.service";
       ProviderPayout,
       ProviderPayoutEarning,
       ProviderPayoutStatusHistory,
+      ProviderPayoutAccount,
+      ProviderPayoutAccountHistory,
       User,
     ]),
   ],
-  controllers: [ProviderEarningsController, AdminProviderEarningsController, ProviderPayoutsController, AdminProviderPayoutsController],
-  providers: [ProviderEarningsService, ProviderPayoutsService],
-  exports: [ProviderEarningsService, ProviderPayoutsService],
+  controllers: [ProviderEarningsController, AdminProviderEarningsController, ProviderPayoutsController, AdminProviderPayoutsController, ProviderPayoutAccountsController, AdminProviderPayoutAccountsController],
+  providers: [ProviderEarningsService, ProviderPayoutsService, ProviderPayoutAccountsService, ProviderPayoutAccountCryptoService],
+  exports: [ProviderEarningsService, ProviderPayoutsService, ProviderPayoutAccountsService],
 })
 export class EarningsModule {}
