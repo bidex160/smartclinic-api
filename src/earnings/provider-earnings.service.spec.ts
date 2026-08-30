@@ -37,6 +37,47 @@ describe('ProviderEarningsService', () => {
   it('makes duplicate webhook/browser/reconciliation creation idempotent', async () => { const first = await subject.createHeldHealthCheckEarning(manager, booking, transaction); await expect(subject.createHeldHealthCheckEarning(manager, booking, transaction)).resolves.toBe(first); expect(earnings.save).toHaveBeenCalledTimes(1); });
   it('moves HELD to PAYABLE only after authoritative completion', async () => { await subject.createHeldHealthCheckEarning(manager, booking, transaction); booking.status = BookingStatus.COMPLETED; await expect(subject.markHealthCheckPayable(manager, booking.id, 'actor-1')).resolves.toMatchObject({ status: ProviderEarningStatus.PAYABLE, payableAt: expect.any(Date) }); expect(history.save).toHaveBeenLastCalledWith(expect.objectContaining({ fromStatus: ProviderEarningStatus.HELD, toStatus: ProviderEarningStatus.PAYABLE, reasonCode: 'HEALTH_CHECK_COMPLETED' })); });
   it('leaves an unfulfillable earning HELD', async () => { const result = await subject.createHeldHealthCheckEarning(manager, booking, transaction); booking.status = BookingStatus.UNFULFILLABLE; await expect(subject.markHealthCheckPayable(manager, booking.id, 'actor-1')).rejects.toBeInstanceOf(ConflictException); expect(result.status).toBe(ProviderEarningStatus.HELD); });
+  it('copies the immutable pharmacy funding snapshot after commission configuration changes', async () => {
+    commissions.requireForProvider.mockResolvedValue({ source: CommissionRateSource.PROVIDER_OVERRIDE, rateBasisPoints: 2000 });
+    const result = await subject.createHeldPharmacyFulfillmentEarning(manager, {
+      providerId: 'provider-1', fulfillmentReference: 'SC-ORF-SNAPSHOT',
+      grossAmountMinor: '10000', currency: 'NGN', commissionBps: 1000,
+      commissionSource: CommissionRateSource.PLATFORM_DEFAULT,
+      commissionAmountMinor: '1000', providerShareMinor: '9000',
+      paymentTransaction: { ...transaction, amount: '100.00' },
+    });
+    expect(result).toMatchObject({
+      grossAmountMinor: '10000', commissionBps: 1000,
+      commissionSource: CommissionRateSource.PLATFORM_DEFAULT,
+      commissionAmountMinor: '1000', providerShareMinor: '9000',
+      status: ProviderEarningStatus.HELD,
+    });
+    expect(commissions.requireForProvider).not.toHaveBeenCalled();
+  });
+  it('preserves a zero-percent pharmacy funding snapshot', async () => {
+    await expect(subject.createHeldPharmacyFulfillmentEarning(manager, {
+      providerId: 'provider-1', fulfillmentReference: 'SC-ORF-ZERO',
+      grossAmountMinor: '10000', currency: 'NGN', commissionBps: 0,
+      commissionSource: CommissionRateSource.PROVIDER_OVERRIDE,
+      commissionAmountMinor: '0', providerShareMinor: '10000',
+      paymentTransaction: { ...transaction, amount: '100.00' },
+    })).resolves.toMatchObject({ commissionBps: 0, commissionAmountMinor: '0', providerShareMinor: '10000' });
+  });
+  it('keeps pharmacy earning creation and HELD to PAYABLE transition idempotent', async () => {
+    const input = {
+      providerId: 'provider-1', fulfillmentReference: 'SC-ORF-IDEMPOTENT',
+      grossAmountMinor: '10000', currency: 'NGN', commissionBps: 1000,
+      commissionSource: CommissionRateSource.PLATFORM_DEFAULT,
+      commissionAmountMinor: '1000', providerShareMinor: '9000',
+      paymentTransaction: { ...transaction, amount: '100.00' },
+    };
+    const first = await subject.createHeldPharmacyFulfillmentEarning(manager, input);
+    await expect(subject.createHeldPharmacyFulfillmentEarning(manager, { ...input, commissionBps: 2000, commissionAmountMinor: '2000', providerShareMinor: '8000' })).resolves.toBe(first);
+    await subject.markPharmacyFulfillmentPayable(manager, input.fulfillmentReference, 'actor-1');
+    await subject.markPharmacyFulfillmentPayable(manager, input.fulfillmentReference, 'actor-1');
+    expect(first).toMatchObject({ commissionBps: 1000, status: ProviderEarningStatus.PAYABLE });
+    expect(history.save).toHaveBeenCalledTimes(2);
+  });
   it('returns narrow not-found for cross-Provider detail', async () => { earnings.findOne.mockResolvedValue(null); await expect(subject.getOwn({ id: 'user-1' } as any, 'SC-EARN-other')).rejects.toBeInstanceOf(NotFoundException); });
   it('aggregates separate currency balances from Provider share only', async () => { const qb: any = { select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), getRawMany: jest.fn().mockResolvedValue([{ currency: 'NGN', held: '1800000', payable: '3500000', settled: '10000000' }, { currency: 'USD', held: '5000', payable: '0', settled: '0' }]) }; earnings.createQueryBuilder.mockReturnValue(qb); await expect(subject.balancesOwn({ id: 'user-1' } as any)).resolves.toEqual([{ currency: 'NGN', heldAmountMinor: 1800000, payableAmountMinor: 3500000, settledAmountMinor: 10000000 }, { currency: 'USD', heldAmountMinor: 5000, payableAmountMinor: 0, settledAmountMinor: 0 }]); });
 });
