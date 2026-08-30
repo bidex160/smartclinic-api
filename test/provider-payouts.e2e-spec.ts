@@ -1,0 +1,21 @@
+import { INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Test } from '@nestjs/testing';
+import * as request from 'supertest';
+import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
+import { RolesGuard } from '../src/auth/roles.guard';
+import { AdminProviderPayoutsController, ProviderPayoutsController } from '../src/earnings/provider-payouts.controller';
+import { ProviderPayoutsService } from '../src/earnings/provider-payouts.service';
+import { UserRole } from '../src/users/enums/user-role.enum';
+
+describe('Provider payout authorization (e2e)', () => {
+  let app: INestApplication;
+  const payout = { reference: 'SC-PAYOUT-ABC123', currency: 'NGN', totalAmountMinor: 9000, earningCount: 1, status: 'DRAFT', settlementMethod: 'MANUAL_BANK_TRANSFER' };
+  const service = { listMine: jest.fn().mockResolvedValue({ items: [payout], page: 1, limit: 25, total: 1, totalPages: 1 }), detailMine: jest.fn().mockResolvedValue(payout), adminList: jest.fn().mockResolvedValue({ items: [payout], page: 1, limit: 25, total: 1, totalPages: 1 }), adminDetail: jest.fn().mockResolvedValue(payout), eligible: jest.fn().mockResolvedValue({ items: [], page: 1, limit: 25, total: 0, totalPages: 0 }), create: jest.fn().mockResolvedValue(payout), process: jest.fn().mockResolvedValue({ ...payout, status: 'PROCESSING' }), complete: jest.fn().mockResolvedValue({ ...payout, status: 'COMPLETED' }), fail: jest.fn(), cancel: jest.fn() };
+  beforeAll(async () => { const module = await Test.createTestingModule({ controllers: [ProviderPayoutsController, AdminProviderPayoutsController], providers: [RolesGuard, Reflector, { provide: ProviderPayoutsService, useValue: service }] }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); const token = req.headers.authorization; if (!token) throw new UnauthorizedException(); req.user = { id: 'user-1', roles: token === 'Bearer provider' ? [UserRole.PROVIDER] : token === 'Bearer admin' ? [UserRole.ADMIN] : token === 'Bearer operations' ? [UserRole.OPERATIONS] : [UserRole.USER] }; return true; } }).compile(); app = module.createNestApplication(); app.setGlobalPrefix('api/v1'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true })); await app.init(); });
+  afterAll(async () => app.close());
+  it('allows Provider read-only access and denies patients', async () => { await request(app.getHttpServer()).get('/api/v1/provider/payouts').set('Authorization', 'Bearer provider').expect(200); await request(app.getHttpServer()).get('/api/v1/provider/payouts').set('Authorization', 'Bearer user').expect(403); });
+  it('does not allow a Provider to create or transition payouts', async () => { await request(app.getHttpServer()).post('/api/v1/admin/provider-payouts').set('Authorization', 'Bearer provider').send({}).expect(403); await request(app.getHttpServer()).post('/api/v1/admin/provider-payouts/SC-PAYOUT-ONE/complete').set('Authorization', 'Bearer provider').send({ externalReference: 'BANK-1' }).expect(403); });
+  it('allows ADMIN and OPERATIONS to use manual settlement endpoints', async () => { await request(app.getHttpServer()).get('/api/v1/admin/provider-payouts/eligible-earnings?providerReference=SCPR-ONE&currency=NGN').set('Authorization', 'Bearer operations').expect(200); await request(app.getHttpServer()).post('/api/v1/admin/provider-payouts').set('Authorization', 'Bearer admin').send({ providerReference: 'SCPR-ONE', currency: 'NGN', earningReferences: ['SC-EARN-ONE'], settlementMethod: 'MANUAL_BANK_TRANSFER' }).expect(201); });
+  it('requires authentication on both boundaries', async () => { await request(app.getHttpServer()).get('/api/v1/provider/payouts').expect(401); await request(app.getHttpServer()).get('/api/v1/admin/provider-payouts').expect(401); });
+});

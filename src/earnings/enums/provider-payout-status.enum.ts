@@ -1,0 +1,7 @@
+export enum ProviderPayoutStatus {
+  DRAFT = 'DRAFT',
+  PROCESSING = 'PROCESSING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+}

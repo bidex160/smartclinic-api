@@ -11,6 +11,11 @@ import { ProviderEarningsService } from "./provider-earnings.service";
 import { ProviderEarning } from "./entities/provider-earning.entity";
 import { ProviderEarningStatusHistory } from "./entities/provider-earning-status-history.entity";
 import { User } from "src/users/entities/user.entity";
+import { ProviderPayout } from "./entities/provider-payout.entity";
+import { ProviderPayoutEarning } from "./entities/provider-payout-earning.entity";
+import { ProviderPayoutStatusHistory } from "./entities/provider-payout-status-history.entity";
+import { AdminProviderPayoutsController, ProviderPayoutsController } from "./provider-payouts.controller";
+import { ProviderPayoutsService } from "./provider-payouts.service";
 
 @Module({
   imports: [
@@ -20,11 +25,14 @@ import { User } from "src/users/entities/user.entity";
       Provider,
       ProviderEarning,
       ProviderEarningStatusHistory,
+      ProviderPayout,
+      ProviderPayoutEarning,
+      ProviderPayoutStatusHistory,
       User,
     ]),
   ],
-  controllers: [ProviderEarningsController, AdminProviderEarningsController],
-  providers: [ProviderEarningsService],
-  exports: [ProviderEarningsService],
+  controllers: [ProviderEarningsController, AdminProviderEarningsController, ProviderPayoutsController, AdminProviderPayoutsController],
+  providers: [ProviderEarningsService, ProviderPayoutsService],
+  exports: [ProviderEarningsService, ProviderPayoutsService],
 })
 export class EarningsModule {}
