@@ -1,0 +1,5 @@
+import { Type,Transform } from 'class-transformer';import { ArrayNotEmpty,IsArray,IsBoolean,IsEnum,IsISO8601,IsInt,IsOptional,IsString,Matches,MaxLength,Min,ValidateNested } from 'class-validator';import { PHARMACY_QUOTE_REFERENCE_PATTERN } from '../pharmacy-quote-reference';import { PharmacyQuoteItemAvailability } from '../enums/pharmacy-quote-status.enum';
+export class PharmacyQuoteItemDto{@IsInt()@Min(0)sortOrder!:number;@IsEnum(PharmacyQuoteItemAvailability)availability!:PharmacyQuoteItemAvailability;@IsInt()@Min(0)quantitySupplied!:number;@IsInt()@Min(0)unitPriceMinor!:number;@IsOptional()@IsString()@MaxLength(500)note?:string|null;}
+export class UpsertPharmacyQuoteDto{@Transform(({value})=>typeof value==='string'?value.toUpperCase():value)@Matches(/^[A-Z]{3}$/)currency!:string;@IsISO8601()expiresAt!:string;@IsArray()@ArrayNotEmpty()@ValidateNested({each:true})@Type(()=>PharmacyQuoteItemDto)items!:PharmacyQuoteItemDto[];}
+export class PharmacyQuoteReferenceParamsDto{@Matches(PHARMACY_QUOTE_REFERENCE_PATTERN)reference!:string;}
+export class AcceptPharmacyQuoteDto{@IsOptional()@IsBoolean()acknowledgeUnavailableItems=false;}

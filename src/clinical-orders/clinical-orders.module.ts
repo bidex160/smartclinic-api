@@ -20,11 +20,13 @@ import { ClinicalOrderFulfillment } from './entities/clinical-order-fulfillment.
 import { ClinicalOrderFulfillmentHistory } from './entities/clinical-order-fulfillment-history.entity';
 import { ClinicalOrderFulfillmentsService } from './clinical-order-fulfillments.service';
 import { MeOrderFulfillmentsController, ProviderOrderFulfillmentsController } from './clinical-order-fulfillments.controller';
+import { PharmacyQuote } from './entities/pharmacy-quote.entity';import { PharmacyQuoteItem } from './entities/pharmacy-quote-item.entity';import { PharmacyFulfillmentFunding } from './entities/pharmacy-fulfillment-funding.entity';import { PharmacyDispensing } from './entities/pharmacy-dispensing.entity';import { PharmacyFulfillmentService } from './pharmacy-fulfillment.service';import { MePharmacyFulfillmentController,ProviderPharmacyFulfillmentController } from './pharmacy-fulfillment.controller';import { CommissionsModule } from '../commissions/commissions.module';import { EarningsModule } from '../earnings/earnings.module';
 @Module({
   imports: [
     AuthModule,
     ProvidersModule,
     ProviderServiceUnitsModule,
+    CommissionsModule,EarningsModule,
     TypeOrmModule.forFeature([
       ClinicalOrder,
       ClinicalOrderStatusHistory,
@@ -36,10 +38,11 @@ import { MeOrderFulfillmentsController, ProviderOrderFulfillmentsController } fr
       User,
       ClinicalOrderFulfillment,
       ClinicalOrderFulfillmentHistory,
+      PharmacyQuote,PharmacyQuoteItem,PharmacyFulfillmentFunding,PharmacyDispensing,
     ]),
   ],
-  controllers: [ProviderClinicalOrdersController, MeClinicalOrdersController, ProviderOrderFulfillmentsController, MeOrderFulfillmentsController],
-  providers: [ClinicalOrdersService, ClinicalOrderFulfillmentsService],
+  controllers: [ProviderClinicalOrdersController, MeClinicalOrdersController, ProviderOrderFulfillmentsController, MeOrderFulfillmentsController,ProviderPharmacyFulfillmentController,MePharmacyFulfillmentController],
+  providers: [ClinicalOrdersService, ClinicalOrderFulfillmentsService,PharmacyFulfillmentService],
   exports: [ClinicalOrdersService],
 })
 export class ClinicalOrdersModule {}

@@ -32,6 +32,7 @@ import { MeCareRequestFundingController } from './me-care-request-funding.contro
 import { PatientProviderConnection } from '../patient-provider-connections/entities/patient-provider-connection.entity';
 import { PatientProviderConnectionFunding } from '../patient-provider-connections/entities/patient-provider-connection-funding.entity';
 import { PatientProviderConnectionHistory } from '../patient-provider-connections/entities/patient-provider-connection-history.entity';
+import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy-fulfillment-funding.entity';import { PharmacyQuote } from '../clinical-orders/entities/pharmacy-quote.entity';import { ClinicalOrderFulfillment } from '../clinical-orders/entities/clinical-order-fulfillment.entity';import { PharmacyDispensing } from '../clinical-orders/entities/pharmacy-dispensing.entity';import { Patient } from '../patients/entities/patient.entity';import { MePharmacyFundingController } from './me-pharmacy-funding.controller';
 @Module({
   imports: [
     AuthModule,
@@ -57,9 +58,10 @@ import { PatientProviderConnectionHistory } from '../patient-provider-connection
       ,PatientProviderConnection,
       PatientProviderConnectionFunding,
       PatientProviderConnectionHistory
+      ,PharmacyFulfillmentFunding,PharmacyQuote,ClinicalOrderFulfillment,PharmacyDispensing,Patient
     ]),
   ],
-  controllers: [AdminPaymentFlowController, PaystackWebhookController, MeCareRequestFundingController],
+  controllers: [AdminPaymentFlowController, PaystackWebhookController, MeCareRequestFundingController,MePharmacyFundingController],
   providers: [
     PaymentFlowService,
     TestPaymentProviderAdapter,
