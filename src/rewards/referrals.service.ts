@@ -6,7 +6,7 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { randomBytes } from "node:crypto";
-import { EntityManager, Repository } from "typeorm";
+import { EntityManager, QueryFailedError, Repository } from "typeorm";
 import { HealthCheckEncounter } from "../health-checks/entities/health-check-encounter.entity";
 import { HealthCheckEncounterStatus } from "../health-checks/enums/health-check-encounter-status.enum";
 import { Provider } from "../providers/entities/provider.entity";
@@ -30,13 +30,16 @@ import { ReferralTargetType } from "./enums/referral-target-type.enum";
 import { RewardLedgerDirection } from "./enums/reward-ledger-direction.enum";
 import { User } from "../users/entities/user.entity";
 import { RewardWithdrawalsService } from "./reward-withdrawals.service";
+import { PatientCareActionSource } from './enums/patient-care-action-source.enum';
 
-const QUALIFIED_RULE: Record<ReferralTargetType, string> = {
-  [ReferralTargetType.PATIENT]: "PATIENT_QUALIFIED",
-  [ReferralTargetType.CLINIC]: "CLINIC_QUALIFIED",
-  [ReferralTargetType.LABORATORY]: "LABORATORY_QUALIFIED",
-  [ReferralTargetType.PHARMACY]: "PHARMACY_QUALIFIED",
-};
+const MILESTONE_RULE = {
+  PROVIDER_REGISTERED: 'PROVIDER_REGISTERED',
+  PROVIDER_VERIFIED: 'PROVIDER_VERIFIED',
+  PROVIDER_ACTIVATED: 'PROVIDER_ACTIVATED',
+  PATIENT_REGISTERED: 'PATIENT_REGISTERED',
+  PATIENT_FIRST_CARE_ACTION: 'PATIENT_FIRST_CARE_ACTION',
+} as const;
+type ReferralMilestone = keyof typeof MILESTONE_RULE;
 
 @Injectable()
 export class ReferralsService {
@@ -120,7 +123,7 @@ export class ReferralsService {
         },
         lock: { mode: "pessimistic_write" },
       });
-      if (!referral || referral.status === ReferralStatus.QUALIFIED) return;
+      if (!referral) return;
       const completed = await manager
         .getRepository(HealthCheckEncounter)
         .createQueryBuilder("encounter")
@@ -131,8 +134,28 @@ export class ReferralsService {
         })
         .getCount();
       if (completed < 1) return;
-      await this.qualify(manager, referral);
+      await this.recordPatientMilestone(manager, referral);
     });
+  }
+
+  async recordPatientFirstCareAction(
+    patientId: string,
+    sourceType: PatientCareActionSource,
+    sourceReference: string,
+    externalManager?: EntityManager,
+  ): Promise<void> {
+    const record = async (manager: EntityManager) => {
+      const referral = await manager.getRepository(Referral).findOne({
+        where: { referredPatientId: patientId, targetType: ReferralTargetType.PATIENT },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!referral) return;
+      await this.recordPatientMilestone(manager, referral);
+    };
+    if (externalManager) return record(externalManager);
+    await this.referrals.manager.transaction(record);
+    void sourceType;
+    void sourceReference;
   }
 
   async qualifyProvider(
@@ -144,20 +167,19 @@ export class ReferralsService {
         where: { referredProviderId: providerId },
         lock: { mode: "pessimistic_write" },
       });
-      if (!referral || referral.status === ReferralStatus.QUALIFIED) return;
+      if (!referral) return;
       const provider = await manager
         .getRepository(Provider)
         .findOne({ where: { id: providerId }, withDeleted: true });
-      if (
-        !provider ||
-        provider.deletedAt ||
-        provider.status !== ProviderStatus.ACTIVE ||
-        provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED
-      )
-        return;
+      if (!provider || provider.deletedAt) return;
       if (this.providerTarget(provider.providerType) !== referral.targetType)
         return;
-      await this.qualify(manager, referral);
+      await this.awardMilestone(manager, referral, MILESTONE_RULE.PROVIDER_REGISTERED);
+      if (provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED) return;
+      await this.awardMilestone(manager, referral, MILESTONE_RULE.PROVIDER_VERIFIED);
+      if (provider.status !== ProviderStatus.ACTIVE) return;
+      await this.awardMilestone(manager, referral, MILESTONE_RULE.PROVIDER_ACTIVATED);
+      await this.markQualified(manager, referral);
     };
     if (externalManager) return qualify(externalManager);
     await this.referrals.manager.transaction(qualify);
@@ -423,7 +445,7 @@ export class ReferralsService {
       throw new ConflictException(
         "This account already has a referral relationship",
       );
-    return manager.getRepository(Referral).save(
+    const referral = await manager.getRepository(Referral).save(
       manager.getRepository(Referral).create({
         referrerUserId: code.userId,
         referralCodeId: code.id,
@@ -432,39 +454,58 @@ export class ReferralsService {
         referredUserId,
         referredPatientId: patientId,
         referredProviderId: providerId,
+        rewardModelVersion: 2,
         qualifiedAt: null,
       }),
     );
+    await this.awardMilestone(manager, referral, targetType === ReferralTargetType.PATIENT ? MILESTONE_RULE.PATIENT_REGISTERED : MILESTONE_RULE.PROVIDER_REGISTERED);
+    return referral;
   }
 
-  private async qualify(
-    manager: EntityManager,
-    referral: Referral,
-  ): Promise<void> {
+  private async recordPatientMilestone(manager: EntityManager, referral: Referral): Promise<void> {
+    await this.awardMilestone(manager, referral, MILESTONE_RULE.PATIENT_REGISTERED);
+    await this.awardMilestone(manager, referral, MILESTONE_RULE.PATIENT_FIRST_CARE_ACTION);
+    await this.markQualified(manager, referral);
+  }
+
+  private async markQualified(manager: EntityManager, referral: Referral): Promise<void> {
+    if (referral.rewardModelVersion !== 2 || referral.status === ReferralStatus.QUALIFIED) return;
     await manager.getRepository(User).findOne({
       where: { id: referral.referrerUserId },
       lock: { mode: "pessimistic_write" },
     });
-    const ruleCode = QUALIFIED_RULE[referral.targetType];
-    const rule = await manager
-      .getRepository(RewardRule)
-      .findOne({ where: { code: ruleCode, isActive: true } });
-    if (!rule || rule.points <= 0)
-      throw new ConflictException(
-        `Active reward rule ${ruleCode} is not configured`,
-      );
     referral.status = ReferralStatus.QUALIFIED;
     referral.qualifiedAt = new Date();
     await manager.getRepository(Referral).save(referral);
-    await this.credit(
-      manager,
-      referral.referrerUserId,
-      referral.id,
-      `REFERRAL_QUALIFIED:${referral.id}`,
-      ruleCode,
-      rule.points,
-    );
     await this.evaluateAchievements(manager, referral.referrerUserId);
+  }
+
+  private async awardMilestone(manager: EntityManager, referral: Referral, milestone: ReferralMilestone): Promise<void> {
+    if (referral.rewardModelVersion !== 2) return;
+    const rule = await manager.getRepository(RewardRule).findOne({ where: { code: milestone, isActive: true } });
+    if (!rule || rule.points <= 0) throw new ConflictException(`Active reward rule ${milestone} is not configured`);
+    await this.credit(manager, referral.referrerUserId, referral.id, `REFERRAL_MILESTONE:${referral.id}:${milestone}`, milestone, rule.points);
+  }
+
+  async reverseMilestone(referralId: string, milestone: ReferralMilestone, reasonCode: string, externalManager?: EntityManager): Promise<void> {
+    const reverse = async (manager: EntityManager) => {
+      const referral = await manager.getRepository(Referral).findOne({ where: { id: referralId }, lock: { mode: 'pessimistic_write' } });
+      if (!referral) throw new BadRequestException('Referral does not exist');
+      const eventKey = `REFERRAL_MILESTONE:${referral.id}:${milestone}`;
+      const credit = await manager.getRepository(RewardPointsLedger).findOne({ where: { eventKey, direction: RewardLedgerDirection.CREDIT } });
+      if (!credit) throw new ConflictException('Reward milestone has not been credited');
+      await this.appendLedger(manager, {
+        userId: referral.referrerUserId,
+        referralId: referral.id,
+        eventKey: `REVERSAL:${eventKey}`,
+        eventType: `${milestone}_REVERSED`,
+        direction: RewardLedgerDirection.DEBIT,
+        points: credit.points,
+        reasonCode: reasonCode.trim() || `${milestone}_REVERSED`,
+      });
+    };
+    if (externalManager) return reverse(externalManager);
+    await this.referrals.manager.transaction(reverse);
   }
 
   async recalculateReferralAchievements(userId: string): Promise<void> {
@@ -537,19 +578,18 @@ export class ReferralsService {
     eventType: string,
     points: number,
   ): Promise<void> {
+    await this.appendLedger(manager, { userId, referralId, eventKey, eventType, direction: RewardLedgerDirection.CREDIT, points, reasonCode: eventType });
+  }
+
+  private async appendLedger(manager: EntityManager, value: Partial<RewardPointsLedger>): Promise<void> {
     const repository = manager.getRepository(RewardPointsLedger);
-    if (await repository.exists({ where: { eventKey } })) return;
-    await repository.save(
-      repository.create({
-        userId,
-        referralId,
-        eventKey,
-        eventType,
-        direction: RewardLedgerDirection.CREDIT,
-        points,
-        reasonCode: eventType,
-      }),
-    );
+    if (await repository.exists({ where: { eventKey: value.eventKey! } })) return;
+    try {
+      await repository.save(repository.create(value));
+    } catch (error) {
+      if (error instanceof QueryFailedError && (error.driverError as { code?: string }).code === '23505') return;
+      throw error;
+    }
   }
 
   private async qualifiedCounts(

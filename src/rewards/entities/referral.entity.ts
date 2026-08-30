@@ -24,6 +24,7 @@ export class Referral {
   @ManyToOne(() => Patient, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'referred_patient_id' }) referredPatient!: Patient | null;
   @Column({ name: 'referred_provider_id', type: 'uuid', nullable: true }) referredProviderId!: string | null;
   @ManyToOne(() => Provider, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'referred_provider_id' }) referredProvider!: Provider | null;
+  @Column({ name: 'reward_model_version', type: 'smallint', default: 2 }) rewardModelVersion!: number;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
   @Column({ name: 'qualified_at', type: 'timestamptz', nullable: true }) qualifiedAt!: Date | null;
 }

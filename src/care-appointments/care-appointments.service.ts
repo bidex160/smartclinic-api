@@ -40,8 +40,10 @@ import { CareServiceDefinition } from "../providers/entities/care-service-defini
 import { ClinicalRecord } from "../clinical-records/entities/clinical-record.entity";
 import { ClinicalRecordStatus } from "../clinical-records/enums/clinical-record-status.enum";
 import { ClinicalRecordsService } from "../clinical-records/clinical-records.service";
-import { ProviderType } from "src/providers/enums/provider-type.enum";
+import { ProviderType } from "../providers/enums/provider-type.enum";
 import { ClinicalOrdersService } from "../clinical-orders/clinical-orders.service";
+import { ReferralsService } from '../rewards/referrals.service';
+import { PatientCareActionSource } from '../rewards/enums/patient-care-action-source.enum';
 
 const ACTIVE = [
   CareAppointmentStatus.SCHEDULED,
@@ -58,6 +60,7 @@ export class CareAppointmentsService {
     private readonly currentProvider: CurrentProviderService,
     private readonly earnings: ProviderEarningsService,
     private readonly clinicalRecords: ClinicalRecordsService,
+    @Optional() private readonly referrals?: ReferralsService,
     @Optional() private readonly clinicalOrders?: ClinicalOrdersService,
   ) {}
 
@@ -738,6 +741,13 @@ async schedule(
           manager,
           care.reference,
           actor,
+        );
+      if (to === CareAppointmentStatus.COMPLETED && this.referrals)
+        await this.referrals.recordPatientFirstCareAction(
+          care.patientId,
+          PatientCareActionSource.GENERAL_CARE_COMPLETED,
+          appointment.reference,
+          manager,
         );
       return this.getMapped(manager, appointment.id);
     });

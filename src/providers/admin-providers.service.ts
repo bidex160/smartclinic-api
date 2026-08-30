@@ -131,6 +131,7 @@ export class AdminProvidersService {
     if (provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED) throw new ConflictException("Provider must be approved before activation");
     provider.status = ProviderStatus.ACTIVE;
     await this.providers.save(provider);
+    await this.referrals.qualifyProvider(id);
     return this.get(id);
   }
   async suspend(id: string): Promise<AdminProviderDetailResponseDto> {

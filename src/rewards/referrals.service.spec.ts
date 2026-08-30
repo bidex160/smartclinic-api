@@ -15,6 +15,7 @@ import { ReferralStatus } from './enums/referral-status.enum';
 import { ReferralTargetType } from './enums/referral-target-type.enum';
 import { ReferralsService } from './referrals.service';
 import { User } from '../users/entities/user.entity';
+import { PatientCareActionSource } from './enums/patient-care-action-source.enum';
 
 describe('ReferralsService', () => {
   let codes: any[]; let referrals: any[]; let ledger: any[]; let achievements: any[]; let providers: any[]; let levelDefinitions: any[]; let rewardRules: any[]; let completedPatients: Set<string>; let manager: any; let subject: ReferralsService;
@@ -28,12 +29,19 @@ describe('ReferralsService', () => {
     ].map(([targetType, requiredCount]) => ({ targetType, requiredCount }));
     const level = { id: 'level-1', code: 'LEVEL_1', name: 'Level 1', ordinal: 1, isActive: true, requirements };
     levelDefinitions = [level];
-    rewardRules = [ReferralTargetType.PATIENT, ReferralTargetType.CLINIC, ReferralTargetType.LABORATORY, ReferralTargetType.PHARMACY].map((target) => ({ code: `${target}_QUALIFIED`, points: target === ReferralTargetType.PATIENT ? 10 : 100, isActive: true })).concat([{ code: 'LEVEL_1_COMPLETED', points: 50, isActive: true } as any]);
+    rewardRules = [
+      { code: 'PROVIDER_REGISTERED', points: 2, isActive: true },
+      { code: 'PROVIDER_VERIFIED', points: 4, isActive: true },
+      { code: 'PROVIDER_ACTIVATED', points: 8, isActive: true },
+      { code: 'PATIENT_REGISTERED', points: 1, isActive: true },
+      { code: 'PATIENT_FIRST_CARE_ACTION', points: 1, isActive: true },
+      { code: 'LEVEL_1_COMPLETED', points: 50, isActive: true },
+    ];
     const repo = (entity: any): any => {
       if (entity === ReferralCode) return { manager, findOne: jest.fn(async ({ where }: any) => codes.find((row) => (where.userId ? row.userId === where.userId : row.codeNormalized === where.codeNormalized && row.isActive === where.isActive)) ?? null), exists: jest.fn(async ({ where }: any) => codes.some((row) => row.codeNormalized === where.codeNormalized)), create: (value: any) => value, save: jest.fn(async (value) => { const row = { id: value.id ?? `code-${codes.length + 1}`, ...value }; codes.push(row); return row; }) };
       if (entity === Referral) return { manager, findOne: jest.fn(async ({ where }: any) => referrals.find((row) => Object.entries(where).every(([key, value]) => row[key] === value)) ?? null), exists: jest.fn(async ({ where }: any) => referrals.some((row) => row.referredUserId === where.referredUserId)), create: (value: any) => value, save: jest.fn(async (value) => { const row = { id: value.id ?? `referral-${referrals.length + 1}`, createdAt: value.createdAt ?? new Date(), ...value }; const index = referrals.findIndex((item) => item.id === row.id); if (index >= 0) referrals[index] = row; else referrals.push(row); return row; }), createQueryBuilder: () => qualifiedCountsBuilder() };
       if (entity === RewardRule) return { findOne: jest.fn(async ({ where }: any) => rewardRules.find((row) => row.code === where.code && row.isActive === where.isActive) ?? null) };
-      if (entity === RewardPointsLedger) return { manager, exists: jest.fn(async ({ where }: any) => ledger.some((row) => row.eventKey === where.eventKey)), create: (value: any) => value, save: jest.fn(async (value) => { ledger.push({ id: `entry-${ledger.length + 1}`, ...value }); return value; }), createQueryBuilder: jest.fn() };
+      if (entity === RewardPointsLedger) return { manager, exists: jest.fn(async ({ where }: any) => ledger.some((row) => row.eventKey === where.eventKey)), findOne: jest.fn(async ({ where }: any) => ledger.find((row) => row.eventKey === where.eventKey && (!where.direction || row.direction === where.direction)) ?? null), create: (value: any) => value, save: jest.fn(async (value) => { ledger.push({ id: `entry-${ledger.length + 1}`, ...value }); return value; }), createQueryBuilder: jest.fn() };
       if (entity === RewardLevelDefinition) return { manager, find: jest.fn(async () => levelDefinitions), findOne: jest.fn(async ({ where }: any) => levelDefinitions.find((item) => item.code === where.code) ?? null) };
       if (entity === RewardLevelAchievement) return { find: jest.fn(async ({ where }: any) => achievements.filter((row) => row.userId === where.userId)), findOne: jest.fn(async ({ where }: any) => achievements.find((row) => row.userId === where.userId && row.levelId === where.levelId) ?? null), create: (value: any) => value, save: jest.fn(async (value) => { const row = { id: `achievement-${achievements.length + 1}`, ...value }; achievements.push(row); return row; }) };
       if (entity === Provider) return { findOne: jest.fn(async ({ where }: any) => providers.find((row) => row.id === where.id) ?? null) };
@@ -51,10 +59,10 @@ describe('ReferralsService', () => {
     }), metrics: jest.fn() } as never);
   });
 
-  it('captures a valid patient registration but awards no points until qualification', async () => {
+  it('credits a valid referred patient registration once', async () => {
     await subject.capturePatient(manager, 'sc-ab12cd', 'user-2', 'patient-2');
     expect(referrals[0]).toMatchObject({ targetType: ReferralTargetType.PATIENT, status: ReferralStatus.REGISTERED });
-    expect(ledger).toHaveLength(0);
+    expect(ledger).toEqual([expect.objectContaining({ points: 1, eventType: 'PATIENT_REGISTERED' })]);
   });
 
   it('rejects invalid and self referral codes', async () => {
@@ -62,7 +70,7 @@ describe('ReferralsService', () => {
     await expect(subject.capturePatient(manager, 'SC-AB12CD', referrerUserId, 'patient-2')).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('qualifies a patient only after the first completed encounter and credits once', async () => {
+  it('qualifies a patient only after the first completed encounter and credits the care milestone once', async () => {
     await subject.capturePatient(manager, 'SC-AB12CD', 'user-2', 'patient-2');
     await subject.qualifyPatient('patient-2');
     expect(referrals[0].status).toBe(ReferralStatus.REGISTERED);
@@ -70,8 +78,17 @@ describe('ReferralsService', () => {
     await subject.qualifyPatient('patient-2');
     await subject.qualifyPatient('patient-2');
     expect(referrals[0].status).toBe(ReferralStatus.QUALIFIED);
-    expect(ledger).toHaveLength(1);
-    expect(ledger[0]).toMatchObject({ points: 10, eventKey: `REFERRAL_QUALIFIED:${referrals[0].id}` });
+    expect(ledger).toHaveLength(2);
+    expect(ledger[1]).toMatchObject({ points: 1, eventKey: `REFERRAL_MILESTONE:${referrals[0].id}:PATIENT_FIRST_CARE_ACTION` });
+  });
+
+  it('credits the first meaningful patient care action across duplicate and different completion sources only once', async () => {
+    await subject.capturePatient(manager, 'SC-AB12CD', 'user-2', 'patient-2');
+    await subject.recordPatientFirstCareAction('patient-2', PatientCareActionSource.GENERAL_CARE_COMPLETED, 'care-1');
+    await subject.recordPatientFirstCareAction('patient-2', PatientCareActionSource.PROVIDER_CONNECTION_CONNECTED, 'connection-1');
+    await subject.recordPatientFirstCareAction('patient-2', PatientCareActionSource.PHARMACY_DISPENSING_COMPLETED, 'fulfillment-1');
+    expect(ledger.filter((entry) => entry.eventType === 'PATIENT_FIRST_CARE_ACTION')).toHaveLength(1);
+    expect(ledger.reduce((sum, entry) => sum + entry.points, 0)).toBe(2);
   });
 
   it.each([
@@ -82,12 +99,37 @@ describe('ReferralsService', () => {
     const provider: any = { id: 'provider-2', userId: 'user-2', providerType, status: ProviderStatus.PENDING, onboardingStatus: ProviderOnboardingStatus.DRAFT, deletedAt: null };
     providers.push(provider);
     await subject.captureProvider(manager, 'SC-AB12CD', provider, targetType);
+    expect(ledger).toEqual([expect.objectContaining({ eventType: 'PROVIDER_REGISTERED', points: 2 })]);
     await subject.qualifyProvider(provider.id);
     expect(referrals[0].status).toBe(ReferralStatus.REGISTERED);
     provider.status = ProviderStatus.ACTIVE; provider.onboardingStatus = ProviderOnboardingStatus.APPROVED;
     await subject.qualifyProvider(provider.id); await subject.qualifyProvider(provider.id);
     expect(referrals[0].status).toBe(ReferralStatus.QUALIFIED);
+    expect(ledger.filter((entry) => entry.eventType.startsWith('PROVIDER_'))).toEqual([
+      expect.objectContaining({ eventType: 'PROVIDER_REGISTERED', points: 2 }),
+      expect.objectContaining({ eventType: 'PROVIDER_VERIFIED', points: 4 }),
+      expect.objectContaining({ eventType: 'PROVIDER_ACTIVATED', points: 8 }),
+    ]);
+    expect(ledger.reduce((sum, entry) => sum + entry.points, 0)).toBe(14);
+  });
+
+  it('does not award milestone credits to a legacy referral with an old qualification credit', async () => {
+    const provider: any = { id: 'provider-legacy', userId: 'user-legacy', providerType: ProviderType.CLINIC, status: ProviderStatus.ACTIVE, onboardingStatus: ProviderOnboardingStatus.APPROVED, deletedAt: null };
+    providers.push(provider);
+    referrals.push({ id: 'legacy-referral', referrerUserId, referredProviderId: provider.id, targetType: ReferralTargetType.CLINIC, status: ReferralStatus.QUALIFIED, rewardModelVersion: 1 });
+    ledger.push({ eventKey: 'REFERRAL_QUALIFIED:legacy-referral', eventType: 'CLINIC_QUALIFIED', direction: RewardLedgerDirection.CREDIT, points: 100, userId: referrerUserId, referralId: 'legacy-referral' });
+    await subject.qualifyProvider(provider.id);
     expect(ledger).toHaveLength(1);
+  });
+
+  it('uses a compensating debit for explicit milestone reversal without mutating the credit', async () => {
+    await subject.capturePatient(manager, 'SC-AB12CD', 'user-2', 'patient-2');
+    const credit = ledger[0];
+    await subject.reverseMilestone(referrals[0].id, 'PATIENT_REGISTERED', 'ADMIN_FRAUD_REVERSAL');
+    await subject.reverseMilestone(referrals[0].id, 'PATIENT_REGISTERED', 'ADMIN_FRAUD_REVERSAL');
+    expect(ledger[0]).toBe(credit);
+    expect(ledger).toHaveLength(2);
+    expect(ledger[1]).toMatchObject({ direction: RewardLedgerDirection.DEBIT, points: 1, eventType: 'PATIENT_REGISTERED_REVERSED' });
   });
 
   it('never trusts a provider URL target that disagrees with authoritative classification', async () => {
@@ -99,7 +141,7 @@ describe('ReferralsService', () => {
   it('achieves configured Level 1 only when all four requirements are met and awards its bonus once', async () => {
     const targets = [ReferralTargetType.CLINIC, ReferralTargetType.CLINIC, ReferralTargetType.LABORATORY, ReferralTargetType.LABORATORY, ReferralTargetType.PHARMACY, ReferralTargetType.PHARMACY, ...Array(9).fill(ReferralTargetType.PATIENT)];
     targets.forEach((targetType, index) => referrals.push({ id: `qualified-${index}`, referrerUserId, targetType, status: ReferralStatus.QUALIFIED }));
-    referrals.push({ id: 'last-patient', referrerUserId, targetType: ReferralTargetType.PATIENT, status: ReferralStatus.REGISTERED, referredPatientId: 'patient-last' });
+    referrals.push({ id: 'last-patient', referrerUserId, targetType: ReferralTargetType.PATIENT, status: ReferralStatus.REGISTERED, referredPatientId: 'patient-last', rewardModelVersion: 2 });
     completedPatients.add('patient-last');
     await subject.qualifyPatient('patient-last'); await subject.qualifyPatient('patient-last');
     expect(achievements).toHaveLength(1);

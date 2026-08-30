@@ -22,6 +22,7 @@ import { CareServiceDefinition } from '../providers/entities/care-service-defini
 import { ClinicalRecord } from '../clinical-records/entities/clinical-record.entity';
 import { ClinicalRecordsModule } from '../clinical-records/clinical-records.module';
 import { ClinicalOrdersModule } from '../clinical-orders/clinical-orders.module';
+import { RewardsModule } from '../rewards/rewards.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { ClinicalOrdersModule } from '../clinical-orders/clinical-orders.module'
     EarningsModule,
     ClinicalRecordsModule,
     ClinicalOrdersModule,
+    RewardsModule,
     TypeOrmModule.forFeature([
       CareAppointment,
       CareAppointmentStatusHistory,

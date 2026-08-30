@@ -18,6 +18,7 @@ import { HealthCheckEncounterStatus } from './enums/health-check-encounter-statu
 import { HealthCheckMeasurementAction } from './enums/health-check-measurement-action.enum';
 import { HEALTH_CHECK_MEASUREMENT_UNITS, HealthCheckMeasurementCode } from './enums/health-check-measurement-code.enum';
 import { ReferralsService } from '../rewards/referrals.service';
+import { PatientCareActionSource } from '../rewards/enums/patient-care-action-source.enum';
 import { ProviderEarningsService } from '../earnings/provider-earnings.service';
 
 interface MeasurementInput { code: HealthCheckMeasurementCode; primary: number; secondary: number | null }
@@ -93,7 +94,7 @@ export class ProviderHealthCheckEncountersService {
       await this.earnings.markHealthCheckPayable(manager, encounter.bookingId, user.id);
       completedPatientId = encounter.booking.participantPatientId;
     });
-    if (completedPatientId) await this.referrals.qualifyPatient(completedPatientId).catch(() => this.referrals.logQualificationFailure('encounter completion', reference));
+    if (completedPatientId) await this.referrals.recordPatientFirstCareAction(completedPatientId, PatientCareActionSource.HEALTH_CHECK_COMPLETED, reference).catch(() => this.referrals.logQualificationFailure('encounter completion', reference));
     return this.get(user, reference);
   }
 

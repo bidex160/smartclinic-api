@@ -1,3 +1,92 @@
-import {Body,Controller,Get,Param,Post,Query,Req,UseGuards} from '@nestjs/common';import {ApiBearerAuth,ApiTags} from '@nestjs/swagger';import {JwtAuthGuard} from '../auth/jwt-auth.guard';import {Roles} from '../auth/roles.decorator';import {RolesGuard} from '../auth/roles.guard';import {User} from '../users/entities/user.entity';import {UserRole} from '../users/enums/user-role.enum';import {ClinicalOrderFulfillmentsService} from './clinical-order-fulfillments.service';import {FulfillmentDirectoryQueryDto,FulfillmentListQueryDto,FulfillmentReferenceParamsDto,FulfillmentUnitDto} from './dto/clinical-order-fulfillment.dto';import {ClinicalOrderReferenceParamsDto} from './dto/clinical-order.dto';
-@ApiTags('Provider Order Fulfillments')@ApiBearerAuth()@UseGuards(JwtAuthGuard,RolesGuard)@Roles(UserRole.PROVIDER)@Controller('provider')export class ProviderOrderFulfillmentsController{constructor(private readonly service:ClinicalOrderFulfillmentsService){}@Get('clinical-order-fulfillment-providers')directory(@Req()r:{user:User},@Query()q:FulfillmentDirectoryQueryDto){return this.service.directoryForProvider(r.user,q);}@Post('clinical-orders/:reference/recommend-fulfillment')recommend(@Req()r:{user:User},@Param()p:ClinicalOrderReferenceParamsDto,@Body()d:FulfillmentUnitDto){return this.service.recommend(r.user,p.reference,d.providerServiceUnitReference);}@Get('order-fulfillments')list(@Req()r:{user:User},@Query()q:FulfillmentListQueryDto){return this.service.listAssigned(r.user,q);}@Get('order-fulfillments/:reference')get(@Req()r:{user:User},@Param()p:FulfillmentReferenceParamsDto){return this.service.getAssigned(r.user,p.reference);}@Post('order-fulfillments/:reference/accept')accept(@Req()r:{user:User},@Param()p:FulfillmentReferenceParamsDto){return this.service.accept(r.user,p.reference);}}
-@ApiTags('My Order Fulfillments')@ApiBearerAuth()@UseGuards(JwtAuthGuard,RolesGuard)@Roles(UserRole.USER)@Controller('me')export class MeOrderFulfillmentsController{constructor(private readonly service:ClinicalOrderFulfillmentsService){}@Get('clinical-order-fulfillment-providers')directory(@Req()r:{user:User},@Query()q:FulfillmentDirectoryQueryDto){return this.service.directory(r.user,q);}@Post('clinical-orders/:reference/select-fulfillment')select(@Req()r:{user:User},@Param()p:ClinicalOrderReferenceParamsDto,@Body()d:FulfillmentUnitDto){return this.service.select(r.user,p.reference,d.providerServiceUnitReference);}}
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { Roles } from "../auth/roles.decorator";
+import { RolesGuard } from "../auth/roles.guard";
+import { User } from "../users/entities/user.entity";
+import { UserRole } from "../users/enums/user-role.enum";
+import { ClinicalOrderFulfillmentsService } from "./clinical-order-fulfillments.service";
+import {
+  FulfillmentDirectoryQueryDto,
+  FulfillmentListQueryDto,
+  FulfillmentReferenceParamsDto,
+  FulfillmentUnitDto,
+} from "./dto/clinical-order-fulfillment.dto";
+import { ClinicalOrderReferenceParamsDto } from "./dto/clinical-order.dto";
+@ApiTags("Provider Order Fulfillments")
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.PROVIDER)
+@Controller("provider")
+export class ProviderOrderFulfillmentsController {
+  constructor(private readonly service: ClinicalOrderFulfillmentsService) {}
+  @Get("clinical-order-fulfillment-providers") directory(
+    @Req() r: { user: User },
+    @Query() q: FulfillmentDirectoryQueryDto,
+  ) {
+    return this.service.directoryForProvider(r.user, q);
+  }
+  @Post("clinical-orders/:reference/recommend-fulfillment") recommend(
+    @Req() r: { user: User },
+    @Param() p: ClinicalOrderReferenceParamsDto,
+    @Body() d: FulfillmentUnitDto,
+  ) {
+    return this.service.recommend(
+      r.user,
+      p.reference,
+      d.providerServiceUnitReference,
+    );
+  }
+  @Get("order-fulfillments") list(
+    @Req() r: { user: User },
+    @Query() q: FulfillmentListQueryDto,
+  ) {
+    return this.service.listAssigned(r.user, q);
+  }
+  @Get("order-fulfillments/:reference") get(
+    @Req() r: { user: User },
+    @Param() p: FulfillmentReferenceParamsDto,
+  ) {
+    return this.service.getAssigned(r.user, p.reference);
+  }
+  @Post("order-fulfillments/:reference/accept") accept(
+    @Req() r: { user: User },
+    @Param() p: FulfillmentReferenceParamsDto,
+  ) {
+    return this.service.accept(r.user, p.reference);
+  }
+}
+@ApiTags("My Order Fulfillments")
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.USER)
+@Controller("me")
+export class MeOrderFulfillmentsController {
+  constructor(private readonly service: ClinicalOrderFulfillmentsService) {}
+  @Get("clinical-order-fulfillment-providers") directory(
+    @Req() r: { user: User },
+    @Query() q: FulfillmentDirectoryQueryDto,
+  ) {
+    return this.service.directory(r.user, q);
+  }
+  @Post("clinical-orders/:reference/select-fulfillment") select(
+    @Req() r: { user: User },
+    @Param() p: ClinicalOrderReferenceParamsDto,
+    @Body() d: FulfillmentUnitDto,
+  ) {
+    return this.service.select(
+      r.user,
+      p.reference,
+      d.providerServiceUnitReference,
+    );
+  }
+}

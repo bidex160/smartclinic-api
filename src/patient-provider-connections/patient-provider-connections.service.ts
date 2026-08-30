@@ -33,6 +33,8 @@ import {
 import { PatientProviderConnectionStatus } from "./enums/patient-provider-connection-status.enum";
 import { PatientProviderConnectionType } from "./enums/patient-provider-connection-type.enum";
 import { generatePatientProviderConnectionReference } from "./patient-provider-connection-reference";
+import { ReferralsService } from '../rewards/referrals.service';
+import { PatientCareActionSource } from '../rewards/enums/patient-care-action-source.enum';
 
 @Injectable()
 export class PatientProviderConnectionsService {
@@ -44,6 +46,7 @@ export class PatientProviderConnectionsService {
     private readonly providers: Repository<Provider>,
     private readonly currentProvider: CurrentProviderService,
     private readonly earnings: ProviderEarningsService,
+    private readonly referrals: ReferralsService,
   ) {}
 
   async getProviderConfig(user: User) {
@@ -438,6 +441,13 @@ async confirm(
         manager,
         row.reference,
         user.id,
+      );
+
+      await this.referrals.recordPatientFirstCareAction(
+        row.patientId,
+        PatientCareActionSource.PROVIDER_CONNECTION_CONNECTED,
+        row.reference,
+        manager,
       );
 
       // Load relations AFTER all locked mutations.

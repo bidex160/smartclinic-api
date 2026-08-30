@@ -31,7 +31,7 @@ describe('ProviderHealthCheckEncountersService', () => {
     const encounterHistoryRepository = historyRepository(encounterHistory); const measurementHistoryRepository = historyRepository(measurementHistory); const bookingHistoryRepository = historyRepository(bookingHistory);
     manager = { getRepository: jest.fn((entity) => entity === Booking ? bookingRepository : entity === ProviderAssignment ? assignmentRepository : entity === HealthCheckEncounter ? encounterRepository : entity === HealthCheckMeasurement ? measurementRepository : entity === HealthCheckEncounterHistory ? encounterHistoryRepository : entity === HealthCheckMeasurementHistory ? measurementHistoryRepository : entity === BookingStatusHistory ? bookingHistoryRepository : {}), transaction: jest.fn(async (work) => work(manager)) };
     encounterRepository.manager = manager;
-    subject = new ProviderHealthCheckEncountersService(encounterRepository, { resolve: jest.fn().mockResolvedValue(provider) } as any, { qualifyPatient: jest.fn(), logQualificationFailure: jest.fn() } as any, { markHealthCheckPayable: jest.fn().mockResolvedValue(null) } as any);
+    subject = new ProviderHealthCheckEncountersService(encounterRepository, { resolve: jest.fn().mockResolvedValue(provider) } as any, { recordPatientFirstCareAction: jest.fn(), logQualificationFailure: jest.fn() } as any, { markHealthCheckPayable: jest.fn().mockResolvedValue(null) } as any);
     jest.spyOn(subject, 'get').mockResolvedValue(response);
   });
 

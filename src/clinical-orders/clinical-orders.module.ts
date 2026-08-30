@@ -16,6 +16,7 @@ import { ClinicalPrescriptionDetail } from "./entities/clinical-prescription-det
 import { ClinicalPrescriptionItem } from "./entities/clinical-prescription-item.entity";
 import { User } from "src/users/entities/user.entity";
 import { ProviderServiceUnitsModule } from '../provider-service-units/provider-service-units.module';
+import { RewardsModule } from '../rewards/rewards.module';
 import { ClinicalOrderFulfillment } from './entities/clinical-order-fulfillment.entity';
 import { ClinicalOrderFulfillmentHistory } from './entities/clinical-order-fulfillment-history.entity';
 import { ClinicalOrderFulfillmentsService } from './clinical-order-fulfillments.service';
@@ -27,6 +28,7 @@ import { PharmacyQuote } from './entities/pharmacy-quote.entity';import { Pharma
     ProvidersModule,
     ProviderServiceUnitsModule,
     CommissionsModule,EarningsModule,
+    RewardsModule,
     TypeOrmModule.forFeature([
       ClinicalOrder,
       ClinicalOrderStatusHistory,
