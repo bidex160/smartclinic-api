@@ -9,8 +9,11 @@ import { ProviderEarning } from './entities/provider-earning.entity';
 import { ProviderPayoutEarning } from './entities/provider-payout-earning.entity';
 import { ProviderPayoutStatusHistory } from './entities/provider-payout-status-history.entity';
 import { ProviderPayout } from './entities/provider-payout.entity';
+import { ProviderPayoutAccount } from './entities/provider-payout-account.entity';
 import { ProviderEarningStatus } from './enums/provider-earning-status.enum';
 import { ProviderPayoutStatus } from './enums/provider-payout-status.enum';
+import { ProviderPayoutAccountStatus, ProviderPayoutAccountType } from './enums/provider-payout-account.enum';
+import { ProviderPayoutSettlementMethod } from './enums/provider-payout-settlement-method.enum';
 
 const ACTIVE = [ProviderPayoutStatus.DRAFT, ProviderPayoutStatus.PROCESSING];
 
@@ -36,12 +39,14 @@ export class ProviderPayoutsService {
         if (earnings.some(earning => earning.status !== ProviderEarningStatus.PAYABLE)) throw new ConflictException('Only PAYABLE earnings can be included in a payout');
         if (earnings.some(earning => earning.providerId !== provider.id)) throw new ConflictException('All earnings must belong to the selected Provider');
         if (earnings.some(earning => earning.currency !== currency)) throw new ConflictException('All earnings must use the payout currency');
+        const payoutAccount = input.payoutAccountReference ? await manager.getRepository(ProviderPayoutAccount).findOne({ where: { reference: input.payoutAccountReference.toUpperCase() }, lock: { mode: 'pessimistic_read' } }) : null;
+        if (input.payoutAccountReference) this.validatePayoutAccount(payoutAccount, provider.id, currency, input.settlementMethod);
         const total = earnings.reduce((sum, earning) => sum + BigInt(earning.providerShareMinor), 0n);
         const repository = manager.getRepository(ProviderPayout);
-        const payout = await repository.save(repository.create({ providerId: provider.id, currency, totalAmountMinor: total.toString(), earningCount: earnings.length, status: ProviderPayoutStatus.DRAFT, settlementMethod: input.settlementMethod, externalReference: null, note: input.note?.trim() || null, initiatedByUserId: actorUserId, processingAt: null, completedAt: null, failedAt: null, cancelledAt: null }));
+        const payout = await repository.save(repository.create({ providerId: provider.id, currency, totalAmountMinor: total.toString(), earningCount: earnings.length, status: ProviderPayoutStatus.DRAFT, settlementMethod: input.settlementMethod, providerPayoutAccountId: payoutAccount?.id ?? null, destinationSnapshot: payoutAccount ? this.destinationSnapshot(payoutAccount) : null, externalReference: null, note: input.note?.trim() || null, initiatedByUserId: actorUserId, processingAt: null, completedAt: null, failedAt: null, cancelledAt: null }));
         const memberships = earnings.map(earning => manager.getRepository(ProviderPayoutEarning).create({ payoutId: payout.id, providerEarningId: earning.id, providerShareMinor: earning.providerShareMinor, releasedAt: null }));
         await manager.getRepository(ProviderPayoutEarning).save(memberships);
-        await this.history(manager, payout, null, ProviderPayoutStatus.DRAFT, actorUserId, 'PAYOUT_CREATED', payout.note);
+        await this.history(manager, payout, null, ProviderPayoutStatus.DRAFT, actorUserId, payoutAccount ? 'PAYOUT_CREATED_WITH_DESTINATION' : 'PAYOUT_CREATED', payout.note);
         return payout.reference;
       });
       return this.adminDetail(reference);
@@ -51,7 +56,7 @@ export class ProviderPayoutsService {
     }
   }
 
-  process(reference: string, actorUserId: string) { return this.transition(reference, actorUserId, [ProviderPayoutStatus.DRAFT], ProviderPayoutStatus.PROCESSING, 'PAYOUT_PROCESSING', null, false); }
+  async process(reference: string, actorUserId: string) { const result = await this.payouts.manager.transaction(async manager => { const payout = await this.lockPayout(manager, reference); if (payout.status === ProviderPayoutStatus.PROCESSING) return payout.reference; if (payout.status !== ProviderPayoutStatus.DRAFT) throw new ConflictException('Payout cannot make this status transition'); if (payout.providerPayoutAccountId) { const account = await manager.getRepository(ProviderPayoutAccount).findOne({ where: { id: payout.providerPayoutAccountId }, lock: { mode: 'pessimistic_read' } }); this.validatePayoutAccount(account, payout.providerId, payout.currency, payout.settlementMethod); } payout.status = ProviderPayoutStatus.PROCESSING; payout.processingAt = new Date(); await manager.getRepository(ProviderPayout).save(payout); await this.history(manager, payout, ProviderPayoutStatus.DRAFT, ProviderPayoutStatus.PROCESSING, actorUserId, 'PAYOUT_PROCESSING', null); return payout.reference; }); return this.adminDetail(result); }
   fail(reference: string, actorUserId: string, reason: string) { return this.transition(reference, actorUserId, [ProviderPayoutStatus.PROCESSING], ProviderPayoutStatus.FAILED, 'PAYOUT_FAILED', reason, true); }
   cancel(reference: string, actorUserId: string, reason: string) { return this.transition(reference, actorUserId, ACTIVE, ProviderPayoutStatus.CANCELLED, 'PAYOUT_CANCELLED', reason, true); }
 
@@ -129,6 +134,8 @@ export class ProviderPayoutsService {
   private async lockPayout(manager: EntityManager, reference: string) { const payout = await manager.getRepository(ProviderPayout).findOne({ where: { reference: reference.toUpperCase() }, lock: { mode: 'pessimistic_write' } }); if (!payout) throw new NotFoundException('Provider payout not found'); return payout; }
   private async resolveProvider(user: User) { const provider = await this.providers.findOne({ where: { userId: user.id }, withDeleted: true }); if (!provider || provider.deletedAt) throw new NotFoundException('Provider payouts were not found'); return provider; }
   private async history(manager: EntityManager, payout: ProviderPayout, fromStatus: ProviderPayoutStatus | null, toStatus: ProviderPayoutStatus, actorUserId: string, reasonCode: string, reasonNote: string | null) { const repository = manager.getRepository(ProviderPayoutStatusHistory); await repository.save(repository.create({ payoutId: payout.id, fromStatus, toStatus, actorUserId, reasonCode, reasonNote })); }
-  private view(payout: ProviderPayout, admin: boolean) { return { reference: payout.reference, ...(admin ? { provider: { reference: payout.provider.providerReference, displayName: payout.provider.displayName } } : {}), currency: payout.currency, totalAmountMinor: Number(payout.totalAmountMinor), earningCount: payout.earningCount, status: payout.status, settlementMethod: payout.settlementMethod, externalReference: payout.externalReference, note: payout.note, createdAt: payout.createdAt, processingAt: payout.processingAt, completedAt: payout.completedAt, failedAt: payout.failedAt, cancelledAt: payout.cancelledAt, updatedAt: payout.updatedAt }; }
+  private validatePayoutAccount(account: ProviderPayoutAccount | null, providerId: string, currency: string, settlementMethod: ProviderPayoutSettlementMethod) { if (!account) throw new NotFoundException('Provider payout account not found'); if (account.providerId !== providerId) throw new ConflictException('Payout account does not belong to the selected Provider'); if (account.status !== ProviderPayoutAccountStatus.VERIFIED) throw new ConflictException('Payout account must be VERIFIED'); if (account.currency !== currency) throw new ConflictException('Payout account currency does not match the payout'); if (settlementMethod === ProviderPayoutSettlementMethod.MANUAL_BANK_TRANSFER && account.type !== ProviderPayoutAccountType.BANK_ACCOUNT) throw new ConflictException('Payout account is not valid for manual bank transfer'); }
+  private destinationSnapshot(account: ProviderPayoutAccount) { return { payoutAccountReference: account.reference, type: account.type, countryCode: account.countryCode, currency: account.currency, bankCode: account.bankCode, bankName: account.bankName, maskedAccountNumber: `****${account.accountNumberLast4}`, accountName: account.accountName }; }
+  private view(payout: ProviderPayout, admin: boolean) { return { reference: payout.reference, ...(admin ? { provider: { reference: payout.provider.providerReference, displayName: payout.provider.displayName } } : {}), currency: payout.currency, totalAmountMinor: Number(payout.totalAmountMinor), earningCount: payout.earningCount, status: payout.status, settlementMethod: payout.settlementMethod, destination: payout.destinationSnapshot ?? null, externalReference: payout.externalReference, note: payout.note, createdAt: payout.createdAt, processingAt: payout.processingAt, completedAt: payout.completedAt, failedAt: payout.failedAt, cancelledAt: payout.cancelledAt, updatedAt: payout.updatedAt }; }
   private page(items: unknown[], total: number, query: { page: number; limit: number }) { return { items, page: query.page, limit: query.limit, total, totalPages: total ? Math.ceil(total / query.limit) : 0 }; }
 }

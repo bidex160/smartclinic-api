@@ -6,6 +6,12 @@ import { ProviderPayoutStatus } from '../enums/provider-payout-status.enum';
 import { generateProviderPayoutReference } from '../provider-payout-reference';
 import { ProviderPayoutEarning } from './provider-payout-earning.entity';
 import { ProviderPayoutStatusHistory } from './provider-payout-status-history.entity';
+import { ProviderPayoutAccount } from './provider-payout-account.entity';
+
+export interface ProviderPayoutDestinationSnapshot {
+  payoutAccountReference: string; type: string; countryCode: string; currency: string;
+  bankCode: string; bankName: string; maskedAccountNumber: string; accountName: string;
+}
 
 @Entity('provider_payouts')
 @Index('UQ_provider_payouts_reference', ['reference'], { unique: true })
@@ -14,6 +20,7 @@ import { ProviderPayoutStatusHistory } from './provider-payout-status-history.en
 @Index('IDX_provider_payouts_status_currency_created', ['status', 'currency', 'createdAt'])
 @Check('CHK_provider_payouts_amount_count', '"total_amount_minor" >= 0 AND "earning_count" > 0')
 @Check('CHK_provider_payouts_currency', '"currency" ~ \'^[A-Z]{3}$\'')
+@Check('CHK_provider_payouts_destination_snapshot', '"destination_snapshot" IS NULL OR jsonb_typeof("destination_snapshot") = \'object\'')
 export class ProviderPayout {
   @PrimaryGeneratedColumn('uuid') id!: string;
   @Column({ type: 'varchar', length: 40 }) reference!: string;
@@ -25,6 +32,9 @@ export class ProviderPayout {
   @Column({ name: 'earning_count', type: 'integer' }) earningCount!: number;
   @Column({ type: 'enum', enum: ProviderPayoutStatus, enumName: 'provider_payout_status_enum' }) status!: ProviderPayoutStatus;
   @Column({ name: 'settlement_method', type: 'enum', enum: ProviderPayoutSettlementMethod, enumName: 'provider_payout_settlement_method_enum' }) settlementMethod!: ProviderPayoutSettlementMethod;
+  @Column({ name: 'provider_payout_account_id', type: 'uuid', nullable: true }) providerPayoutAccountId!: string | null;
+  @ManyToOne(() => ProviderPayoutAccount, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'provider_payout_account_id' }) providerPayoutAccount!: ProviderPayoutAccount | null;
+  @Column({ name: 'destination_snapshot', type: 'jsonb', nullable: true }) destinationSnapshot!: ProviderPayoutDestinationSnapshot | null;
   @Column({ name: 'external_reference', type: 'varchar', length: 160, nullable: true }) externalReference!: string | null;
   @Column({ type: 'varchar', length: 1000, nullable: true }) note!: string | null;
   @Column({ name: 'initiated_by_user_id', type: 'uuid' }) initiatedByUserId!: string;

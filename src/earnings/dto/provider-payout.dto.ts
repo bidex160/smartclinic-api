@@ -26,6 +26,7 @@ export class CreateProviderPayoutDto {
   @ApiProperty() @Matches(/^[A-Za-z]{3}$/) currency!: string;
   @ApiProperty({ type: String, isArray: true }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @ArrayUnique() @IsString({ each: true }) earningReferences!: string[];
   @ApiProperty({ enum: ProviderPayoutSettlementMethod }) @IsEnum(ProviderPayoutSettlementMethod) settlementMethod!: ProviderPayoutSettlementMethod;
+  @ApiPropertyOptional({ description: 'Optional verified Provider payout-account public reference' }) @IsOptional() @IsString() payoutAccountReference?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(1000) note?: string;
 }
 export class ProviderPayoutReasonDto {
