@@ -24,6 +24,7 @@ import { EarningsModule } from './earnings/earnings.module';
 import { ClinicalRecordsModule } from './clinical-records/clinical-records.module';
 import { PatientProviderConnectionsModule } from './patient-provider-connections/patient-provider-connections.module';
 import { ClinicalOrdersModule } from './clinical-orders/clinical-orders.module';
+import { ProviderServiceUnitsModule } from './provider-service-units/provider-service-units.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -46,6 +47,7 @@ const persistenceDomainModules = configuration.database.enabled
       ClinicalRecordsModule,
       PatientProviderConnectionsModule,
       ClinicalOrdersModule,
+      ProviderServiceUnitsModule,
     ]
   : [];
 

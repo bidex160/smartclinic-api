@@ -1,0 +1,1 @@
+import{randomBytes}from'node:crypto';export const PROVIDER_SERVICE_UNIT_REFERENCE_PATTERN=/^SC-PSU-[A-F0-9]{12}$/;export function generateProviderServiceUnitReference(){return`SC-PSU-${randomBytes(6).toString('hex').toUpperCase()}`;}
