@@ -23,6 +23,7 @@ import { CommissionsModule } from './commissions/commissions.module';
 import { EarningsModule } from './earnings/earnings.module';
 import { ClinicalRecordsModule } from './clinical-records/clinical-records.module';
 import { PatientProviderConnectionsModule } from './patient-provider-connections/patient-provider-connections.module';
+import { ClinicalOrdersModule } from './clinical-orders/clinical-orders.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -44,6 +45,7 @@ const persistenceDomainModules = configuration.database.enabled
       EarningsModule,
       ClinicalRecordsModule,
       PatientProviderConnectionsModule,
+      ClinicalOrdersModule,
     ]
   : [];
 

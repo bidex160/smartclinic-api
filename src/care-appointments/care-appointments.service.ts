@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { EntityManager, In, Repository } from "typeorm";
@@ -40,6 +41,7 @@ import { ClinicalRecord } from "../clinical-records/entities/clinical-record.ent
 import { ClinicalRecordStatus } from "../clinical-records/enums/clinical-record-status.enum";
 import { ClinicalRecordsService } from "../clinical-records/clinical-records.service";
 import { ProviderType } from "src/providers/enums/provider-type.enum";
+import { ClinicalOrdersService } from "../clinical-orders/clinical-orders.service";
 
 const ACTIVE = [
   CareAppointmentStatus.SCHEDULED,
@@ -56,6 +58,7 @@ export class CareAppointmentsService {
     private readonly currentProvider: CurrentProviderService,
     private readonly earnings: ProviderEarningsService,
     private readonly clinicalRecords: ClinicalRecordsService,
+    @Optional() private readonly clinicalOrders?: ClinicalOrdersService,
   ) {}
 
 async schedule(
@@ -683,6 +686,8 @@ async schedule(
         );
       if (to === CareAppointmentStatus.COMPLETED)
         await this.requireFinalizedClinicalRecord(manager, appointment, care);
+      if (to === CareAppointmentStatus.COMPLETED && this.clinicalOrders)
+        await this.clinicalOrders.requireNoDraftOrders(manager, appointment.id);
       const fromAppointment = appointment.status;
       appointment.status = to;
       await manager.getRepository(CareAppointment).save(appointment);
