@@ -79,5 +79,37 @@ describe('ProviderEarningsService', () => {
     expect(history.save).toHaveBeenCalledTimes(2);
   });
   it('returns narrow not-found for cross-Provider detail', async () => { earnings.findOne.mockResolvedValue(null); await expect(subject.getOwn({ id: 'user-1' } as any, 'SC-EARN-other')).rejects.toBeInstanceOf(NotFoundException); });
-  it('aggregates separate currency balances from Provider share only', async () => { const qb: any = { select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), getRawMany: jest.fn().mockResolvedValue([{ currency: 'NGN', held: '1800000', payable: '3500000', settled: '10000000' }, { currency: 'USD', held: '5000', payable: '0', settled: '0' }]) }; earnings.createQueryBuilder.mockReturnValue(qb); await expect(subject.balancesOwn({ id: 'user-1' } as any)).resolves.toEqual([{ currency: 'NGN', heldAmountMinor: 1800000, payableAmountMinor: 3500000, settledAmountMinor: 10000000 }, { currency: 'USD', heldAmountMinor: 5000, payableAmountMinor: 0, settledAmountMinor: 0 }]); });
+  it('aggregates gross, commission, Provider share, statuses, and sources separately by currency', async () => {
+    const qb = (rows: any[]) => { const value: any = { getRawMany: jest.fn().mockResolvedValue(rows) }; for (const method of ['select', 'addSelect', 'groupBy', 'addGroupBy', 'orderBy', 'addOrderBy', 'andWhere', 'innerJoin']) value[method] = jest.fn().mockReturnValue(value); return value; };
+    const totals = qb([
+      { currency: 'NGN', earningCount: '3', gross: '2000000', commission: '200000', providerShare: '1800000', held: '500000', payable: '300000', settled: '900000', voided: '100000' },
+      { currency: 'USD', earningCount: '1', gross: '5000', commission: '0', providerShare: '5000', held: '5000', payable: '0', settled: '0', voided: '0' },
+    ]);
+    const statuses = qb([
+      { currency: 'NGN', key: 'HELD', earningCount: '1', gross: '600000', commission: '100000', providerShare: '500000' },
+      { currency: 'NGN', key: 'VOIDED', earningCount: '1', gross: '100000', commission: '0', providerShare: '100000' },
+      { currency: 'USD', key: 'HELD', earningCount: '1', gross: '5000', commission: '0', providerShare: '5000' },
+    ]);
+    const sources = qb([
+      { currency: 'NGN', key: 'GENERAL_CARE', earningCount: '2', gross: '2000000', commission: '200000', providerShare: '1800000' },
+      { currency: 'USD', key: 'PHARMACY_FULFILLMENT', earningCount: '1', gross: '5000', commission: '0', providerShare: '5000' },
+    ]);
+    earnings.createQueryBuilder.mockReturnValueOnce(totals).mockReturnValueOnce(statuses).mockReturnValueOnce(sources);
+    const result = await subject.balancesOwn({ id: 'user-1' } as any);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ currency: 'NGN', earningCount: 3, grossAmountMinor: 2000000, commissionAmountMinor: 200000, providerShareMinor: 1800000, heldAmountMinor: 500000, payableAmountMinor: 300000, settledAmountMinor: 900000, voidedAmountMinor: 100000 });
+    expect(result[0].statusBreakdown).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'VOIDED', providerShareMinor: 100000 })]));
+    expect(result[1]).toMatchObject({ currency: 'USD', commissionAmountMinor: 0, providerShareMinor: 5000 });
+  });
+  it('applies provider tenancy, filters, pagination, and stable newest-first ordering in SQL', async () => {
+    const qb: any = { getManyAndCount: jest.fn().mockResolvedValue([[], 0]) };
+    for (const method of ['innerJoinAndSelect', 'andWhere', 'orderBy', 'addOrderBy', 'skip', 'take']) qb[method] = jest.fn().mockReturnValue(qb);
+    earnings.createQueryBuilder.mockReturnValue(qb);
+    await subject.listOwn({ id: 'user-1' } as any, { status: ProviderEarningStatus.HELD, currency: 'ngn', from: '2026-01-01T00:00:00.000Z', to: '2026-12-31T23:59:59.000Z', page: 2, limit: 10 });
+    expect(qb.andWhere).toHaveBeenCalledWith('earning.providerId = :providerId', { providerId: 'provider-1' });
+    expect(qb.andWhere).toHaveBeenCalledWith('earning.currency = :currency', { currency: 'NGN' });
+    expect(qb.orderBy).toHaveBeenCalledWith('earning.createdAt', 'DESC');
+    expect(qb.addOrderBy).toHaveBeenCalledWith('earning.id', 'DESC');
+    expect(qb.skip).toHaveBeenCalledWith(10);
+  });
 });

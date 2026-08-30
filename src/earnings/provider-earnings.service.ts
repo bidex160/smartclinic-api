@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { Booking } from '../bookings/entities/booking.entity';
@@ -107,23 +107,63 @@ export class ProviderEarningsService {
   async balancesOwn(user: User) { const provider = await this.resolveProviderForRead(user); return this.balances(provider.id); }
   async listAdmin(query: AdminProviderEarningListQueryDto) { return this.listForProvider(query.providerId, query, true); }
   async getAdmin(reference: string) { const earning = await this.earnings.findOne({ where: { reference }, relations: { provider: true } }); if (!earning) throw new NotFoundException('Provider earning not found'); return this.map(earning, true); }
-  async balancesAdmin(providerId?: string) { return this.balances(providerId); }
+  async balancesAdmin(providerId?: string, providerReference?: string) {
+    return this.balances(providerId, providerReference);
+  }
 
   private async listForProvider(providerId: string | undefined, query: ProviderEarningListQueryDto, includeProvider = false) {
     const qb = this.earnings.createQueryBuilder('earning');
     if (includeProvider) qb.innerJoinAndSelect('earning.provider', 'provider');
     if (providerId) qb.andWhere('earning.providerId = :providerId', { providerId });
+    const adminQuery = query as AdminProviderEarningListQueryDto;
+    if (adminQuery.providerReference) qb.andWhere('provider.providerReference = :providerReference', { providerReference: adminQuery.providerReference });
     if (query.status) qb.andWhere('earning.status = :status', { status: query.status });
     if (query.sourceType) qb.andWhere('earning.sourceType = :sourceType', { sourceType: query.sourceType });
-    if ((query as AdminProviderEarningListQueryDto).currency) qb.andWhere('earning.currency = :currency', { currency: (query as AdminProviderEarningListQueryDto).currency!.toUpperCase() });
+    if (query.currency) qb.andWhere('earning.currency = :currency', { currency: query.currency.toUpperCase() });
+    this.applyDateRange(qb, query);
     qb.orderBy('earning.createdAt', 'DESC').addOrderBy('earning.id', 'DESC').skip((query.page - 1) * query.limit).take(query.limit);
     const [rows, total] = await qb.getManyAndCount(); return { items: rows.map(row => this.map(row, includeProvider)), page: query.page, limit: query.limit, total, totalPages: total ? Math.ceil(total / query.limit) : 0 };
   }
   private async getForProvider(providerId: string, reference: string) { const earning = await this.earnings.findOne({ where: { providerId, reference } }); if (!earning) throw new NotFoundException('Provider earning not found'); return this.map(earning); }
-  private async balances(providerId?: string) {
-    const qb = this.earnings.createQueryBuilder('earning').select('earning.currency', 'currency').addSelect(`COALESCE(SUM(CASE WHEN earning.status = 'HELD' THEN earning.provider_share_minor ELSE 0 END), 0)`, 'held').addSelect(`COALESCE(SUM(CASE WHEN earning.status = 'PAYABLE' THEN earning.provider_share_minor ELSE 0 END), 0)`, 'payable').addSelect(`COALESCE(SUM(CASE WHEN earning.status = 'SETTLED' THEN earning.provider_share_minor ELSE 0 END), 0)`, 'settled').groupBy('earning.currency').orderBy('earning.currency', 'ASC');
-    if (providerId) qb.where('earning.providerId = :providerId', { providerId });
-    const rows = await qb.getRawMany(); return rows.map(row => ({ currency: row.currency, heldAmountMinor: Number(row.held), payableAmountMinor: Number(row.payable), settledAmountMinor: Number(row.settled) }));
+  private async balances(providerId?: string, providerReference?: string) {
+    const base = () => {
+      const qb = this.earnings.createQueryBuilder('earning');
+      if (providerReference) qb.innerJoin('earning.provider', 'provider').andWhere('provider.providerReference = :providerReference', { providerReference });
+      if (providerId) qb.andWhere('earning.providerId = :providerId', { providerId });
+      return qb;
+    };
+    const totals = await base().select('earning.currency', 'currency')
+      .addSelect('COUNT(*)', 'earningCount')
+      .addSelect('COALESCE(SUM(earning.gross_amount_minor), 0)', 'gross')
+      .addSelect('COALESCE(SUM(earning.commission_amount_minor), 0)', 'commission')
+      .addSelect('COALESCE(SUM(earning.provider_share_minor), 0)', 'providerShare')
+      .addSelect(`COALESCE(SUM(CASE WHEN earning.status = 'HELD' THEN earning.provider_share_minor ELSE 0 END), 0)`, 'held')
+      .addSelect(`COALESCE(SUM(CASE WHEN earning.status = 'PAYABLE' THEN earning.provider_share_minor ELSE 0 END), 0)`, 'payable')
+      .addSelect(`COALESCE(SUM(CASE WHEN earning.status = 'SETTLED' THEN earning.provider_share_minor ELSE 0 END), 0)`, 'settled')
+      .addSelect(`COALESCE(SUM(CASE WHEN earning.status = 'VOIDED' THEN earning.provider_share_minor ELSE 0 END), 0)`, 'voided')
+      .groupBy('earning.currency').orderBy('earning.currency', 'ASC').getRawMany();
+    const statuses = await base().select('earning.currency', 'currency').addSelect('earning.status', 'key')
+      .addSelect('COUNT(*)', 'earningCount').addSelect('COALESCE(SUM(earning.gross_amount_minor), 0)', 'gross')
+      .addSelect('COALESCE(SUM(earning.commission_amount_minor), 0)', 'commission')
+      .addSelect('COALESCE(SUM(earning.provider_share_minor), 0)', 'providerShare')
+      .groupBy('earning.currency').addGroupBy('earning.status').orderBy('earning.currency', 'ASC').addOrderBy('earning.status', 'ASC').getRawMany();
+    const sources = await base().select('earning.currency', 'currency').addSelect('earning.sourceType', 'key')
+      .addSelect('COUNT(*)', 'earningCount').addSelect('COALESCE(SUM(earning.gross_amount_minor), 0)', 'gross')
+      .addSelect('COALESCE(SUM(earning.commission_amount_minor), 0)', 'commission')
+      .addSelect('COALESCE(SUM(earning.provider_share_minor), 0)', 'providerShare')
+      .groupBy('earning.currency').addGroupBy('earning.sourceType').orderBy('earning.currency', 'ASC').addOrderBy('earning.sourceType', 'ASC').getRawMany();
+    const breakdown = (rows: any[], currency: string) => rows.filter(row => row.currency === currency).map(row => ({ key: row.key, earningCount: Number(row.earningCount), grossAmountMinor: Number(row.gross), commissionAmountMinor: Number(row.commission), providerShareMinor: Number(row.providerShare) }));
+    return totals.map(row => ({
+      currency: row.currency, earningCount: Number(row.earningCount), grossAmountMinor: Number(row.gross),
+      commissionAmountMinor: Number(row.commission), providerShareMinor: Number(row.providerShare),
+      heldAmountMinor: Number(row.held), payableAmountMinor: Number(row.payable), settledAmountMinor: Number(row.settled), voidedAmountMinor: Number(row.voided),
+      statusBreakdown: breakdown(statuses, row.currency), sourceBreakdown: breakdown(sources, row.currency),
+    }));
+  }
+  private applyDateRange(qb: any, query: ProviderEarningListQueryDto) {
+    if (query.from && query.to && new Date(query.from) > new Date(query.to)) throw new BadRequestException('from must not be after to');
+    if (query.from) qb.andWhere('earning.createdAt >= :from', { from: new Date(query.from) });
+    if (query.to) qb.andWhere('earning.createdAt <= :to', { to: new Date(query.to) });
   }
   private map(row: ProviderEarning, includeProvider = false) { return { reference: row.reference, sourceType: row.sourceType, sourceReference: row.sourceReference, currency: row.currency, grossAmountMinor: Number(row.grossAmountMinor), commissionBasisPoints: row.commissionBps, commissionSource: row.commissionSource, commissionAmountMinor: Number(row.commissionAmountMinor), providerShareMinor: Number(row.providerShareMinor), status: row.status, payableAt: row.payableAt, settledAt: row.settledAt, createdAt: row.createdAt, updatedAt: row.updatedAt, ...(includeProvider ? { provider: { reference: row.provider.providerReference, displayName: row.provider.displayName } } : {}) }; }
   private toMinor(amount: string): bigint { const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(amount); if (!match) throw new ConflictException('Invalid authoritative money amount'); return BigInt(match[1]) * 100n + BigInt((match[2] ?? '').padEnd(2, '0')); }
