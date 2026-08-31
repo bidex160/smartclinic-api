@@ -75,6 +75,6 @@ import { HealthCheckPackage } from "../health-checks/entities/health-check-packa
     GuidedSelfCheckReviewerAuthorizationsService,
     GuidedSelfCheckNextActionsService,
   ],
-  exports: [GuidedSelfChecksService],
+  exports: [GuidedSelfChecksService, GuidedSelfCheckNextActionsService],
 })
 export class GuidedSelfChecksModule {}
