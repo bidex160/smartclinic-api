@@ -2,7 +2,7 @@ import { Check,Column,CreateDateColumn,Entity,Index,JoinColumn,ManyToOne,OneToMa
 import { Patient } from '../../patients/entities/patient.entity'; import { User } from '../../users/entities/user.entity';
 import { GuidedSelfCheckFundingStatus,GuidedSelfCheckWorkflowStatus } from '../enums/guided-self-check.enum';
 import { GuidedSelfCheckHistory } from './guided-self-check-history.entity';
-import { GuidedSelfCheckQuestionnaireVersion } from './guided-self-check-questionnaire-version.entity';
+import { GuidedSelfCheckQuestionnaireVersion } from './guided-self-check-questionnaire-version.entity'; import { GuidedSelfCheckClassificationStatus } from '../enums/guided-self-check-classification.enum';
 @Entity('guided_self_checks')
 @Index('IDX_gsc_patient_created',['patientId','createdAt']) @Index('IDX_gsc_patient_funding',['patientId','fundingStatus'])
 @Check('CHK_gsc_snapshot_money','"standard_price_minor_snapshot" >= 0 AND "effective_price_minor" >= 0 AND ("promotional_price_minor_snapshot" IS NULL OR "promotional_price_minor_snapshot" >= 0)')
@@ -23,6 +23,7 @@ export class GuidedSelfCheck {
  @ManyToOne(()=>GuidedSelfCheckQuestionnaireVersion,{nullable:true,onDelete:'RESTRICT'}) @JoinColumn({name:'questionnaire_version_id'}) questionnaireVersion!:GuidedSelfCheckQuestionnaireVersion|null;
  @Column({name:'started_at',type:'timestamptz',nullable:true}) startedAt!:Date|null;
  @Column({name:'completed_at',type:'timestamptz',nullable:true}) completedAt!:Date|null;
+ @Column({name:'classification_status',type:'enum',enum:GuidedSelfCheckClassificationStatus,enumName:'guided_self_check_classification_status_enum',default:GuidedSelfCheckClassificationStatus.PENDING}) classificationStatus!:GuidedSelfCheckClassificationStatus;
  @CreateDateColumn({name:'created_at',type:'timestamptz'}) createdAt!:Date; @UpdateDateColumn({name:'updated_at',type:'timestamptz'}) updatedAt!:Date;
  @OneToMany(()=>GuidedSelfCheckHistory,h=>h.selfCheck) history!:GuidedSelfCheckHistory[];
 }
