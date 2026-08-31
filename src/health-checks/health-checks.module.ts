@@ -39,6 +39,7 @@ import { HealthCheckPackageAddon } from './entities/health-check-package-addon.e
 import { ProviderService } from '../providers/entities/provider-service.entity';
 import { ProviderServiceAddon } from '../providers/entities/provider-service-addon.entity';
 import { HealthCheckConfigurationService } from './health-check-configuration.service';
+import { HealthCheckConfigurationQuote } from './entities/health-check-configuration-quote.entity';import { ProviderLocation } from '../providers/entities/provider-location.entity';
 
 @Module({
   imports: [
@@ -67,6 +68,8 @@ import { HealthCheckConfigurationService } from './health-check-configuration.se
       HealthCheckPackageAddon,
       ProviderService,
       ProviderServiceAddon,
+      HealthCheckConfigurationQuote,
+      ProviderLocation,
     ]),
   ],
   controllers: [

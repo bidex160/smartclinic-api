@@ -34,6 +34,7 @@ export class PatientHealthCheckHistoryItemDto {
 }
 export class PatientHealthCheckDetailResponseDto extends PatientHealthCheckHistoryItemDto {
   @ApiPropertyOptional({ nullable: true }) visitAddress!: { addressLine1: string; addressLine2: string | null; city: string; stateOrRegion: string; postalCode: string | null; countryCode: string } | null;
+  @ApiPropertyOptional({nullable:true})commercialConfiguration!:Record<string,unknown>|null;
 }
 export class PatientHealthCheckHistoryResponseDto {
   @ApiProperty({ type: PatientHealthCheckHistoryItemDto, isArray: true }) items!: PatientHealthCheckHistoryItemDto[];

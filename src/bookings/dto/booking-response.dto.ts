@@ -76,6 +76,7 @@ export class BookingResponseDto {
 
   @ApiProperty({ format: 'date-time' })
   updatedAt!: Date;
+  @ApiPropertyOptional({nullable:true,description:'Immutable patient-safe V2 commercial configuration.'})commercialConfiguration!:Record<string,unknown>|null;
 
   static fromEntity(booking: Booking): BookingResponseDto {
     return {
@@ -103,6 +104,8 @@ export class BookingResponseDto {
       visitAddressSummary: booking.visitAddress ? { city: booking.visitAddress.city, stateOrRegion: booking.visitAddress.stateOrRegion, postalCode: booking.visitAddress.postalCode, countryCode: booking.visitAddress.countryCode } : null,
       createdAt: booking.createdAt,
       updatedAt: booking.updatedAt,
+      commercialConfiguration: BookingResponseDto.commercial(booking),
     };
   }
+  private static commercial(booking:Booking):Record<string,unknown>|null{const value=booking.commercialConfigurationSnapshot as any;if(!value)return null;return{package:value.package??null,provider:value.provider??null,providerLocation:value.providerLocation??null,fulfilmentMode:value.fulfilmentMode??null,includedContents:Array.isArray(value.includedContents)?value.includedContents:[],selectedAddons:Array.isArray(value.selectedAddons)?value.selectedAddons:[],pricing:{basePackagePriceMinor:Number(booking.basePackagePriceMinor??0),clinicalAddonsTotalMinor:Number(booking.clinicalAddonsTotalMinor??0),fulfilmentFeeMinor:Number(booking.fulfilmentFeeMinor??0),totalMinor:booking.quotedAmount?Math.round(Number(booking.quotedAmount)*100):null,currency:booking.currency}};}
 }

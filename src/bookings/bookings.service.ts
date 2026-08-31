@@ -26,6 +26,7 @@ import { ProviderCapabilitiesService } from '../providers/provider-capabilities.
 import { deriveAppointmentEndTime } from '../providers/booking-availability-context';
 import { ProviderService } from '../providers/entities/provider-service.entity';
 import { ProviderServiceAddon } from '../providers/entities/provider-service-addon.entity';
+import { HealthCheckConfigurationQuote } from '../health-checks/entities/health-check-configuration-quote.entity';
 
 
 @Injectable()
@@ -44,13 +45,18 @@ export class BookingsService {
     @InjectRepository(FulfilmentMode)
     private readonly fulfilmentModeRepository: Repository<FulfilmentMode>,
     private readonly providerCapabilities: ProviderCapabilitiesService,
+    @InjectRepository(HealthCheckConfigurationQuote) private readonly configurationQuotes:Repository<HealthCheckConfigurationQuote>,
   ) {}
 
   async createSelf(user: User, dto: CreateSelfBookingDto): Promise<BookingResponseDto> {
     const patient = await this.patientRepository.findOne({ where: { userId: user.id }, withDeleted: true });
     if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE) throw new NotFoundException('SELF Patient identity was not found for the authenticated user');
-    return this.create({ ...dto, bookerUserId: user.id, participantPatientId: patient.id });
+    if(dto.configurationReference)return this.createFromQuote(user,patient,dto);
+    if(!dto.healthCheckPackageId||!dto.fulfilmentModeId)throw new BadRequestException('Legacy booking requires healthCheckPackageId and fulfilmentModeId, or supply configurationReference');
+    return this.create({ ...dto, healthCheckPackageId:dto.healthCheckPackageId,fulfilmentModeId:dto.fulfilmentModeId,bookerUserId: user.id, participantPatientId: patient.id });
   }
+
+  private async createFromQuote(user:User,patient:Patient,dto:CreateSelfBookingDto):Promise<BookingResponseDto>{validateBookingSchedulingPreference(dto as CreateBookingDto);for(let attempt=0;attempt<MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS;attempt+=1){try{const saved=await this.bookingRepository.manager.transaction(async manager=>{const quote=await manager.getRepository(HealthCheckConfigurationQuote).findOne({where:{reference:dto.configurationReference!,userId:user.id,patientId:patient.id},relations:{providerService:{provider:true,healthCheckPackage:true,fulfilmentMode:true},providerLocation:true},lock:{mode:'pessimistic_write'}});if(!quote)throw new NotFoundException('Health Check configuration quote not found');if(quote.bookingId){const existing=await manager.getRepository(Booking).findOne({where:{id:quote.bookingId}});if(existing)return existing;}if(quote.consumedAt)throw new ConflictException('Health Check configuration quote has already been consumed');if(quote.expiresAt.getTime()<=Date.now())throw new ConflictException('Health Check configuration quote has expired');const offering=quote.providerService;if(!offering?.isActive||!offering.healthCheckPackage.isActive||!offering.fulfilmentMode.isActive)throw new ConflictException('Quoted Health Check offering is no longer available');await this.validateVisitAddress(offering.fulfilmentModeId,dto.visitAddress);const end=offering.healthCheckPackage.estimatedDurationMinutes?deriveAppointmentEndTime(dto.preferredTimeWindowStart,offering.healthCheckPackage.estimatedDurationMinutes):null;if(!end)throw new BadRequestException('Health Check package has no valid appointment duration');const address=dto.visitAddress?this.normalizedAddress(dto.visitAddress):null;const eligible=await this.providerCapabilities.findEligibleProviders(offering.healthCheckPackageId,offering.fulfilmentModeId,{requestedDate:dto.preferredDate,requestedStartTime:dto.preferredTimeWindowStart,requestedEndTime:end,requestedTimezone:dto.preferredTimezone,visitAddress:address});if(!eligible.some((x)=>x.id===offering.id))throw new ConflictException('Selected Provider is unavailable for the requested appointment');const bookingRepo=manager.getRepository(Booking);const booking=bookingRepo.create({bookingReference:generateBookingReference(),bookerUserId:user.id,participantPatientId:patient.id,organisationContextId:null,healthCheckPackageId:offering.healthCheckPackageId,fulfilmentModeId:offering.fulfilmentModeId,providerLocationId:quote.providerLocationId,commercialProviderId:offering.providerId,commercialProviderServiceId:offering.id,preferredDate:dto.preferredDate,preferredTimeWindowStart:dto.preferredTimeWindowStart,preferredTimeWindowEnd:null,preferredTimezone:dto.preferredTimezone,preferredLocationNote:dto.preferredLocationNote??null,status:BookingStatus.DRAFT,currency:quote.currency,quotedAmount:this.fromMinor(quote.totalMinor),basePackagePriceMinor:quote.basePackagePriceMinor,clinicalAddonsTotalMinor:quote.clinicalAddonsTotalMinor,fulfilmentFeeMinor:quote.fulfilmentFeeMinor,commercialConfigurationSnapshot:quote.configurationSnapshot});const row=await bookingRepo.save(booking);if(dto.visitAddress)await manager.getRepository(BookingVisitAddress).save(manager.getRepository(BookingVisitAddress).create({...this.normalizedAddress(dto.visitAddress),bookingId:row.id}));await manager.getRepository(BookingStatusHistory).save(manager.getRepository(BookingStatusHistory).create({bookingId:row.id,fromStatus:null,toStatus:BookingStatus.DRAFT,actorUserId:user.id}));quote.bookingId=row.id;quote.consumedAt=new Date();await manager.getRepository(HealthCheckConfigurationQuote).save(quote);return row;});return this.findByReference(saved.bookingReference);}catch(error){if(!isBookingReferenceCollision(error)||attempt===MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS-1)throw error;}}throw new ConflictException('Unable to generate a unique booking reference');}
 
   async requireSelfBooking(user: User, bookingReference: string): Promise<Booking> {
     if (user.deletedAt || user.status !== UserStatus.ACTIVE) this.selfBookingNotFound();
@@ -146,6 +152,7 @@ export class BookingsService {
         fulfilmentMode: true,
         participant: true,
         visitAddress: true,
+        providerLocation:true,
       },
     });
 

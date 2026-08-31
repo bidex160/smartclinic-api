@@ -32,6 +32,7 @@ import { MeHealthCheckBookingsController } from './me-health-check-bookings.cont
 import { MeHealthCheckPaymentsController, MeHealthCheckRewardsController } from './me-health-check-payments.controller';
 import { ProvidersModule } from '../providers/providers.module';
 import { ProviderService } from '../providers/entities/provider-service.entity';
+import { HealthCheckConfigurationQuote } from '../health-checks/entities/health-check-configuration-quote.entity';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { ProviderService } from '../providers/entities/provider-service.entity';
       PublicBookingSession,
       HealthResultAccessGrant,
       ProviderService,
+      HealthCheckConfigurationQuote,
     ]),
   ],
   controllers: [BookingsController, PublicBookingsController, AdminBookingLifecycleController, MePatientLinkingController, MeHealthCheckBookingsController, MeHealthCheckPaymentsController, MeHealthCheckRewardsController],

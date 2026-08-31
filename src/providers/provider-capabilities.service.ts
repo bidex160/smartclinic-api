@@ -20,6 +20,7 @@ import { ProviderServiceLocation } from "./entities/provider-service-location.en
 import { ProviderService } from "./entities/provider-service.entity";
 import { Provider } from "./entities/provider.entity";
 import { ProviderStatus } from "./enums/provider-status.enum";
+import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 import { DayOfWeek } from "./enums/day-of-week.enum";
 import { UpdateProviderServicePriceDto } from './dto/update-provider-service-price.dto';
 
@@ -34,6 +35,7 @@ export interface AvailabilityWindow {
     stateOrRegion: string;
     city: string;
     postalCode: string | null;
+    addressLine1?: string;
   } | null;
 }
 
@@ -447,6 +449,7 @@ export class ProviderCapabilitiesService {
     .andWhere('provider.status = :status', {
       status: ProviderStatus.ACTIVE,
     })
+    .andWhere('provider.onboardingStatus = :onboardingStatus', { onboardingStatus: ProviderOnboardingStatus.APPROVED })
     .andWhere('provider.deletedAt IS NULL')
     .andWhere('package.isActive = true')
     .andWhere('mode.isActive = true')

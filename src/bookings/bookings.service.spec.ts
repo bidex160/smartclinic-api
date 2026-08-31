@@ -29,6 +29,7 @@ describe('BookingsService', () => {
       ...createBookingDto,
       id: 'e1585f20-fa0e-4e8f-9a8a-a6ba805ef5a5',
       bookingReference: 'SC-2026-ABCDEFGHIJKL',
+      commercialConfiguration: null,
       organisationContextId: null,
       quotedAmount: '12500.00',
       currency: 'NGN',
@@ -69,6 +70,7 @@ describe('BookingsService', () => {
       referenceRepository as never,
       referenceRepository as never,
       providerCapabilities as never,
+      {} as never,
     );
 
     return {
@@ -147,6 +149,7 @@ describe('BookingsService', () => {
 
     await expect(service.findByReference('SC-2026-ABCDEFGHIJKL')).resolves.toEqual({
       bookingReference: 'SC-2026-ABCDEFGHIJKL',
+      commercialConfiguration: null,
       status: BookingStatus.DRAFT,
       healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential Health Check' },
       fulfilmentMode: { code: 'PROVIDER_LOCATION', name: 'Provider location' },
@@ -164,7 +167,7 @@ describe('BookingsService', () => {
     });
     expect(bookingRepository.findOne).toHaveBeenCalledWith({
       where: { bookingReference: 'SC-2026-ABCDEFGHIJKL' },
-      relations: { healthCheckPackage: true, fulfilmentMode: true, participant: true, visitAddress: true },
+      relations: { healthCheckPackage: true, fulfilmentMode: true, participant: true, visitAddress: true, providerLocation: true },
     });
     expect(packagePricingService.findEligibleProviders).not.toHaveBeenCalled();
   });
