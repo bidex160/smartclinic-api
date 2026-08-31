@@ -20,9 +20,20 @@ import { GuidedSelfCheckClassificationsService } from "./guided-self-check-class
 import { GuidedSelfCheckQuestionnairesService } from "./guided-self-check-questionnaires.service";
 import { GuidedSelfChecksService } from "./guided-self-checks.service";
 import { User } from "src/users/entities/user.entity";
+import { ProvidersModule } from "../providers/providers.module";
+import { Provider } from "../providers/entities/provider.entity";
+import { GuidedSelfCheckProfessionalReview } from "./entities/guided-self-check-professional-review.entity";
+import { GuidedSelfCheckProfessionalReviewHistory } from "./entities/guided-self-check-professional-review-history.entity";
+import { GuidedSelfCheckProfessionalReviewsService } from "./guided-self-check-professional-reviews.service";
+import { AdminGuidedSelfCheckReviewsController,ProviderGuidedSelfCheckReviewsController } from "./guided-self-check-reviews.controller";
+import { GuidedSelfCheckReviewerAuthorization } from "./entities/guided-self-check-reviewer-authorization.entity";
+import { GuidedSelfCheckReviewerAuthorizationHistory } from "./entities/guided-self-check-reviewer-authorization-history.entity";
+import { GuidedSelfCheckReviewerAuthorizationsService } from "./guided-self-check-reviewer-authorizations.service";
+import { GuidedSelfCheckReviewerDirectoryController,GuidedSelfCheckReviewerGovernanceController } from "./guided-self-check-reviewer-authorizations.controller";
 @Module({
   imports: [
     AuthModule,
+    ProvidersModule,
     TypeOrmModule.forFeature([
       GuidedSelfCheckProduct,
       GuidedSelfCheck,
@@ -34,6 +45,11 @@ import { User } from "src/users/entities/user.entity";
       GuidedSelfCheckClinicalRuleset,
       GuidedSelfCheckClassificationResult,
       User,
+      Provider,
+      GuidedSelfCheckProfessionalReview,
+      GuidedSelfCheckProfessionalReviewHistory,
+      GuidedSelfCheckReviewerAuthorization,
+      GuidedSelfCheckReviewerAuthorizationHistory,
     ]),
   ],
   controllers: [
@@ -41,11 +57,17 @@ import { User } from "src/users/entities/user.entity";
     MeGuidedSelfChecksController,
     AdminGuidedSelfCheckController,
     AdminGuidedSelfCheckClassificationsController,
+    AdminGuidedSelfCheckReviewsController,
+    ProviderGuidedSelfCheckReviewsController,
+    GuidedSelfCheckReviewerDirectoryController,
+    GuidedSelfCheckReviewerGovernanceController,
   ],
   providers: [
     GuidedSelfChecksService,
     GuidedSelfCheckQuestionnairesService,
     GuidedSelfCheckClassificationsService,
+    GuidedSelfCheckProfessionalReviewsService,
+    GuidedSelfCheckReviewerAuthorizationsService,
   ],
   exports: [GuidedSelfChecksService],
 })
