@@ -25,7 +25,7 @@ import { Provider } from "../providers/entities/provider.entity";
 import { GuidedSelfCheckProfessionalReview } from "./entities/guided-self-check-professional-review.entity";
 import { GuidedSelfCheckProfessionalReviewHistory } from "./entities/guided-self-check-professional-review-history.entity";
 import { GuidedSelfCheckProfessionalReviewsService } from "./guided-self-check-professional-reviews.service";
-import { AdminGuidedSelfCheckReviewsController } from "./guided-self-check-reviews.controller";
+import { AdminGuidedSelfCheckReviewsController, InternalClinicalGuidedSelfCheckReviewsController } from "./guided-self-check-reviews.controller";
 import { GuidedSelfCheckReviewerAuthorization } from "./entities/guided-self-check-reviewer-authorization.entity";
 import { GuidedSelfCheckReviewerAuthorizationHistory } from "./entities/guided-self-check-reviewer-authorization-history.entity";
 import { GuidedSelfCheckNextAction } from "./entities/guided-self-check-next-action.entity";
@@ -41,6 +41,10 @@ import { GuidedSelfCheckClassificationReprocessingController } from "./guided-se
 import { GuidedSelfCheckAnalysis } from "./entities/guided-self-check-analysis.entity";
 import { GuidedSelfCheckAnalysisService } from "./guided-self-check-analysis.service";
 import { GuidedSelfCheckAnalysisController } from "./guided-self-check-analysis.controller";
+import { GuidedSelfCheckInternalClinicalProfessional } from "./entities/guided-self-check-internal-clinical-professional.entity";
+import { GuidedSelfCheckInternalClinicalProfessionalHistory } from "./entities/guided-self-check-internal-clinical-professional-history.entity";
+import { GuidedSelfCheckInternalClinicalProfessionalsService } from "./guided-self-check-internal-clinical-professionals.service";
+import { GuidedSelfCheckInternalClinicalProfessionalAdministrationController, GuidedSelfCheckInternalClinicalProfessionalDirectoryController } from "./guided-self-check-internal-clinical-professionals.controller";
 @Module({
   imports: [
     AuthModule,
@@ -67,6 +71,8 @@ import { GuidedSelfCheckAnalysisController } from "./guided-self-check-analysis.
       GuidedSelfCheckClinicalGovernanceHistory,
       GuidedSelfCheckRulesetAudit,
       GuidedSelfCheckAnalysis,
+      GuidedSelfCheckInternalClinicalProfessional,
+      GuidedSelfCheckInternalClinicalProfessionalHistory,
     ]),
   ],
   controllers: [
@@ -79,6 +85,9 @@ import { GuidedSelfCheckAnalysisController } from "./guided-self-check-analysis.
     GuidedSelfCheckClinicalRulesetsController,
     GuidedSelfCheckClassificationReprocessingController,
     GuidedSelfCheckAnalysisController,
+    InternalClinicalGuidedSelfCheckReviewsController,
+    GuidedSelfCheckInternalClinicalProfessionalDirectoryController,
+    GuidedSelfCheckInternalClinicalProfessionalAdministrationController,
   ],
   providers: [
     GuidedSelfChecksService,
@@ -89,6 +98,7 @@ import { GuidedSelfCheckAnalysisController } from "./guided-self-check-analysis.
     GuidedSelfCheckClinicalGovernanceService,
     GuidedSelfCheckClassificationReprocessingService,
     GuidedSelfCheckAnalysisService,
+    GuidedSelfCheckInternalClinicalProfessionalsService,
   ],
   exports: [GuidedSelfChecksService, GuidedSelfCheckNextActionsService],
 })

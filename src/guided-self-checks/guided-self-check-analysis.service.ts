@@ -17,12 +17,15 @@ import {
   GuidedSelfCheckAnalysisStatus,
 } from './enums/guided-self-check-analysis.enum';
 import { GuidedSelfCheckClassification } from './enums/guided-self-check-classification.enum';
+import { GuidedSelfCheckNextActionType } from './enums/guided-self-check-next-action.enum';
+import { GuidedSelfCheckNextActionsService } from './guided-self-check-next-actions.service';
 
 @Injectable()
 export class GuidedSelfCheckAnalysisService {
   constructor(
     @InjectRepository(GuidedSelfCheckAnalysis) private analyses: Repository<GuidedSelfCheckAnalysis>,
     private data: DataSource,
+    private nextActions: GuidedSelfCheckNextActionsService = undefined as never,
     @Optional() @Inject(GUIDED_SELF_CHECK_ANALYSIS_PORT) private port?: GuidedSelfCheckAnalysisPort,
   ) {}
 
@@ -39,6 +42,7 @@ export class GuidedSelfCheckAnalysisService {
       providerKey: null,
       modelKey: null,
       failureCode: null,
+      humanReviewRecommended: false,
       startedAt: null,
       completedAt: null,
     }));
@@ -101,15 +105,20 @@ export class GuidedSelfCheckAnalysisService {
         const output = await this.port.analyze(request);
         this.validateOutput(output);
         analysis.output = output;
+        analysis.humanReviewRecommended = output.humanReviewSuggested;
         analysis.status = GuidedSelfCheckAnalysisStatus.COMPLETED;
         analysis.failureCode = null;
         analysis.completedAt = new Date();
         await repo.save(analysis);
+        await this.audit(manager, analysis, 'AI_ACTION_SUGGESTED', { suggestedAction: output.recommendedAction });
+        if (output.humanReviewSuggested) await this.audit(manager, analysis, 'HUMAN_REVIEW_RECOMMENDED');
+        await this.nextActions.acceptAmberAnalysisSuggestion(manager, analysis, output.recommendedAction);
         await this.audit(manager, analysis, 'ANALYSIS_COMPLETED');
       } catch {
         analysis.status = GuidedSelfCheckAnalysisStatus.FAILED;
         analysis.failureCode = GuidedSelfCheckAnalysisFailureCode.INVALID_OUTPUT;
         await repo.save(analysis);
+        await this.audit(manager, analysis, 'AI_ACTION_REJECTED', { reason: 'INVALID_OR_UNAPPLICABLE_OUTPUT' });
         await this.audit(manager, analysis, 'ANALYSIS_FAILED');
       }
       return this.internalView(analysis);
@@ -145,15 +154,16 @@ export class GuidedSelfCheckAnalysisService {
   private validateOutput(output: unknown): asserts output is NonNullable<GuidedSelfCheckAnalysis['output']> {
     if (!output || Array.isArray(output) || typeof output !== 'object') throw new ConflictException('AI analysis output failed schema validation');
     const value = output as Record<string, unknown>;
-    const allowed = new Set(['conciseSummary', 'notableResponses', 'inconsistencies', 'informationGaps', 'suggestedOperationalPriority', 'humanReviewSuggested', 'safeReasonCodes']);
+    const allowed = new Set(['conciseSummary', 'notableResponses', 'inconsistencies', 'informationGaps', 'suggestedOperationalPriority', 'humanReviewSuggested', 'safeReasonCodes', 'recommendedAction', 'escalationSuggested']);
     const stringArrays = ['notableResponses', 'inconsistencies', 'informationGaps', 'safeReasonCodes'];
     const invalidArray = stringArrays.some(key => !Array.isArray(value[key]) || (value[key] as unknown[]).length > 50 || (value[key] as unknown[]).some(item => typeof item !== 'string' || item.length > 500));
-    if (Object.keys(value).some(key => !allowed.has(key)) || typeof value.conciseSummary !== 'string' || value.conciseSummary.length > 1_000 || invalidArray || !Object.values(GuidedSelfCheckAnalysisPriority).includes(value.suggestedOperationalPriority as GuidedSelfCheckAnalysisPriority) || typeof value.humanReviewSuggested !== 'boolean') {
+    const allowedActions: unknown[] = [null, GuidedSelfCheckNextActionType.BOOK_ESSENTIAL_CHECK, GuidedSelfCheckNextActionType.FIND_CARE, GuidedSelfCheckNextActionType.REQUEST_PROFESSIONAL_CONTACT];
+    if (Object.keys(value).some(key => !allowed.has(key)) || typeof value.conciseSummary !== 'string' || value.conciseSummary.length > 1_000 || invalidArray || !Object.values(GuidedSelfCheckAnalysisPriority).includes(value.suggestedOperationalPriority as GuidedSelfCheckAnalysisPriority) || typeof value.humanReviewSuggested !== 'boolean' || !allowedActions.includes(value.recommendedAction) || typeof value.escalationSuggested !== 'boolean') {
       throw new ConflictException('AI analysis output failed schema validation');
     }
   }
 
-  private audit(manager: EntityManager, analysis: GuidedSelfCheckAnalysis, event: string) {
+  private audit(manager: EntityManager, analysis: GuidedSelfCheckAnalysis, event: string, extra: Record<string, unknown> = {}) {
     return manager.getRepository(GuidedSelfCheckHistory).save({
       guidedSelfCheckId: analysis.guidedSelfCheckId,
       event,
@@ -164,6 +174,7 @@ export class GuidedSelfCheckAnalysisService {
         providerKey: analysis.providerKey,
         modelKey: analysis.modelKey,
         failureCode: analysis.failureCode,
+        ...extra,
       },
     });
   }

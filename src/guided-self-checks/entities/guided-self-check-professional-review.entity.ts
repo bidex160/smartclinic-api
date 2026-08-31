@@ -8,6 +8,7 @@ import { GuidedSelfCheckClassificationResult } from './guided-self-check-classif
 import { GuidedSelfCheck } from './guided-self-check.entity';
 import { GuidedSelfCheckProfessionalReviewHistory } from './guided-self-check-professional-review-history.entity';
 import { GuidedSelfCheckReviewerAuthorization } from './guided-self-check-reviewer-authorization.entity';
+import { GuidedSelfCheckInternalClinicalProfessional } from './guided-self-check-internal-clinical-professional.entity';
 
 @Entity('guided_self_check_professional_reviews')
 @Index('UQ_gsc_review_reference',['reference'],{unique:true})
@@ -31,6 +32,8 @@ export class GuidedSelfCheckProfessionalReview {
  @ManyToOne(()=>User,{nullable:true,onDelete:'RESTRICT'}) @JoinColumn({name:'acknowledged_by_user_id'}) acknowledgedByUser!:User|null;
  @Column({name:'acknowledged_at',type:'timestamptz',nullable:true}) acknowledgedAt!:Date|null;
  @Column({name:'operational_note',type:'varchar',length:1000,nullable:true}) operationalNote!:string|null;
+ @Column({name:'assigned_internal_clinical_professional_id',type:'uuid',nullable:true}) assignedInternalClinicalProfessionalId!:string|null;
+ @ManyToOne(()=>GuidedSelfCheckInternalClinicalProfessional,{nullable:true,onDelete:'RESTRICT'}) @JoinColumn({name:'assigned_internal_clinical_professional_id'}) assignedInternalClinicalProfessional!:GuidedSelfCheckInternalClinicalProfessional|null;
  @Column({name:'assigned_reviewer_user_id',type:'uuid',nullable:true}) assignedReviewerUserId!:string|null;
  @ManyToOne(()=>User,{nullable:true,onDelete:'RESTRICT'}) @JoinColumn({name:'assigned_reviewer_user_id'}) assignedReviewerUser!:User|null;
  @Column({name:'assigned_reviewer_provider_id',type:'uuid',nullable:true}) assignedReviewerProviderId!:string|null;
@@ -43,6 +46,8 @@ export class GuidedSelfCheckProfessionalReview {
  @Column({name:'cancelled_at',type:'timestamptz',nullable:true}) cancelledAt!:Date|null;
  @Column({type:'enum',enum:GuidedSelfCheckReviewDecision,enumName:'guided_self_check_review_decision_enum',nullable:true}) decision!:GuidedSelfCheckReviewDecision|null;
  @Column({name:'reviewer_notes',type:'text',nullable:true}) reviewerNotes!:string|null;
+ @Column({name:'patient_guidance',type:'varchar',length:1000,nullable:true}) patientGuidance!:string|null;
+ @Column({name:'internal_clinical_note',type:'varchar',length:3000,nullable:true}) internalClinicalNote!:string|null;
  @Column({name:'contact_required',type:'boolean',default:false}) contactRequired!:boolean;
  @Column({name:'contact_status',type:'enum',enum:GuidedSelfCheckContactStatus,enumName:'guided_self_check_contact_status_enum',default:GuidedSelfCheckContactStatus.NOT_REQUIRED}) contactStatus!:GuidedSelfCheckContactStatus;
  @Column({name:'contacted_at',type:'timestamptz',nullable:true}) contactedAt!:Date|null;
