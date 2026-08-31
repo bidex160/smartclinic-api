@@ -19,7 +19,7 @@ describe('Guided Self-Check internal clinical RED review', () => {
     const historyRepo = { save: jest.fn() };
     const manager: any = { getRepository: jest.fn((entity: any) => entity.name === 'GuidedSelfCheckProfessionalReview' ? reviewRepo : historyRepo), save: reviewRepo.save };
     const data: any = { transaction: jest.fn((fn: any) => fn(manager)) };
-    const professionals = { eligible: jest.fn().mockResolvedValue(professional), eligibleForUser: jest.fn().mockResolvedValue(professional) };
+    const professionals = { eligible: jest.fn().mockResolvedValue(professional), activeForUser: jest.fn().mockResolvedValue(professional), requireCapability: jest.fn() };
     const nextActions = { selectForReview: jest.fn().mockResolvedValue({ type: GuidedSelfCheckNextActionType.FIND_CARE }), operational: jest.fn() };
     return { subject: new GuidedSelfCheckProfessionalReviewsService(reviewRepo as never, data, nextActions as never, professionals as never), review, reviewRepo, historyRepo, professionals, nextActions };
   }
@@ -35,7 +35,7 @@ describe('Guided Self-Check internal clinical RED review', () => {
   it('only the exact assigned capable professional can start', async () => {
     const h = harness({ status: GuidedSelfCheckReviewStatus.ASSIGNED, assignedInternalClinicalProfessionalId: professional.id, assignedInternalClinicalProfessional: professional });
     await expect(h.subject.startInternal(h.review.reference, user)).resolves.toMatchObject({ status: GuidedSelfCheckReviewStatus.IN_REVIEW });
-    h.professionals.eligibleForUser.mockResolvedValueOnce({ ...professional, id: 'other' });
+    h.professionals.activeForUser.mockResolvedValueOnce({ ...professional, id: 'other' });
     await expect(h.subject.startInternal(h.review.reference, { id: 'other-user' } as any)).rejects.toBeInstanceOf(ForbiddenException);
   });
 

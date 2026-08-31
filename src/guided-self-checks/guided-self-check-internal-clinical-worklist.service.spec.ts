@@ -5,7 +5,7 @@ import { GuidedSelfCheckClassification } from './enums/guided-self-check-classif
 import { GuidedSelfCheckReviewModel, GuidedSelfCheckReviewPriority, GuidedSelfCheckReviewStatus } from './enums/guided-self-check-review.enum';
 
 describe('Guided Self-Check internal clinical professional worklist', () => {
-  const professional = { id: 'professional-a', reference: 'SC-ICP-AAAAAAAAAAAA' };
+  const professional = { id: 'professional-a', reference: 'SC-ICP-AAAAAAAAAAAA', capabilities: ['SELF_CHECK_CLINICAL_REVIEW','URGENT_SELF_CHECK_REVIEW'] };
   const assignedAt = new Date('2026-08-01T09:00:00Z');
   const startedAt = new Date('2026-08-01T09:05:00Z');
   const createdAt = new Date('2026-08-01T08:00:00Z');
@@ -17,7 +17,7 @@ describe('Guided Self-Check internal clinical professional worklist', () => {
     qb.andWhere = jest.fn((sql: string, params?: Record<string, unknown>) => { calls.push([sql, params]); return qb; });
     qb.getManyAndCount = jest.fn().mockResolvedValue([rows, rows.length]);
     const reviews = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
-    const professionals = { eligibleForUser: jest.fn().mockResolvedValue(professional) };
+    const professionals = { activeForUser: jest.fn().mockResolvedValue(professional) };
     const subject = new GuidedSelfCheckProfessionalReviewsService(reviews as never, { manager: {} } as never, {} as never, professionals as never);
     return { subject, qb, calls, professionals };
   }
@@ -34,14 +34,14 @@ describe('Guided Self-Check internal clinical professional worklist', () => {
   it.each([UserRole.USER, UserRole.PROVIDER, UserRole.ADMIN, UserRole.OPERATIONS])('derives identity from the authenticated %s user without role widening', async role => {
     const h = harness([row()]);
     const result = await h.subject.listMine({ id: `user-${role}`, role } as any, { page: 1, limit: 20 });
-    expect(h.professionals.eligibleForUser).toHaveBeenCalledWith(`user-${role}`, 'URGENT_SELF_CHECK_REVIEW');
+    expect(h.professionals.activeForUser).toHaveBeenCalledWith(`user-${role}`);
     expect(h.calls).toContainEqual(['review.assignedInternalClinicalProfessionalId = :professionalId', { professionalId: professional.id }]);
     expect(result.items).toEqual([{ reference: 'SC-GSR-ABCDEF123456', selfCheckReference: 'SC-GSC-ABCDEF123456', classification: 'RED', priority: 'URGENT', status: 'ASSIGNED', assignedAt, startedAt, createdAt }]);
   });
 
   it.each([UserRole.USER, UserRole.PROVIDER, UserRole.ADMIN, UserRole.OPERATIONS])('rejects %s when no active capable professional identity exists', async role => {
     const h = harness();
-    h.professionals.eligibleForUser.mockRejectedValueOnce(new ForbiddenException());
+    h.professionals.activeForUser.mockRejectedValueOnce(new ForbiddenException());
     await expect(h.subject.listMine({ id: `user-${role}`, role } as any, { page: 1, limit: 20 })).rejects.toBeInstanceOf(ForbiddenException);
     expect(h.qb.getManyAndCount).not.toHaveBeenCalled();
   });
@@ -50,7 +50,7 @@ describe('Guided Self-Check internal clinical professional worklist', () => {
     const h = harness();
     await h.subject.listMine({ id: 'user-a' } as any, { page: 2, limit: 10 });
     expect(h.calls).toEqual(expect.arrayContaining([
-      ['review.reviewModel = :reviewModel', { reviewModel: GuidedSelfCheckReviewModel.INTERNAL_URGENT }],
+      ['review.reviewModel IN (:...reviewModels)', { reviewModels: [GuidedSelfCheckReviewModel.INTERNAL_URGENT, GuidedSelfCheckReviewModel.INTERNAL_ROUTINE] }],
       ['review.assignedInternalClinicalProfessionalId = :professionalId', { professionalId: professional.id }],
       ['review.status IN (:...actionableStatuses)', { actionableStatuses: [GuidedSelfCheckReviewStatus.ASSIGNED, GuidedSelfCheckReviewStatus.IN_REVIEW] }],
     ]));
@@ -73,5 +73,16 @@ describe('Guided Self-Check internal clinical professional worklist', () => {
   it('returns a normal empty paginated result', async () => {
     const h = harness();
     await expect(h.subject.listMine({ id: 'user-a' } as any, { page: 1, limit: 20 })).resolves.toEqual({ items: [], total: 0, page: 1, limit: 20 });
+  });
+
+  it('scopes routine and urgent models to the exact active capability', async () => {
+    const h = harness();
+    h.professionals.activeForUser.mockResolvedValueOnce({ ...professional, capabilities: ['SELF_CHECK_CLINICAL_REVIEW'] });
+    await h.subject.listMine({ id: 'routine-clinician' } as any, { page: 1, limit: 20 });
+    expect(h.calls).toContainEqual(['review.reviewModel IN (:...reviewModels)', { reviewModels: [GuidedSelfCheckReviewModel.INTERNAL_ROUTINE] }]);
+    const urgent = harness();
+    urgent.professionals.activeForUser.mockResolvedValueOnce({ ...professional, capabilities: ['URGENT_SELF_CHECK_REVIEW'] });
+    await urgent.subject.listMine({ id: 'urgent-clinician' } as any, { page: 1, limit: 20 });
+    expect(urgent.calls).toContainEqual(['review.reviewModel IN (:...reviewModels)', { reviewModels: [GuidedSelfCheckReviewModel.INTERNAL_URGENT] }]);
   });
 });

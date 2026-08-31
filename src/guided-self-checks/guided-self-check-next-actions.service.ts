@@ -10,6 +10,7 @@ import { GuidedSelfCheckProfessionalReview } from './entities/guided-self-check-
 import { GuidedSelfCheckClassification } from './enums/guided-self-check-classification.enum';
 import { GuidedSelfCheckNextActionSource, GuidedSelfCheckNextActionType } from './enums/guided-self-check-next-action.enum';
 import { GuidedSelfCheckReviewDecision } from './enums/guided-self-check-review.enum';
+import { GuidedSelfCheckContactWorkItemsService } from './guided-self-check-contact-work-items.service';
 
 const PRESENTATION: Record<GuidedSelfCheckNextActionType, { titleKey: string; title: string; message: string; cta: Record<string, string> }> = {
   [GuidedSelfCheckNextActionType.CONTINUE_STAYING_WELL]: { titleKey: 'SELF_CHECK_CONTINUE_STAYING_WELL', title: 'Continue staying well', message: 'Keep supporting your wellbeing and seek care whenever you have concerns. This Self-Check is not a diagnosis.', cta: { type: 'NONE' } },
@@ -21,7 +22,7 @@ const PRESENTATION: Record<GuidedSelfCheckNextActionType, { titleKey: string; ti
 
 @Injectable()
 export class GuidedSelfCheckNextActionsService {
-  constructor(@InjectRepository(GuidedSelfCheckNextAction) private actions: Repository<GuidedSelfCheckNextAction>, private data: DataSource) {}
+  constructor(@InjectRepository(GuidedSelfCheckNextAction) private actions: Repository<GuidedSelfCheckNextAction>, private data: DataSource, private contacts: GuidedSelfCheckContactWorkItemsService = undefined as never) {}
 
   classificationType(classification: GuidedSelfCheckClassification) {
     return classification === GuidedSelfCheckClassification.GREEN ? GuidedSelfCheckNextActionType.CONTINUE_STAYING_WELL : classification === GuidedSelfCheckClassification.AMBER ? GuidedSelfCheckNextActionType.REQUEST_PROFESSIONAL_CONTACT : GuidedSelfCheckNextActionType.SEEK_URGENT_ASSESSMENT;
@@ -38,8 +39,9 @@ export class GuidedSelfCheckNextActionsService {
     const type = this.classificationType(result.classification);
     const repo = manager.getRepository(GuidedSelfCheckNextAction);
     const current = await repo.findOne({ where: { guidedSelfCheckId: result.guidedSelfCheckId, isCurrent: true }, lock: { mode: 'pessimistic_read' } });
-    if (current) return current;
-    return repo.save(repo.create({ guidedSelfCheckId: result.guidedSelfCheckId, classificationId: result.id, professionalReviewId: null, analysisId: null, type, source: GuidedSelfCheckNextActionSource.CLASSIFICATION, targetMetadata: this.target(type), isCurrent: true, selectedByUserId: null, selectedAt: new Date() }));
+    if (current) { if(this.contacts)await this.contacts.reconcileCurrent(manager,current); return current; }
+    const action=await repo.save(repo.create({ guidedSelfCheckId: result.guidedSelfCheckId, classificationId: result.id, professionalReviewId: null, analysisId: null, type, source: GuidedSelfCheckNextActionSource.CLASSIFICATION, targetMetadata: this.target(type), isCurrent: true, selectedByUserId: null, selectedAt: new Date() }));
+    if(this.contacts)await this.contacts.reconcileCurrent(manager,action);return action;
   }
 
   allowed(decision: GuidedSelfCheckReviewDecision, classification?: GuidedSelfCheckClassification): GuidedSelfCheckNextActionType[] {
@@ -49,6 +51,13 @@ export class GuidedSelfCheckNextActionsService {
         case GuidedSelfCheckReviewDecision.FOLLOW_UP_RECOMMENDED: return [GuidedSelfCheckNextActionType.FIND_CARE, GuidedSelfCheckNextActionType.BOOK_ESSENTIAL_CHECK, GuidedSelfCheckNextActionType.REQUEST_PROFESSIONAL_CONTACT];
         case GuidedSelfCheckReviewDecision.PATIENT_CONTACT_REQUIRED: return [GuidedSelfCheckNextActionType.REQUEST_PROFESSIONAL_CONTACT];
         case GuidedSelfCheckReviewDecision.URGENT_ESCALATION_CONFIRMED: return [GuidedSelfCheckNextActionType.SEEK_URGENT_ASSESSMENT, GuidedSelfCheckNextActionType.FIND_CARE];
+      }
+    }
+    if (classification === GuidedSelfCheckClassification.AMBER) {
+      switch (decision) {
+        case GuidedSelfCheckReviewDecision.FOLLOW_UP_RECOMMENDED: return [GuidedSelfCheckNextActionType.BOOK_ESSENTIAL_CHECK, GuidedSelfCheckNextActionType.FIND_CARE, GuidedSelfCheckNextActionType.REQUEST_PROFESSIONAL_CONTACT];
+        case GuidedSelfCheckReviewDecision.PATIENT_CONTACT_REQUIRED: return [GuidedSelfCheckNextActionType.REQUEST_PROFESSIONAL_CONTACT];
+        default: return [];
       }
     }
     switch (decision) {
@@ -95,10 +104,12 @@ export class GuidedSelfCheckNextActionsService {
     const current = await repo.findOne({ where: { guidedSelfCheckId: value.guidedSelfCheckId, isCurrent: true }, lock: { mode: 'pessimistic_write' } });
     if (current?.source === value.source && current.professionalReviewId === value.professionalReviewId && current.analysisId === value.analysisId) {
       if (current.type !== value.type) throw new ConflictException('Established next action is immutable for this source');
+      if(this.contacts)await this.contacts.reconcileCurrent(manager,current);
       return current;
     }
     if (current) { current.isCurrent = false; await repo.save(current); }
     const action = await repo.save(repo.create({ guidedSelfCheckId: value.guidedSelfCheckId, classificationId: value.classificationId, professionalReviewId: value.professionalReviewId, analysisId: value.analysisId, type: value.type, source: value.source, targetMetadata: this.target(value.type), isCurrent: true, selectedByUserId: value.actorUserId, selectedAt: new Date() }));
+    if(this.contacts)await this.contacts.reconcileCurrent(manager,action);
     await this.audit(manager, value.guidedSelfCheckId, 'NEXT_ACTION_RECOMMENDED', value.actorUserId, { actionType: value.type, source: value.source });
     return action;
   }

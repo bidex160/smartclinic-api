@@ -72,11 +72,13 @@ describe('GuidedSelfCheckAnalysisService', () => {
     const manager: any = { getRepository: jest.fn((entity: any) => entity.name === 'GuidedSelfCheckAnalysis' ? analysisRepo : entity.name === 'GuidedSelfCheckQuestion' ? questionRepo : entity.name === 'GuidedSelfCheckAnswer' ? answerRepo : historyRepo) };
     const data: any = { transaction: jest.fn((fn: any) => fn(manager)) };
     const nextActions = { acceptAmberAnalysisSuggestion: jest.fn() };
+    const reviews = { ensureRoutineForAnalysis: jest.fn() };
     const output: any = { conciseSummary: 'Structured internal summary', notableResponses: [], inconsistencies: [], informationGaps: [], suggestedOperationalPriority: 'ROUTINE', humanReviewSuggested: true, safeReasonCodes: [], recommendedAction: 'BOOK_ESSENTIAL_CHECK', escalationSuggested: false };
     const port = { providerKey: 'test-provider', modelKey: 'test-model', analyze: jest.fn().mockResolvedValue(output) };
-    const service = new GuidedSelfCheckAnalysisService(analysisRepo as never, data, nextActions as never, port);
+    const service = new GuidedSelfCheckAnalysisService(analysisRepo as never, data, nextActions as never, port, reviews as never);
     await expect(service.process(analysis.reference)).resolves.toMatchObject({ status: GuidedSelfCheckAnalysisStatus.COMPLETED });
     expect(nextActions.acceptAmberAnalysisSuggestion).toHaveBeenCalledWith(manager, analysis, 'BOOK_ESSENTIAL_CHECK');
+    expect(reviews.ensureRoutineForAnalysis).toHaveBeenCalledWith(manager, analysis);
     expect(analysis.humanReviewRecommended).toBe(true);
     expect(classification.classification).toBe(GuidedSelfCheckClassification.AMBER);
     expect(historyRepo.save).toHaveBeenCalledWith(expect.objectContaining({ event: 'HUMAN_REVIEW_RECOMMENDED' }));

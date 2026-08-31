@@ -14,4 +14,17 @@ describe('Guided Self-Check patient clinical projection', () => {
     expect(JSON.stringify(result)).not.toContain('Never expose this');
     expect(JSON.stringify(result)).not.toContain('Internal operations only');
   });
+
+  it('exposes only safe AMBER review/contact states without AI output, staff identity or notes', async () => {
+    const check = { id: 'check', reference: 'SC-GSC-AMBER', userId: 'patient' };
+    const classification = { guidedSelfCheckId: 'check', classification: GuidedSelfCheckClassification.AMBER, requiresProfessionalReview: true, urgentAction: false, patientMessageKey: GuidedSelfCheckPatientMessageKey.AMBER_REVIEW, classifiedAt: new Date() };
+    const review = { status: 'COMPLETED', completedAt: new Date(), patientGuidance: 'Please arrange the recommended follow-up.', internalClinicalNote: 'hidden' };
+    const analysis = { status: 'COMPLETED', humanReviewRecommended: true, output: { conciseSummary: 'internal AI output' }, providerKey: 'hidden-provider' };
+    const data: any = { manager: { getRepository: jest.fn((entity: any) => ({ findOne: jest.fn().mockResolvedValue(entity.name === 'GuidedSelfCheckProfessionalReview' ? review : analysis) })) } };
+    const contacts = { patientState: jest.fn().mockResolvedValue({ required: true, status: 'ACKNOWLEDGED', completedAt: null, outcome: null }) };
+    const service = new GuidedSelfCheckClassificationsService({ findOne: jest.fn().mockResolvedValue(classification) } as never, { findOne: jest.fn().mockResolvedValue(check) } as never, data, contacts as never);
+    const result = await service.getPatientResult(check.reference, check.userId);
+    expect(result).toMatchObject({ classification: { classification: 'AMBER' }, professionalReview: { status: 'COMPLETED', patientGuidance: 'Please arrange the recommended follow-up.' }, professionalContact: { status: 'ACKNOWLEDGED' }, analysis: { status: 'COMPLETED', humanReviewRecommended: true } });
+    expect(JSON.stringify(result)).not.toMatch(/internal AI output|hidden-provider|internalClinicalNote|staff|assigned/i);
+  });
 });

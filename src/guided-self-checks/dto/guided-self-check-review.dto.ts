@@ -1,13 +1,14 @@
 import { Type } from 'class-transformer';
 import { IsBoolean,IsEnum,IsInt,IsOptional,IsString,Matches,Max,MaxLength,Min } from 'class-validator';
 import { GuidedSelfCheckClassification } from '../enums/guided-self-check-classification.enum';
-import { GuidedSelfCheckReviewDecision,GuidedSelfCheckReviewPriority,GuidedSelfCheckReviewStatus } from '../enums/guided-self-check-review.enum';
+import { GuidedSelfCheckReviewDecision,GuidedSelfCheckReviewModel,GuidedSelfCheckReviewPriority,GuidedSelfCheckReviewStatus } from '../enums/guided-self-check-review.enum';
 import { GuidedSelfCheckNextActionType } from '../enums/guided-self-check-next-action.enum';
 export class GuidedSelfCheckReviewListQueryDto{
  @Type(()=>Number)@IsInt()@Min(1)page=1; @Type(()=>Number)@IsInt()@Min(1)@Max(100)limit=20;
  @IsOptional()@IsEnum(GuidedSelfCheckReviewStatus)status?:GuidedSelfCheckReviewStatus;
  @IsOptional()@IsEnum(GuidedSelfCheckReviewPriority)priority?:GuidedSelfCheckReviewPriority;
  @IsOptional()@IsEnum(GuidedSelfCheckClassification)classification?:GuidedSelfCheckClassification;
+ @IsOptional()@IsEnum(GuidedSelfCheckReviewModel)reviewModel?:GuidedSelfCheckReviewModel;
  @IsOptional()@Type(()=>Boolean)@IsBoolean()assigned?:boolean;
 }
 export enum GuidedSelfCheckMyReviewStatus {
@@ -18,6 +19,8 @@ export class GuidedSelfCheckMyReviewListQueryDto{
  @Type(()=>Number)@IsInt()@Min(1)@Max(100)limit=20;
  @IsOptional()@IsEnum(GuidedSelfCheckMyReviewStatus)status?:GuidedSelfCheckMyReviewStatus;
  @IsOptional()@IsEnum(GuidedSelfCheckReviewPriority)priority?:GuidedSelfCheckReviewPriority;
+ @IsOptional()@IsEnum(GuidedSelfCheckReviewModel)reviewModel?:GuidedSelfCheckReviewModel;
+ @IsOptional()@IsEnum(GuidedSelfCheckClassification)classification?:GuidedSelfCheckClassification;
 }
 export class AssignInternalClinicalProfessionalDto{@IsString()@MaxLength(40)professionalReference!:string;}
 const PATIENT_SAFE_GUIDANCE=/^(?![\s\S]*(?:<[^>]*>|https?:\/\/|javascript:))[\s\S]*$/i;

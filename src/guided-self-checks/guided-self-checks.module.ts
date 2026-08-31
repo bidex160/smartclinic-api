@@ -45,6 +45,9 @@ import { GuidedSelfCheckInternalClinicalProfessional } from "./entities/guided-s
 import { GuidedSelfCheckInternalClinicalProfessionalHistory } from "./entities/guided-self-check-internal-clinical-professional-history.entity";
 import { GuidedSelfCheckInternalClinicalProfessionalsService } from "./guided-self-check-internal-clinical-professionals.service";
 import { GuidedSelfCheckInternalClinicalProfessionalAdministrationController, GuidedSelfCheckInternalClinicalProfessionalDirectoryController } from "./guided-self-check-internal-clinical-professionals.controller";
+import { GuidedSelfCheckContactWorkItem } from "./entities/guided-self-check-contact-work-item.entity";
+import { GuidedSelfCheckContactWorkItemsService } from "./guided-self-check-contact-work-items.service";
+import { GuidedSelfCheckContactWorkItemsController } from "./guided-self-check-contact-work-items.controller";
 @Module({
   imports: [
     AuthModule,
@@ -73,6 +76,7 @@ import { GuidedSelfCheckInternalClinicalProfessionalAdministrationController, Gu
       GuidedSelfCheckAnalysis,
       GuidedSelfCheckInternalClinicalProfessional,
       GuidedSelfCheckInternalClinicalProfessionalHistory,
+      GuidedSelfCheckContactWorkItem,
     ]),
   ],
   controllers: [
@@ -88,6 +92,7 @@ import { GuidedSelfCheckInternalClinicalProfessionalAdministrationController, Gu
     InternalClinicalGuidedSelfCheckReviewsController,
     GuidedSelfCheckInternalClinicalProfessionalDirectoryController,
     GuidedSelfCheckInternalClinicalProfessionalAdministrationController,
+    GuidedSelfCheckContactWorkItemsController,
   ],
   providers: [
     GuidedSelfChecksService,
@@ -99,6 +104,7 @@ import { GuidedSelfCheckInternalClinicalProfessionalAdministrationController, Gu
     GuidedSelfCheckClassificationReprocessingService,
     GuidedSelfCheckAnalysisService,
     GuidedSelfCheckInternalClinicalProfessionalsService,
+    GuidedSelfCheckContactWorkItemsService,
   ],
   exports: [GuidedSelfChecksService, GuidedSelfCheckNextActionsService],
 })

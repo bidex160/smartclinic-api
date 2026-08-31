@@ -66,4 +66,14 @@ describe('GuidedSelfCheckNextActionsService', () => {
     expect(rows).toHaveLength(count);
     expect(history.save).toHaveBeenCalledWith(expect.objectContaining({ event: 'AI_ACTION_REJECTED' }));
   });
+
+  it('delegates executable contact work to backend reconciliation without creating care or Provider records', async () => {
+    const repo = { findOne: jest.fn().mockResolvedValue(null), create: jest.fn((value: any) => value), save: jest.fn(async (value: any) => ({ id: 'action', ...value })) };
+    const contacts = { reconcileCurrent: jest.fn() };
+    const manager: any = { getRepository: jest.fn(() => repo) };
+    const subject = new GuidedSelfCheckNextActionsService(repo as never, {} as never, contacts as never);
+    await subject.ensureClassificationAction(manager, { id: 'classification', guidedSelfCheckId: 'check', classification: GuidedSelfCheckClassification.AMBER } as any);
+    expect(contacts.reconcileCurrent).toHaveBeenCalledWith(manager, expect.objectContaining({ type: GuidedSelfCheckNextActionType.REQUEST_PROFESSIONAL_CONTACT }));
+    expect(JSON.stringify(contacts.reconcileCurrent.mock.calls)).not.toMatch(/provider|appointment|careRequest|payment/i);
+  });
 });

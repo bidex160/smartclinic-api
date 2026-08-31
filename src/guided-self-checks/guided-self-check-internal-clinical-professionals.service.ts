@@ -87,17 +87,28 @@ export class GuidedSelfCheckInternalClinicalProfessionalsService {
   }
 
   async eligibleForUser(userId: string, capability: GuidedSelfCheckInternalClinicalCapability, manager: EntityManager = this.data.manager) {
+    const professional = await this.activeForUser(userId, manager);
+    this.requireCapability(professional, capability);
+    return professional;
+  }
+
+  async activeForUser(userId: string, manager: EntityManager = this.data.manager) {
     const professional = await manager.getRepository(GuidedSelfCheckInternalClinicalProfessional).findOne({
       where: { userId }, relations: { user: true }, lock: manager.queryRunner ? { mode: 'pessimistic_read' } : undefined,
     });
-    this.assertEligible(professional, capability);
+    this.assertActive(professional);
     return professional!;
   }
 
+  requireCapability(professional: GuidedSelfCheckInternalClinicalProfessional, capability: GuidedSelfCheckInternalClinicalCapability) {
+    if (!professional.capabilities.includes(capability)) throw new ForbiddenException('Active internal clinical professional capability is required');
+  }
+
   private assertEligible(professional: GuidedSelfCheckInternalClinicalProfessional | null, capability: GuidedSelfCheckInternalClinicalCapability) {
-    if (!professional || professional.status !== GuidedSelfCheckInternalClinicalProfessionalStatus.ACTIVE || professional.disabledAt || !professional.user || professional.user.deletedAt || professional.user.status !== UserStatus.ACTIVE || !professional.capabilities.includes(capability)) {
-      throw new ForbiddenException('Active internal clinical professional capability is required');
-    }
+    this.assertActive(professional);this.requireCapability(professional!,capability);
+  }
+  private assertActive(professional: GuidedSelfCheckInternalClinicalProfessional | null) {
+    if (!professional || professional.status !== GuidedSelfCheckInternalClinicalProfessionalStatus.ACTIVE || professional.disabledAt || !professional.user || professional.user.deletedAt || professional.user.status !== UserStatus.ACTIVE) throw new ForbiddenException('Active internal clinical professional capability is required');
   }
 
   private async lock(manager: EntityManager, reference: string) {

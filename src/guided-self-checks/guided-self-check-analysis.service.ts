@@ -19,6 +19,7 @@ import {
 import { GuidedSelfCheckClassification } from './enums/guided-self-check-classification.enum';
 import { GuidedSelfCheckNextActionType } from './enums/guided-self-check-next-action.enum';
 import { GuidedSelfCheckNextActionsService } from './guided-self-check-next-actions.service';
+import { GuidedSelfCheckProfessionalReviewsService } from './guided-self-check-professional-reviews.service';
 
 @Injectable()
 export class GuidedSelfCheckAnalysisService {
@@ -27,6 +28,7 @@ export class GuidedSelfCheckAnalysisService {
     private data: DataSource,
     private nextActions: GuidedSelfCheckNextActionsService = undefined as never,
     @Optional() @Inject(GUIDED_SELF_CHECK_ANALYSIS_PORT) private port?: GuidedSelfCheckAnalysisPort,
+    private reviews: GuidedSelfCheckProfessionalReviewsService = undefined as never,
   ) {}
 
   async ensureForClassification(manager: EntityManager, result: GuidedSelfCheckClassificationResult) {
@@ -112,6 +114,7 @@ export class GuidedSelfCheckAnalysisService {
         await repo.save(analysis);
         await this.audit(manager, analysis, 'AI_ACTION_SUGGESTED', { suggestedAction: output.recommendedAction });
         if (output.humanReviewSuggested) await this.audit(manager, analysis, 'HUMAN_REVIEW_RECOMMENDED');
+        if (output.humanReviewSuggested && this.reviews) await this.reviews.ensureRoutineForAnalysis(manager, analysis);
         await this.nextActions.acceptAmberAnalysisSuggestion(manager, analysis, output.recommendedAction);
         await this.audit(manager, analysis, 'ANALYSIS_COMPLETED');
       } catch {
