@@ -1,0 +1,3 @@
+import { Type } from 'class-transformer';import { IsEnum,IsInt,IsOptional,Max,Min } from 'class-validator';import { GuidedSelfCheckClassificationStatus } from '../enums/guided-self-check-classification.enum';
+export class GuidedSelfCheckProcessingQueueQueryDto{@IsOptional()@IsEnum(GuidedSelfCheckClassificationStatus)status?:GuidedSelfCheckClassificationStatus;@IsOptional()@Type(()=>Number)@IsInt()@Min(1)questionnaireVersion?:number;@IsOptional()@Type(()=>Number)@IsInt()@Min(1)page=1;@IsOptional()@Type(()=>Number)@IsInt()@Min(1)@Max(100)limit=20;}
+export class GuidedSelfCheckBatchReprocessDto{@IsInt()@Min(1)questionnaireVersion!:number;@IsOptional()@Type(()=>Number)@IsInt()@Min(1)@Max(100)limit=25;}

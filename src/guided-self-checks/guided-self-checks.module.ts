@@ -38,6 +38,8 @@ import { GuidedSelfCheckClinicalGovernanceHistory } from "./entities/guided-self
 import { GuidedSelfCheckRulesetAudit } from "./entities/guided-self-check-ruleset-audit.entity";
 import { GuidedSelfCheckClinicalGovernanceService } from "./guided-self-check-clinical-governance.service";
 import { GuidedSelfCheckClinicalGovernanceAuthorizationsController, GuidedSelfCheckClinicalRulesetsController } from "./guided-self-check-clinical-governance.controller";
+import { GuidedSelfCheckClassificationReprocessingService } from "./guided-self-check-classification-reprocessing.service";
+import { GuidedSelfCheckClassificationReprocessingController } from "./guided-self-check-classification-reprocessing.controller";
 @Module({
   imports: [
     AuthModule,
@@ -76,6 +78,7 @@ import { GuidedSelfCheckClinicalGovernanceAuthorizationsController, GuidedSelfCh
     GuidedSelfCheckReviewerGovernanceController,
     GuidedSelfCheckClinicalGovernanceAuthorizationsController,
     GuidedSelfCheckClinicalRulesetsController,
+    GuidedSelfCheckClassificationReprocessingController,
   ],
   providers: [
     GuidedSelfChecksService,
@@ -85,6 +88,7 @@ import { GuidedSelfCheckClinicalGovernanceAuthorizationsController, GuidedSelfCh
     GuidedSelfCheckReviewerAuthorizationsService,
     GuidedSelfCheckNextActionsService,
     GuidedSelfCheckClinicalGovernanceService,
+    GuidedSelfCheckClassificationReprocessingService,
   ],
   exports: [GuidedSelfChecksService, GuidedSelfCheckNextActionsService],
 })

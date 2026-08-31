@@ -24,6 +24,9 @@ export class GuidedSelfCheck {
  @Column({name:'started_at',type:'timestamptz',nullable:true}) startedAt!:Date|null;
  @Column({name:'completed_at',type:'timestamptz',nullable:true}) completedAt!:Date|null;
  @Column({name:'classification_status',type:'enum',enum:GuidedSelfCheckClassificationStatus,enumName:'guided_self_check_classification_status_enum',default:GuidedSelfCheckClassificationStatus.PENDING}) classificationStatus!:GuidedSelfCheckClassificationStatus;
+ @Column({name:'classification_last_attempt_at',type:'timestamptz',nullable:true}) classificationLastAttemptAt!:Date|null;
+ @Column({name:'classification_failure_code',type:'varchar',length:60,nullable:true}) classificationFailureCode!:string|null;
+ @Column({name:'classification_retry_count',type:'integer',default:0}) classificationRetryCount!:number;
  @CreateDateColumn({name:'created_at',type:'timestamptz'}) createdAt!:Date; @UpdateDateColumn({name:'updated_at',type:'timestamptz'}) updatedAt!:Date;
  @OneToMany(()=>GuidedSelfCheckHistory,h=>h.selfCheck) history!:GuidedSelfCheckHistory[];
 }
