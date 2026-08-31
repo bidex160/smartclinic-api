@@ -25,11 +25,9 @@ import { Provider } from "../providers/entities/provider.entity";
 import { GuidedSelfCheckProfessionalReview } from "./entities/guided-self-check-professional-review.entity";
 import { GuidedSelfCheckProfessionalReviewHistory } from "./entities/guided-self-check-professional-review-history.entity";
 import { GuidedSelfCheckProfessionalReviewsService } from "./guided-self-check-professional-reviews.service";
-import { AdminGuidedSelfCheckReviewsController,ProviderGuidedSelfCheckReviewsController } from "./guided-self-check-reviews.controller";
+import { AdminGuidedSelfCheckReviewsController } from "./guided-self-check-reviews.controller";
 import { GuidedSelfCheckReviewerAuthorization } from "./entities/guided-self-check-reviewer-authorization.entity";
 import { GuidedSelfCheckReviewerAuthorizationHistory } from "./entities/guided-self-check-reviewer-authorization-history.entity";
-import { GuidedSelfCheckReviewerAuthorizationsService } from "./guided-self-check-reviewer-authorizations.service";
-import { GuidedSelfCheckReviewerDirectoryController,GuidedSelfCheckReviewerGovernanceController } from "./guided-self-check-reviewer-authorizations.controller";
 import { GuidedSelfCheckNextAction } from "./entities/guided-self-check-next-action.entity";
 import { GuidedSelfCheckNextActionsService } from "./guided-self-check-next-actions.service";
 import { HealthCheckPackage } from "../health-checks/entities/health-check-package.entity";
@@ -40,6 +38,9 @@ import { GuidedSelfCheckClinicalGovernanceService } from "./guided-self-check-cl
 import { GuidedSelfCheckClinicalGovernanceAuthorizationsController, GuidedSelfCheckClinicalRulesetsController } from "./guided-self-check-clinical-governance.controller";
 import { GuidedSelfCheckClassificationReprocessingService } from "./guided-self-check-classification-reprocessing.service";
 import { GuidedSelfCheckClassificationReprocessingController } from "./guided-self-check-classification-reprocessing.controller";
+import { GuidedSelfCheckAnalysis } from "./entities/guided-self-check-analysis.entity";
+import { GuidedSelfCheckAnalysisService } from "./guided-self-check-analysis.service";
+import { GuidedSelfCheckAnalysisController } from "./guided-self-check-analysis.controller";
 @Module({
   imports: [
     AuthModule,
@@ -65,6 +66,7 @@ import { GuidedSelfCheckClassificationReprocessingController } from "./guided-se
       GuidedSelfCheckClinicalGovernanceAuthorization,
       GuidedSelfCheckClinicalGovernanceHistory,
       GuidedSelfCheckRulesetAudit,
+      GuidedSelfCheckAnalysis,
     ]),
   ],
   controllers: [
@@ -73,22 +75,20 @@ import { GuidedSelfCheckClassificationReprocessingController } from "./guided-se
     AdminGuidedSelfCheckController,
     AdminGuidedSelfCheckClassificationsController,
     AdminGuidedSelfCheckReviewsController,
-    ProviderGuidedSelfCheckReviewsController,
-    GuidedSelfCheckReviewerDirectoryController,
-    GuidedSelfCheckReviewerGovernanceController,
     GuidedSelfCheckClinicalGovernanceAuthorizationsController,
     GuidedSelfCheckClinicalRulesetsController,
     GuidedSelfCheckClassificationReprocessingController,
+    GuidedSelfCheckAnalysisController,
   ],
   providers: [
     GuidedSelfChecksService,
     GuidedSelfCheckQuestionnairesService,
     GuidedSelfCheckClassificationsService,
     GuidedSelfCheckProfessionalReviewsService,
-    GuidedSelfCheckReviewerAuthorizationsService,
     GuidedSelfCheckNextActionsService,
     GuidedSelfCheckClinicalGovernanceService,
     GuidedSelfCheckClassificationReprocessingService,
+    GuidedSelfCheckAnalysisService,
   ],
   exports: [GuidedSelfChecksService, GuidedSelfCheckNextActionsService],
 })

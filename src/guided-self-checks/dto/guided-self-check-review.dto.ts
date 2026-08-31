@@ -13,3 +13,4 @@ export class GuidedSelfCheckReviewListQueryDto{
 export class AssignGuidedSelfCheckReviewDto{@IsString()@MaxLength(40)reviewerReference!:string;}
 export class CompleteGuidedSelfCheckReviewDto{@IsEnum(GuidedSelfCheckReviewDecision)decision!:GuidedSelfCheckReviewDecision;@IsEnum(GuidedSelfCheckNextActionType)nextActionType?:GuidedSelfCheckNextActionType;@IsOptional()@IsString()@MaxLength(5000)reviewerNotes?:string;@IsOptional()@IsBoolean()contactRequired?:boolean;}
 export class CancelGuidedSelfCheckReviewDto{@IsOptional()@IsString()@MaxLength(500)reason?:string;}
+export class TriageGuidedSelfCheckReviewDto{@IsOptional()@IsString()@MaxLength(1000)note?:string;}
