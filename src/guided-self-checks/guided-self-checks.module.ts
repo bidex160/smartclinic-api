@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "../auth/auth.module";
 import { GuidedSelfCheckAnswer } from "./entities/guided-self-check-answer.entity";
+import { GuidedSelfCheckClassificationResult } from "./entities/guided-self-check-classification.entity";
+import { GuidedSelfCheckClinicalRuleset } from "./entities/guided-self-check-clinical-ruleset.entity";
 import { GuidedSelfCheckHistory } from "./entities/guided-self-check-history.entity";
 import { GuidedSelfCheckProduct } from "./entities/guided-self-check-product.entity";
 import { GuidedSelfCheckQuestionGroup } from "./entities/guided-self-check-question-group.entity";
@@ -9,10 +11,12 @@ import { GuidedSelfCheckQuestion } from "./entities/guided-self-check-question.e
 import { GuidedSelfCheckQuestionnaireVersion } from "./entities/guided-self-check-questionnaire-version.entity";
 import { GuidedSelfCheck } from "./entities/guided-self-check.entity";
 import {
+  AdminGuidedSelfCheckClassificationsController,
   AdminGuidedSelfCheckController,
   GuidedSelfCheckProductController,
   MeGuidedSelfChecksController,
 } from "./guided-self-checks.controller";
+import { GuidedSelfCheckClassificationsService } from "./guided-self-check-classifications.service";
 import { GuidedSelfCheckQuestionnairesService } from "./guided-self-check-questionnaires.service";
 import { GuidedSelfChecksService } from "./guided-self-checks.service";
 import { User } from "src/users/entities/user.entity";
@@ -27,6 +31,8 @@ import { User } from "src/users/entities/user.entity";
       GuidedSelfCheckQuestionGroup,
       GuidedSelfCheckQuestion,
       GuidedSelfCheckAnswer,
+      GuidedSelfCheckClinicalRuleset,
+      GuidedSelfCheckClassificationResult,
       User,
     ]),
   ],
@@ -34,8 +40,13 @@ import { User } from "src/users/entities/user.entity";
     GuidedSelfCheckProductController,
     MeGuidedSelfChecksController,
     AdminGuidedSelfCheckController,
+    AdminGuidedSelfCheckClassificationsController,
   ],
-  providers: [GuidedSelfChecksService, GuidedSelfCheckQuestionnairesService],
+  providers: [
+    GuidedSelfChecksService,
+    GuidedSelfCheckQuestionnairesService,
+    GuidedSelfCheckClassificationsService,
+  ],
   exports: [GuidedSelfChecksService],
 })
 export class GuidedSelfChecksModule {}
