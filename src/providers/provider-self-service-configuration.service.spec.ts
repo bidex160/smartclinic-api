@@ -22,7 +22,7 @@ describe('ProviderSelfServiceConfigurationService', () => {
     locations = { findOne: jest.fn().mockResolvedValue({ id: 'location-1', providerId: 'provider-1' }) };
     availability = { findOne: jest.fn().mockResolvedValue({ id: 'availability-1', providerId: 'provider-1' }) };
     exceptions = { findOne: jest.fn().mockResolvedValue({ id: 'exception-1', providerId: 'provider-1' }) };
-    subject = new ProviderSelfServiceConfigurationService(context, capabilities, weekly, exceptionsService, services, locations, availability, exceptions, {} as never);
+    subject = new ProviderSelfServiceConfigurationService(context, capabilities, weekly, exceptionsService, services, locations, availability, exceptions, {} as never, { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() } as never, { findOne: jest.fn() } as never, { exists: jest.fn() } as never);
   });
 
   it('derives provider identity for capability creation and activation', async () => {

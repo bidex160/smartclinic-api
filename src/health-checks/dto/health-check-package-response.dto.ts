@@ -23,6 +23,11 @@ export class HealthCheckPackageResponseDto {
 
   @ApiProperty({ example: true })
   isActive!: boolean;
+  @ApiProperty({ type: Object, isArray: true }) includedContents!: Array<{ code: string; name: string; category: string; description: string | null }>;
+  @ApiProperty({ type: Object, isArray: true }) optionalAddons!: Array<{ code: string; name: string; category: string; description: string | null }>;
+  @ApiPropertyOptional({ nullable: true, description: 'Lowest operational Provider base price in the single returned currency, in minor units.' }) fromPriceMinor!: number | null;
+  @ApiPropertyOptional({ nullable: true }) currency!: string | null;
+  @ApiProperty({ type: Object, isArray: true }) fulfilmentModes!: Array<{ code: string; name: string }>;
 
   static fromEntity(
     healthCheckPackage: HealthCheckPackage,
@@ -35,6 +40,7 @@ export class HealthCheckPackageResponseDto {
       benefits: healthCheckPackage.benefits,
       estimatedDurationMinutes: healthCheckPackage.estimatedDurationMinutes,
       isActive: healthCheckPackage.isActive,
+      includedContents: [], optionalAddons: [], fromPriceMinor: null, currency: null, fulfilmentModes: [],
     };
   }
 }

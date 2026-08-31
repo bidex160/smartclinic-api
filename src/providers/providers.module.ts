@@ -68,6 +68,9 @@ import { AdminCareServicesController, ProviderCareServicesController, PublicFind
 import { ProviderCareServicesService } from './provider-care-services.service';
 import { FindCareService } from './find-care.service';
 import { ProviderCareEligibilityService } from './provider-care-eligibility.service';
+import { ProviderServiceAddon } from './entities/provider-service-addon.entity';
+import { HealthCheckAddon } from '../health-checks/entities/health-check-addon.entity';
+import { HealthCheckPackageAddon } from '../health-checks/entities/health-check-package-addon.entity';
 @Module({
   imports: [
     AuthModule,
@@ -100,6 +103,9 @@ import { ProviderCareEligibilityService } from './provider-care-eligibility.serv
       ProviderCareService,
       ProviderCareServiceDeliveryOption,
       ProviderCareServiceClinicalTemplate,
+      ProviderServiceAddon,
+      HealthCheckAddon,
+      HealthCheckPackageAddon,
     ]),
   ],
   controllers: [

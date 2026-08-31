@@ -20,6 +20,11 @@ import { ProviderConfigurationContextService } from './provider-configuration-co
 import { ProviderServiceAreasService } from './provider-service-areas.service';
 import { CreateProviderServiceAreaDto, UpdateProviderServiceAreaDto } from './dto/provider-service-area.dto';
 import { UpdateProviderServicePriceDto } from './dto/update-provider-service-price.dto';
+import { ConfigureProviderServiceAddonDto } from './dto/configure-provider-service-addon.dto';
+import { ProviderServiceAddon } from './entities/provider-service-addon.entity';
+import { HealthCheckAddon } from '../health-checks/entities/health-check-addon.entity';
+import { HealthCheckPackageAddon } from '../health-checks/entities/health-check-package-addon.entity';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 
 @Injectable()
 export class ProviderSelfServiceConfigurationService {
@@ -33,6 +38,9 @@ export class ProviderSelfServiceConfigurationService {
     @InjectRepository(ProviderAvailability) private readonly availability: Repository<ProviderAvailability>,
     @InjectRepository(ProviderAvailabilityException) private readonly exceptions: Repository<ProviderAvailabilityException>,
     private readonly serviceAreas: ProviderServiceAreasService,
+    @InjectRepository(ProviderServiceAddon) private readonly serviceAddons: Repository<ProviderServiceAddon>,
+    @InjectRepository(HealthCheckAddon) private readonly addons: Repository<HealthCheckAddon>,
+    @InjectRepository(HealthCheckPackageAddon) private readonly packageAddons: Repository<HealthCheckPackageAddon>,
   ) {}
 
   async listServices(user: User) { const provider = await this.context.resolve(user); return this.capabilities.listServices(provider.id); }
@@ -40,6 +48,9 @@ export class ProviderSelfServiceConfigurationService {
   async activateService(user: User, id: string) { await this.ownService(user, id, true); return this.capabilities.activateService(id); }
   async deactivateService(user: User, id: string) { await this.ownService(user, id, true); return this.capabilities.deactivateService(id); }
   async updateServicePrice(user: User, id: string, dto: UpdateProviderServicePriceDto) { await this.ownService(user, id, true); return this.capabilities.updateServicePrice(id, dto); }
+  async listServiceAddons(user: User, id: string) { await this.ownService(user, id); return (await this.serviceAddons.find({ where: { providerServiceId: id, isActive: true }, relations: { addon: true } })).map((x) => ({ code: x.addon.code, name: x.addon.name, category: x.addon.category, priceMinor: Number(x.priceMinor), currency: x.currency, isActive: x.isActive })); }
+  async configureServiceAddon(user: User, id: string, dto: ConfigureProviderServiceAddonDto) { const service = await this.ownService(user, id, true); const addon = await this.addons.findOne({ where: { code: dto.addonCode, isActive: true } }); if (!addon) throw new BadRequestException('Clinical add-on is unavailable'); if (!await this.packageAddons.exists({ where: { healthCheckPackageId: service.healthCheckPackageId, addonId: addon.id, isActive: true } })) throw new BadRequestException('Clinical add-on is incompatible with this package'); if (dto.currency !== service.currency) throw new ConflictException('Clinical add-on currency must match the Provider package currency'); let row = await this.serviceAddons.findOne({ where: { providerServiceId: id, addonId: addon.id } }); if (!row) row = this.serviceAddons.create({ providerServiceId: id, addonId: addon.id }); row.priceMinor=String(dto.priceMinor); row.currency=dto.currency; row.isActive=true; await this.serviceAddons.save(row); return { code:addon.code,name:addon.name,category:addon.category,priceMinor:dto.priceMinor,currency:dto.currency,isActive:true }; }
+  async disableServiceAddon(user: User, id: string, addonCode: string) { await this.ownService(user,id,true); const row=await this.serviceAddons.createQueryBuilder('capability').innerJoinAndSelect('capability.addon','addon').where('capability.providerServiceId=:id',{id}).andWhere('addon.code=:code',{code:addonCode.toUpperCase()}).getOne(); if(!row)throw new NotFoundException('Provider clinical add-on not found'); row.isActive=false;await this.serviceAddons.save(row);return{code:row.addon.code,isActive:false}; }
 
   async listLocations(user: User) { const provider = await this.context.resolve(user); return this.capabilities.listLocations(provider.id); }
   async createLocation(user: User, dto: CreateProviderLocationDto) { const provider = await this.context.resolve(user, true); return this.capabilities.createLocation(provider.id, dto); }

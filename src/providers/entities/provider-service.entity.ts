@@ -5,6 +5,7 @@ import { Provider } from './provider.entity';
 import { ProviderServiceLocation } from './provider-service-location.entity';
 import { ProviderAvailability } from './provider-availability.entity';
 import { ProviderAvailabilityException } from './provider-availability-exception.entity';
+import { ProviderServiceAddon } from './provider-service-addon.entity';
 
 @Entity('provider_services')
 @Unique('UQ_provider_services_provider_package_mode', ['providerId', 'healthCheckPackageId', 'fulfilmentModeId'])
@@ -22,6 +23,7 @@ export class ProviderService {
   @Column({ name: 'fulfilment_mode_id', type: 'uuid' }) fulfilmentModeId!: string;
   @ManyToOne(() => FulfilmentMode, { onDelete: 'RESTRICT' }) @JoinColumn({ name: 'fulfilment_mode_id' }) fulfilmentMode!: FulfilmentMode;
   @Column({ name: 'price_minor', type: 'bigint' }) priceMinor!: string;
+  @Column({ name: 'fulfilment_fee_minor', type: 'bigint', default: '0' }) fulfilmentFeeMinor!: string;
   @Column({ type: 'char', length: 3 }) currency!: string;
   @Column({ name: 'is_active', type: 'boolean', default: true }) isActive!: boolean;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
@@ -29,4 +31,5 @@ export class ProviderService {
   @OneToMany(() => ProviderServiceLocation, (link) => link.providerService) locationLinks!: ProviderServiceLocation[];
   @OneToMany(() => ProviderAvailability, (availability) => availability.providerService) availability!: ProviderAvailability[];
   @OneToMany(() => ProviderAvailabilityException, (exception) => exception.providerService) availabilityExceptions!: ProviderAvailabilityException[];
+  @OneToMany(() => ProviderServiceAddon, (value) => value.providerService) addons!: ProviderServiceAddon[];
 }

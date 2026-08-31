@@ -33,6 +33,12 @@ import { MePatientProfileController } from './me-patient-profile.controller';
 import { PatientPortalProfileService } from './patient-portal-profile.service';
 import { RewardsModule } from '../rewards/rewards.module';
 import { EarningsModule } from '../earnings/earnings.module';
+import { HealthCheckPackageContent } from './entities/health-check-package-content.entity';
+import { HealthCheckAddon } from './entities/health-check-addon.entity';
+import { HealthCheckPackageAddon } from './entities/health-check-package-addon.entity';
+import { ProviderService } from '../providers/entities/provider-service.entity';
+import { ProviderServiceAddon } from '../providers/entities/provider-service-addon.entity';
+import { HealthCheckConfigurationService } from './health-check-configuration.service';
 
 @Module({
   imports: [
@@ -56,6 +62,11 @@ import { EarningsModule } from '../earnings/earnings.module';
       User,
       BookingFunding,
       PaymentAttempt,
+      HealthCheckPackageContent,
+      HealthCheckAddon,
+      HealthCheckPackageAddon,
+      ProviderService,
+      ProviderServiceAddon,
     ]),
   ],
   controllers: [
@@ -74,6 +85,7 @@ import { EarningsModule } from '../earnings/earnings.module';
     HealthResultAccessService,
     PatientHealthCheckHistoryService,
     PatientPortalProfileService,
+    HealthCheckConfigurationService,
   ],
   exports: [HealthResultAccessService],
 })

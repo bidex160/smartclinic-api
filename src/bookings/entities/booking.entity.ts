@@ -84,6 +84,11 @@ export class Booking {
   @Column({ type: 'enum', enum: BookingStatus, enumName: 'booking_status_enum', default: BookingStatus.DRAFT })
   status!: BookingStatus;
 
+  @Column({ name: 'base_package_price_minor', type: 'bigint', nullable: true }) basePackagePriceMinor!: string | null;
+  @Column({ name: 'clinical_addons_total_minor', type: 'bigint', nullable: true }) clinicalAddonsTotalMinor!: string | null;
+  @Column({ name: 'fulfilment_fee_minor', type: 'bigint', nullable: true }) fulfilmentFeeMinor!: string | null;
+  @Column({ name: 'commercial_configuration_snapshot', type: 'jsonb', nullable: true }) commercialConfigurationSnapshot!: Record<string, unknown> | null;
+
   @Column({ name: 'quoted_amount', type: 'numeric', precision: 12, scale: 2, nullable: true })
   quotedAmount!: string | null;
 

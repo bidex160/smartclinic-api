@@ -25,6 +25,7 @@ import { UserStatus } from '../users/enums/user-status.enum';
 import { ProviderCapabilitiesService } from '../providers/provider-capabilities.service';
 import { deriveAppointmentEndTime } from '../providers/booking-availability-context';
 import { ProviderService } from '../providers/entities/provider-service.entity';
+import { ProviderServiceAddon } from '../providers/entities/provider-service-addon.entity';
 
 
 @Injectable()
@@ -78,15 +79,30 @@ export class BookingsService {
           const bookingRepository = manager.getRepository(Booking);
           const historyRepository = manager.getRepository(BookingStatusHistory);
           const addressRepository = manager.getRepository(BookingVisitAddress);
-          const providerService = await manager.getRepository(ProviderService).findOne({ where: { id: capability.id, providerId: capability.providerId, healthCheckPackageId: createBookingDto.healthCheckPackageId, fulfilmentModeId: createBookingDto.fulfilmentModeId, isActive: true }, lock: { mode: 'pessimistic_read' } });
+          const providerService = await manager.getRepository(ProviderService).findOne({ where: { id: capability.id, providerId: capability.providerId, healthCheckPackageId: createBookingDto.healthCheckPackageId, fulfilmentModeId: createBookingDto.fulfilmentModeId, isActive: true }, relations: { healthCheckPackage: { contents: true, addonAvailability: { addon: true } }, fulfilmentMode: true }, lock: { mode: 'pessimistic_read' } });
           if (!providerService) throw new ConflictException('Selected provider Health Check offering is no longer available');
-          const { visitAddress: _visitAddress, ...bookingInput } = createBookingDto;
+          const packageConfiguration: Pick<HealthCheckPackage, 'code' | 'name' | 'contents' | 'addonAvailability'> = providerService.healthCheckPackage ?? { code: '', name: '', contents: [], addonAvailability: [] };
+          const modeConfiguration: Pick<FulfilmentMode, 'code' | 'name'> = providerService.fulfilmentMode ?? { code: '', name: '' };
+          const addonCodes = createBookingDto.addonCodes ?? [];
+          if (addonCodes.includes('HOME_VISIT')) throw new BadRequestException('HOME_VISIT is a fulfilment mode, not a clinical add-on');
+          const included = new Set((packageConfiguration.contents ?? []).filter((x) => x.isActive).map((x) => x.code));
+          const duplicateIncluded = addonCodes.find((code) => included.has(code));
+          if (duplicateIncluded) throw new ConflictException(`Clinical add-on is already included in the package: ${duplicateIncluded}`);
+          const compatible = new Set((packageConfiguration.addonAvailability ?? []).filter((x) => x.isActive && x.addon.isActive).map((x) => x.addon.code));
+          const capabilities = addonCodes.length ? await manager.getRepository(ProviderServiceAddon).createQueryBuilder('capability').innerJoinAndSelect('capability.addon', 'addon').where('capability.providerServiceId=:serviceId', { serviceId: providerService.id }).andWhere('capability.isActive=true').andWhere('addon.isActive=true').andWhere('addon.code IN (:...codes)', { codes: addonCodes }).setLock('pessimistic_read').getMany() : [];
+          for (const code of addonCodes) { if (!compatible.has(code)) throw new BadRequestException(`Clinical add-on is unavailable for this package: ${code}`); if (!capabilities.some((x) => x.addon.code === code)) throw new ConflictException(`Provider does not offer clinical add-on: ${code}`); }
+          if (capabilities.some((x) => x.currency !== providerService.currency)) throw new ConflictException('Clinical add-on currency does not match package currency');
+          const addonTotal = capabilities.reduce((sum, x) => sum + BigInt(x.priceMinor), 0n);
+          const base = BigInt(providerService.priceMinor), fee = BigInt(providerService.fulfilmentFeeMinor ?? '0'), total = base + addonTotal + fee;
+          const { visitAddress: _visitAddress, addonCodes: _addonCodes, ...bookingInput } = createBookingDto;
           const booking = bookingRepository.create({
             ...bookingInput,
             bookingReference: generateBookingReference(),
             organisationContextId: createBookingDto.organisationContextId ?? null,
-            quotedAmount: this.fromMinor(providerService.priceMinor),
+            quotedAmount: this.fromMinor(total.toString()),
             currency: providerService.currency,
+            basePackagePriceMinor: base.toString(), clinicalAddonsTotalMinor: addonTotal.toString(), fulfilmentFeeMinor: fee.toString(),
+            commercialConfigurationSnapshot: { package: { code: packageConfiguration.code, name: packageConfiguration.name }, includedContents: (packageConfiguration.contents ?? []).filter((x) => x.isActive).sort((a, b) => a.sortOrder - b.sortOrder).map((x) => ({ code: x.code, name: x.name, category: x.category })), selectedAddons: capabilities.map((x) => ({ code: x.addon.code, name: x.addon.name, priceMinor: x.priceMinor })), fulfilmentMode: { code: modeConfiguration.code, name: modeConfiguration.name }, pricing: { basePackagePriceMinor: base.toString(), clinicalAddonsTotalMinor: addonTotal.toString(), fulfilmentFeeMinor: fee.toString(), totalMinor: total.toString(), currency: providerService.currency } },
             commercialProviderId: providerService.providerId,
             commercialProviderServiceId: providerService.id,
             preferredDate: createBookingDto.preferredDate ?? null,

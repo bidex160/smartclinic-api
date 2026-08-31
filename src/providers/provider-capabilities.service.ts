@@ -104,7 +104,7 @@ export class ProviderCapabilitiesService {
     try {
       return ProviderServiceResponseDto.fromEntity(
         await this.services.save(
-          this.services.create({ providerId, healthCheckPackageId: dto.healthCheckPackageId, fulfilmentModeId: dto.fulfilmentModeId, priceMinor: String(dto.priceMinor), currency: dto.currency, isActive: true }),
+          this.services.create({ providerId, healthCheckPackageId: dto.healthCheckPackageId, fulfilmentModeId: dto.fulfilmentModeId, priceMinor: String(dto.priceMinor), fulfilmentFeeMinor: String(dto.fulfilmentFeeMinor ?? 0), currency: dto.currency, isActive: true }),
         ),
       );
     } catch (error) {
@@ -147,6 +147,7 @@ export class ProviderCapabilitiesService {
   async updateServicePrice(id: string, dto: UpdateProviderServicePriceDto): Promise<ProviderServiceResponseDto> {
     const service = await this.requireService(id);
     service.priceMinor = String(dto.priceMinor);
+    if (dto.fulfilmentFeeMinor !== undefined) service.fulfilmentFeeMinor = String(dto.fulfilmentFeeMinor);
     service.currency = dto.currency;
     return ProviderServiceResponseDto.fromEntity(await this.services.save(service));
   }

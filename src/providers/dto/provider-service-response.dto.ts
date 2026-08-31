@@ -6,12 +6,13 @@ export class ProviderServiceResponseDto {
   @ApiProperty({ format: 'uuid' }) healthCheckPackageId!: string;
   @ApiProperty({ format: 'uuid' }) fulfilmentModeId!: string;
   @ApiProperty() priceMinor!: number;
+  @ApiProperty() fulfilmentFeeMinor!: number;
   @ApiProperty() currency!: string;
   @ApiProperty() isActive!: boolean;
   @ApiProperty({ format: 'uuid', isArray: true }) providerLocationIds!: string[];
   @ApiProperty({ format: 'date-time' }) createdAt!: Date;
   @ApiProperty({ format: 'date-time' }) updatedAt!: Date;
   static fromEntity(value: ProviderService): ProviderServiceResponseDto {
-    return { id: value.id, providerId: value.providerId, healthCheckPackageId: value.healthCheckPackageId, fulfilmentModeId: value.fulfilmentModeId, priceMinor: Number(value.priceMinor), currency: value.currency, isActive: value.isActive, providerLocationIds: value.locationLinks?.map((link) => link.providerLocationId) ?? [], createdAt: value.createdAt, updatedAt: value.updatedAt };
+    return { id: value.id, providerId: value.providerId, healthCheckPackageId: value.healthCheckPackageId, fulfilmentModeId: value.fulfilmentModeId, priceMinor: Number(value.priceMinor), fulfilmentFeeMinor: Number(value.fulfilmentFeeMinor ?? 0), currency: value.currency, isActive: value.isActive, providerLocationIds: value.locationLinks?.map((link) => link.providerLocationId) ?? [], createdAt: value.createdAt, updatedAt: value.updatedAt };
   }
 }

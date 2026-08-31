@@ -59,9 +59,9 @@ describe('HealthCheckPackagesService', () => {
         } as HealthCheckPackage,
       ]),
     };
-    const service = new HealthCheckPackagesService(healthCheckPackageRepository as never);
+    const service = new HealthCheckPackagesService(healthCheckPackageRepository as never, { find: jest.fn().mockResolvedValue([]) } as never);
 
-    await expect(service.findActive()).resolves.toEqual([
+    await expect(service.findActive()).resolves.toMatchObject([
       {
         id: '02c1de7d-9c38-4d1e-b2e0-d376df3bb21e',
         code: 'ESSENTIAL',
@@ -72,9 +72,10 @@ describe('HealthCheckPackagesService', () => {
         isActive: true,
       },
     ]);
-    expect(healthCheckPackageRepository.find).toHaveBeenCalledWith({
-      where: { isActive: true },
-      order: { name: 'ASC' },
-    });
+    expect(healthCheckPackageRepository.find).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ isActive: true }),
+      order: { code: 'ASC' },
+      relations: { contents: true, addonAvailability: { addon: true } },
+    }));
   });
 });

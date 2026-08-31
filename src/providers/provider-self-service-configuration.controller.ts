@@ -16,6 +16,7 @@ import { UpdateProviderLocationDto } from './dto/update-provider-location.dto';
 import { ProviderSelfServiceConfigurationService } from './provider-self-service-configuration.service';
 import { CreateProviderServiceAreaDto, UpdateProviderServiceAreaDto } from './dto/provider-service-area.dto';
 import { UpdateProviderServicePriceDto } from './dto/update-provider-service-price.dto';
+import { ConfigureProviderServiceAddonDto } from './dto/configure-provider-service-addon.dto';
 
 @ApiTags('Provider configuration') @ApiBearerAuth() @UseGuards(JwtAuthGuard, RolesGuard) @Roles(UserRole.PROVIDER)
 @ApiUnauthorizedResponse() @ApiForbiddenResponse() @ApiNotFoundResponse() @ApiConflictResponse() @Controller('provider')
@@ -26,6 +27,9 @@ export class ProviderSelfServiceConfigurationController {
   @Patch('services/:id/activate') activateService(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.configuration.activateService(req.user, p.id); }
   @Patch('services/:id/deactivate') deactivateService(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.configuration.deactivateService(req.user, p.id); }
   @Patch('services/:id/price') updateServicePrice(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto, @Body() dto: UpdateProviderServicePriceDto) { return this.configuration.updateServicePrice(req.user, p.id, dto); }
+  @Get('services/:id/addons') listServiceAddons(@Req() req:{user:User},@Param() p:ResourceIdParamsDto){return this.configuration.listServiceAddons(req.user,p.id);}
+  @Post('services/:id/addons') configureServiceAddon(@Req() req:{user:User},@Param() p:ResourceIdParamsDto,@Body() dto:ConfigureProviderServiceAddonDto){return this.configuration.configureServiceAddon(req.user,p.id,dto);}
+  @Delete('services/:id/addons/:addonCode') disableServiceAddon(@Req() req:{user:User},@Param('id') id:string,@Param('addonCode') code:string){return this.configuration.disableServiceAddon(req.user,id,code);}
   @Post('services/:serviceId/locations/:locationId') link(@Req() req: { user: User }, @Param() p: ProviderServiceLocationParamsDto) { return this.configuration.linkLocation(req.user, p.serviceId, p.locationId); }
   @Delete('services/:serviceId/locations/:locationId') unlink(@Req() req: { user: User }, @Param() p: ProviderServiceLocationParamsDto) { return this.configuration.unlinkLocation(req.user, p.serviceId, p.locationId); }
 

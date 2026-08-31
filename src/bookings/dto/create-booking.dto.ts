@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString, IsTimeZone, IsUUID, Matches, MaxLength, ValidateNested } from 'class-validator';
+import { ArrayUnique, IsArray, IsDateString, IsOptional, IsString, IsTimeZone, IsUUID, Matches, MaxLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { BookingVisitAddressDto } from './booking-visit-address.dto';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -26,6 +26,9 @@ export class CreateBookingDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
   fulfilmentModeId!: string;
+
+  @ApiPropertyOptional({ type: String, isArray: true, description: 'Stable clinical add-on codes. Monetary values are resolved server-side.' })
+  @IsOptional() @IsArray() @ArrayUnique() @Matches(/^[A-Z][A-Z0-9_]{1,79}$/, { each: true }) addonCodes?: string[];
 
   @ApiProperty({ format: 'date', example: '2026-08-20' })
   @IsDateString()

@@ -2,6 +2,8 @@ import { Booking } from '../../bookings/entities/booking.entity';
 import { Check, Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 import { PackagePrice } from './package-price.entity';
+import { HealthCheckPackageContent } from './health-check-package-content.entity';
+import { HealthCheckPackageAddon } from './health-check-package-addon.entity';
 
 @Entity('health_check_packages')
 @Check(
@@ -41,4 +43,10 @@ export class HealthCheckPackage {
 
   @OneToMany(() => PackagePrice, (packagePrice) => packagePrice.healthCheckPackage)
   packagePrices!: PackagePrice[];
+
+  @OneToMany(() => HealthCheckPackageContent, (value) => value.healthCheckPackage)
+  contents!: HealthCheckPackageContent[];
+
+  @OneToMany(() => HealthCheckPackageAddon, (value) => value.healthCheckPackage)
+  addonAvailability!: HealthCheckPackageAddon[];
 }
