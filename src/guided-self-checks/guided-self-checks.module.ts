@@ -30,6 +30,9 @@ import { GuidedSelfCheckReviewerAuthorization } from "./entities/guided-self-che
 import { GuidedSelfCheckReviewerAuthorizationHistory } from "./entities/guided-self-check-reviewer-authorization-history.entity";
 import { GuidedSelfCheckReviewerAuthorizationsService } from "./guided-self-check-reviewer-authorizations.service";
 import { GuidedSelfCheckReviewerDirectoryController,GuidedSelfCheckReviewerGovernanceController } from "./guided-self-check-reviewer-authorizations.controller";
+import { GuidedSelfCheckNextAction } from "./entities/guided-self-check-next-action.entity";
+import { GuidedSelfCheckNextActionsService } from "./guided-self-check-next-actions.service";
+import { HealthCheckPackage } from "../health-checks/entities/health-check-package.entity";
 @Module({
   imports: [
     AuthModule,
@@ -50,6 +53,8 @@ import { GuidedSelfCheckReviewerDirectoryController,GuidedSelfCheckReviewerGover
       GuidedSelfCheckProfessionalReviewHistory,
       GuidedSelfCheckReviewerAuthorization,
       GuidedSelfCheckReviewerAuthorizationHistory,
+      GuidedSelfCheckNextAction,
+      HealthCheckPackage,
     ]),
   ],
   controllers: [
@@ -68,6 +73,7 @@ import { GuidedSelfCheckReviewerDirectoryController,GuidedSelfCheckReviewerGover
     GuidedSelfCheckClassificationsService,
     GuidedSelfCheckProfessionalReviewsService,
     GuidedSelfCheckReviewerAuthorizationsService,
+    GuidedSelfCheckNextActionsService,
   ],
   exports: [GuidedSelfChecksService],
 })
