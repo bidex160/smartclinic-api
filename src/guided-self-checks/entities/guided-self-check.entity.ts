@@ -2,6 +2,7 @@ import { Check,Column,CreateDateColumn,Entity,Index,JoinColumn,ManyToOne,OneToMa
 import { Patient } from '../../patients/entities/patient.entity'; import { User } from '../../users/entities/user.entity';
 import { GuidedSelfCheckFundingStatus,GuidedSelfCheckWorkflowStatus } from '../enums/guided-self-check.enum';
 import { GuidedSelfCheckHistory } from './guided-self-check-history.entity';
+import { GuidedSelfCheckQuestionnaireVersion } from './guided-self-check-questionnaire-version.entity';
 @Entity('guided_self_checks')
 @Index('IDX_gsc_patient_created',['patientId','createdAt']) @Index('IDX_gsc_patient_funding',['patientId','fundingStatus'])
 @Check('CHK_gsc_snapshot_money','"standard_price_minor_snapshot" >= 0 AND "effective_price_minor" >= 0 AND ("promotional_price_minor_snapshot" IS NULL OR "promotional_price_minor_snapshot" >= 0)')
@@ -18,7 +19,10 @@ export class GuidedSelfCheck {
  @Column({name:'funding_status',type:'enum',enum:GuidedSelfCheckFundingStatus,enumName:'guided_self_check_funding_status_enum'}) fundingStatus!:GuidedSelfCheckFundingStatus;
  @Column({name:'workflow_status',type:'enum',enum:GuidedSelfCheckWorkflowStatus,enumName:'guided_self_check_workflow_status_enum'}) workflowStatus!:GuidedSelfCheckWorkflowStatus;
  @Column({name:'paid_at',type:'timestamptz',nullable:true}) paidAt!:Date|null;
+ @Column({name:'questionnaire_version_id',type:'uuid',nullable:true}) questionnaireVersionId!:string|null;
+ @ManyToOne(()=>GuidedSelfCheckQuestionnaireVersion,{nullable:true,onDelete:'RESTRICT'}) @JoinColumn({name:'questionnaire_version_id'}) questionnaireVersion!:GuidedSelfCheckQuestionnaireVersion|null;
+ @Column({name:'started_at',type:'timestamptz',nullable:true}) startedAt!:Date|null;
+ @Column({name:'completed_at',type:'timestamptz',nullable:true}) completedAt!:Date|null;
  @CreateDateColumn({name:'created_at',type:'timestamptz'}) createdAt!:Date; @UpdateDateColumn({name:'updated_at',type:'timestamptz'}) updatedAt!:Date;
  @OneToMany(()=>GuidedSelfCheckHistory,h=>h.selfCheck) history!:GuidedSelfCheckHistory[];
 }
-
