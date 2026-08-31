@@ -33,6 +33,11 @@ import { GuidedSelfCheckReviewerDirectoryController,GuidedSelfCheckReviewerGover
 import { GuidedSelfCheckNextAction } from "./entities/guided-self-check-next-action.entity";
 import { GuidedSelfCheckNextActionsService } from "./guided-self-check-next-actions.service";
 import { HealthCheckPackage } from "../health-checks/entities/health-check-package.entity";
+import { GuidedSelfCheckClinicalGovernanceAuthorization } from "./entities/guided-self-check-clinical-governance-authorization.entity";
+import { GuidedSelfCheckClinicalGovernanceHistory } from "./entities/guided-self-check-clinical-governance-history.entity";
+import { GuidedSelfCheckRulesetAudit } from "./entities/guided-self-check-ruleset-audit.entity";
+import { GuidedSelfCheckClinicalGovernanceService } from "./guided-self-check-clinical-governance.service";
+import { GuidedSelfCheckClinicalGovernanceAuthorizationsController, GuidedSelfCheckClinicalRulesetsController } from "./guided-self-check-clinical-governance.controller";
 @Module({
   imports: [
     AuthModule,
@@ -55,6 +60,9 @@ import { HealthCheckPackage } from "../health-checks/entities/health-check-packa
       GuidedSelfCheckReviewerAuthorizationHistory,
       GuidedSelfCheckNextAction,
       HealthCheckPackage,
+      GuidedSelfCheckClinicalGovernanceAuthorization,
+      GuidedSelfCheckClinicalGovernanceHistory,
+      GuidedSelfCheckRulesetAudit,
     ]),
   ],
   controllers: [
@@ -66,6 +74,8 @@ import { HealthCheckPackage } from "../health-checks/entities/health-check-packa
     ProviderGuidedSelfCheckReviewsController,
     GuidedSelfCheckReviewerDirectoryController,
     GuidedSelfCheckReviewerGovernanceController,
+    GuidedSelfCheckClinicalGovernanceAuthorizationsController,
+    GuidedSelfCheckClinicalRulesetsController,
   ],
   providers: [
     GuidedSelfChecksService,
@@ -74,6 +84,7 @@ import { HealthCheckPackage } from "../health-checks/entities/health-check-packa
     GuidedSelfCheckProfessionalReviewsService,
     GuidedSelfCheckReviewerAuthorizationsService,
     GuidedSelfCheckNextActionsService,
+    GuidedSelfCheckClinicalGovernanceService,
   ],
   exports: [GuidedSelfChecksService, GuidedSelfCheckNextActionsService],
 })

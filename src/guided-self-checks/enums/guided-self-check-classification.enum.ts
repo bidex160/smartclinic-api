@@ -1,6 +1,6 @@
 import { GuidedSelfCheckAnswerState } from './guided-self-check-questionnaire.enum';
 export enum GuidedSelfCheckClassification { GREEN='GREEN',AMBER='AMBER',RED='RED' }
-export enum GuidedSelfCheckRulesetGovernanceStatus { DRAFT='DRAFT',READY='READY',RETIRED='RETIRED' }
+export enum GuidedSelfCheckRulesetGovernanceStatus { DRAFT='DRAFT',IN_REVIEW='IN_REVIEW',APPROVED='APPROVED',READY='READY',RETIRED='RETIRED' }
 export enum GuidedSelfCheckClassificationStatus { PENDING='PENDING',CONFIGURATION_REQUIRED='CONFIGURATION_REQUIRED',CLASSIFIED='CLASSIFIED',FAILED='FAILED' }
 export enum GuidedSelfCheckRuleSeverity { AMBER='AMBER',RED='RED' }
 export enum GuidedSelfCheckRuleOperator { STATE_EQUALS='STATE_EQUALS',EQUALS='EQUALS',INCLUDES='INCLUDES',LT='LT',LTE='LTE',GT='GT',GTE='GTE',BETWEEN='BETWEEN',UNANSWERED='UNANSWERED',AND='AND',OR='OR' }
