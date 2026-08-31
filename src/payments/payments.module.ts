@@ -32,7 +32,7 @@ import { MeCareRequestFundingController } from './me-care-request-funding.contro
 import { PatientProviderConnection } from '../patient-provider-connections/entities/patient-provider-connection.entity';
 import { PatientProviderConnectionFunding } from '../patient-provider-connections/entities/patient-provider-connection-funding.entity';
 import { PatientProviderConnectionHistory } from '../patient-provider-connections/entities/patient-provider-connection-history.entity';
-import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy-fulfillment-funding.entity';import { PharmacyQuote } from '../clinical-orders/entities/pharmacy-quote.entity';import { ClinicalOrderFulfillment } from '../clinical-orders/entities/clinical-order-fulfillment.entity';import { PharmacyDispensing } from '../clinical-orders/entities/pharmacy-dispensing.entity';import { Patient } from '../patients/entities/patient.entity';import { MePharmacyFundingController } from './me-pharmacy-funding.controller';
+import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy-fulfillment-funding.entity';import { PharmacyQuote } from '../clinical-orders/entities/pharmacy-quote.entity';import { ClinicalOrderFulfillment } from '../clinical-orders/entities/clinical-order-fulfillment.entity';import { PharmacyDispensing } from '../clinical-orders/entities/pharmacy-dispensing.entity';import { Patient } from '../patients/entities/patient.entity';import { MePharmacyFundingController } from './me-pharmacy-funding.controller'; import { GuidedSelfCheck } from '../guided-self-checks/entities/guided-self-check.entity'; import { GuidedSelfCheckHistory } from '../guided-self-checks/entities/guided-self-check-history.entity'; import { MeGuidedSelfCheckFundingController } from './me-guided-self-check-funding.controller';
 @Module({
   imports: [
     AuthModule,
@@ -58,10 +58,10 @@ import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy
       ,PatientProviderConnection,
       PatientProviderConnectionFunding,
       PatientProviderConnectionHistory
-      ,PharmacyFulfillmentFunding,PharmacyQuote,ClinicalOrderFulfillment,PharmacyDispensing,Patient
+      ,PharmacyFulfillmentFunding,PharmacyQuote,ClinicalOrderFulfillment,PharmacyDispensing,Patient,GuidedSelfCheck,GuidedSelfCheckHistory
     ]),
   ],
-  controllers: [AdminPaymentFlowController, PaystackWebhookController, MeCareRequestFundingController,MePharmacyFundingController],
+  controllers: [AdminPaymentFlowController, PaystackWebhookController, MeCareRequestFundingController,MePharmacyFundingController,MeGuidedSelfCheckFundingController],
   providers: [
     PaymentFlowService,
     TestPaymentProviderAdapter,

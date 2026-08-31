@@ -18,6 +18,7 @@ import { FastTrackRequest } from '../../fasttrack/entities/fasttrack-request.ent
 import { CareRequestFunding } from '../../care-requests/entities/care-request-funding.entity';
 import { PatientProviderConnectionFunding } from '../../patient-provider-connections/entities/patient-provider-connection-funding.entity';
 import { PharmacyFulfillmentFunding } from '../../clinical-orders/entities/pharmacy-fulfillment-funding.entity';
+import { GuidedSelfCheck } from '../../guided-self-checks/entities/guided-self-check.entity';
 
 @Entity("payment_attempts")
 @Index("UQ_payment_attempts_idempotency_key", ["idempotencyKey"], {
@@ -33,7 +34,8 @@ import { PharmacyFulfillmentFunding } from '../../clinical-orders/entities/pharm
 @Index("IDX_payment_attempts_care_request_funding_status", ["careRequestFundingId", "status"])
 @Index("IDX_payment_attempts_patient_connection_funding_status", ["patientProviderConnectionFundingId", "status"])
 @Index("IDX_payment_attempts_pharmacy_funding_status", ["pharmacyFulfillmentFundingId", "status"])
-@Check('CHK_payment_attempts_obligation', '(CASE WHEN "booking_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "fasttrack_request_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "care_request_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "patient_provider_connection_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "pharmacy_fulfillment_funding_id" IS NULL THEN 0 ELSE 1 END) = 1')
+@Index("IDX_payment_attempts_guided_self_check_status", ["guidedSelfCheckId", "status"])
+@Check('CHK_payment_attempts_obligation', '(CASE WHEN "booking_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "fasttrack_request_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "care_request_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "patient_provider_connection_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "pharmacy_fulfillment_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "guided_self_check_id" IS NULL THEN 0 ELSE 1 END) = 1')
 @Check("CHK_payment_attempts_amount_non_negative", '"amount" >= 0')
 @Check("CHK_payment_attempts_currency_format", "\"currency\" ~ '^[A-Z]{3}$'")
 export class PaymentAttempt {
@@ -59,6 +61,8 @@ export class PaymentAttempt {
   @ManyToOne(() => PatientProviderConnectionFunding, funding => funding.paymentAttempts, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'patient_provider_connection_funding_id' }) patientProviderConnectionFunding!: PatientProviderConnectionFunding | null;
   @Column({name:'pharmacy_fulfillment_funding_id',type:'uuid',nullable:true})pharmacyFulfillmentFundingId!:string|null;
   @ManyToOne(()=>PharmacyFulfillmentFunding,f=>f.paymentAttempts,{nullable:true,onDelete:'RESTRICT'})@JoinColumn({name:'pharmacy_fulfillment_funding_id'})pharmacyFulfillmentFunding!:PharmacyFulfillmentFunding|null;
+  @Column({name:'guided_self_check_id',type:'uuid',nullable:true}) guidedSelfCheckId!:string|null;
+  @ManyToOne(()=>GuidedSelfCheck,{nullable:true,onDelete:'RESTRICT'}) @JoinColumn({name:'guided_self_check_id'}) guidedSelfCheck!:GuidedSelfCheck|null;
 
   @Column({ type: "numeric", precision: 12, scale: 2 })
   amount!: string;

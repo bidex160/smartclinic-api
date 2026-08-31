@@ -25,6 +25,7 @@ import { ClinicalRecordsModule } from './clinical-records/clinical-records.modul
 import { PatientProviderConnectionsModule } from './patient-provider-connections/patient-provider-connections.module';
 import { ClinicalOrdersModule } from './clinical-orders/clinical-orders.module';
 import { ProviderServiceUnitsModule } from './provider-service-units/provider-service-units.module';
+import { GuidedSelfChecksModule } from './guided-self-checks/guided-self-checks.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -48,6 +49,7 @@ const persistenceDomainModules = configuration.database.enabled
       PatientProviderConnectionsModule,
       ClinicalOrdersModule,
       ProviderServiceUnitsModule,
+      GuidedSelfChecksModule,
     ]
   : [];
 
