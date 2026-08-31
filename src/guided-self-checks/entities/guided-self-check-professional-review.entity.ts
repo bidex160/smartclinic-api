@@ -15,6 +15,7 @@ import { GuidedSelfCheckInternalClinicalProfessional } from './guided-self-check
 @Index('UQ_gsc_review_classification',['classificationId'],{unique:true})
 @Index('IDX_gsc_review_queue',['status','priority','createdAt'])
 @Index('IDX_gsc_review_assignee',['assignedReviewerUserId','status'])
+@Index('IDX_gsc_review_internal_worklist',['assignedInternalClinicalProfessionalId','status','priority','assignedAt','id'])
 export class GuidedSelfCheckProfessionalReview {
  @PrimaryGeneratedColumn('uuid') id!:string;
  @Column({type:'varchar',length:40}) reference!:string;

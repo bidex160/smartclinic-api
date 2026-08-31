@@ -5,7 +5,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../users/enums/user-role.enum';
-import { AssignInternalClinicalProfessionalDto, CancelGuidedSelfCheckReviewDto, CompleteGuidedSelfCheckReviewDto, GuidedSelfCheckReviewListQueryDto, TriageGuidedSelfCheckReviewDto } from './dto/guided-self-check-review.dto';
+import { AssignInternalClinicalProfessionalDto, CancelGuidedSelfCheckReviewDto, CompleteGuidedSelfCheckReviewDto, GuidedSelfCheckMyReviewListQueryDto, GuidedSelfCheckReviewListQueryDto, TriageGuidedSelfCheckReviewDto } from './dto/guided-self-check-review.dto';
 import { GuidedSelfCheckProfessionalReviewsService } from './guided-self-check-professional-reviews.service';
 
 @ApiTags('Internal Guided Self-Check urgent reviews')
@@ -26,6 +26,7 @@ export class AdminGuidedSelfCheckReviewsController {
 @Controller('internal/guided-self-check-reviews')
 export class InternalClinicalGuidedSelfCheckReviewsController {
   constructor(private reviews: GuidedSelfCheckProfessionalReviewsService) {}
+  @Get() listMine(@Query() query: GuidedSelfCheckMyReviewListQueryDto, @Req() request: { user: User }) { return this.reviews.listMine(request.user, query); }
   @Get(':reference') get(@Param('reference') reference: string, @Req() request: { user: User }) { return this.reviews.getInternalClinical(reference, request.user); }
   @Post(':reference/start') start(@Param('reference') reference: string, @Req() request: { user: User }) { return this.reviews.startInternal(reference, request.user); }
   @Post(':reference/complete') complete(@Param('reference') reference: string, @Body() dto: CompleteGuidedSelfCheckReviewDto, @Req() request: { user: User }) { return this.reviews.completeInternal(reference, request.user, dto); }
