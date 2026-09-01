@@ -39,6 +39,7 @@ import {
 import { GuidedSelfCheckAnalysisStatus } from "./enums/guided-self-check-analysis.enum";
 import { GuidedSelfCheckWorkflowStatus } from "./enums/guided-self-check.enum";
 import { GuidedSelfCheckContactWorkItemsService } from "./guided-self-check-contact-work-items.service";
+import { GuidedSelfCheckAnalysisDispatchService } from "./guided-self-check-analysis-dispatch.service";
 export const GUIDED_SELF_CHECK_PATIENT_MESSAGE_CATALOGUE = {
   [GuidedSelfCheckPatientMessageKey.GREEN_COMPLETE]: {
     title: "Your Self-Check is complete.",
@@ -64,12 +65,13 @@ export class GuidedSelfCheckClassificationsService {
     private checks: Repository<GuidedSelfCheck>,
     private data: DataSource,
     private contacts: GuidedSelfCheckContactWorkItemsService = undefined as never,
+    private analysisDispatch: GuidedSelfCheckAnalysisDispatchService = undefined as never,
   ) {}
   async classifyCompleted(
     reference: string,
     expectedRulesetReference?: string,
   ) {
-    return this.data.transaction(async (m) => {
+    const result = await this.data.transaction(async (m) => {
       const s = await m
         .getRepository(GuidedSelfCheck)
         .findOne({ where: { reference }, lock: { mode: "pessimistic_write" } });
@@ -278,6 +280,8 @@ export class GuidedSelfCheckClassificationsService {
         });
       return result;
     });
+    if (result && this.analysisDispatch) await this.analysisDispatch.dispatchForClassification(result);
+    return result;
   }
   async getPatientResult(reference: string, userId: string) {
     const s = await this.checks.findOne({ where: { reference, userId } });

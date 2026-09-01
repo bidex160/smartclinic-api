@@ -1,9 +1,10 @@
-import { ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import {
   GUIDED_SELF_CHECK_ANALYSIS_PORT,
   GuidedSelfCheckAnalysisPort,
+  GuidedSelfCheckAnalysisProviderError,
   GuidedSelfCheckAnalysisRequest,
 } from './guided-self-check-analysis.port';
 import { GuidedSelfCheckAnalysis } from './entities/guided-self-check-analysis.entity';
@@ -23,6 +24,8 @@ import { GuidedSelfCheckProfessionalReviewsService } from './guided-self-check-p
 
 @Injectable()
 export class GuidedSelfCheckAnalysisService {
+  private readonly logger = new Logger(GuidedSelfCheckAnalysisService.name);
+
   constructor(
     @InjectRepository(GuidedSelfCheckAnalysis) private analyses: Repository<GuidedSelfCheckAnalysis>,
     private data: DataSource,
@@ -43,6 +46,7 @@ export class GuidedSelfCheckAnalysisService {
       output: null,
       providerKey: null,
       modelKey: null,
+      promptVersion: null,
       failureCode: null,
       humanReviewRecommended: false,
       startedAt: null,
@@ -78,7 +82,9 @@ export class GuidedSelfCheckAnalysisService {
   }
 
   async process(reference: string) {
-    return this.data.transaction(async manager => {
+    let claimed: GuidedSelfCheckAnalysis | ReturnType<GuidedSelfCheckAnalysisService['internalView']>;
+    try {
+      claimed = await this.data.transaction(async manager => {
       const repo = manager.getRepository(GuidedSelfCheckAnalysis);
       const locked = await repo.findOne({
         where: { reference },
@@ -93,23 +99,53 @@ export class GuidedSelfCheckAnalysisService {
       if (analysis.status === GuidedSelfCheckAnalysisStatus.COMPLETED || analysis.status === GuidedSelfCheckAnalysisStatus.PROCESSING) {
         return this.internalView(analysis);
       }
-      if (!this.port) {
-        analysis.status = GuidedSelfCheckAnalysisStatus.FAILED;
-        analysis.failureCode = GuidedSelfCheckAnalysisFailureCode.PROVIDER_UNAVAILABLE;
-        await repo.save(analysis);
-        await this.audit(manager, analysis, 'ANALYSIS_FAILED');
-        return this.internalView(analysis);
-      }
       analysis.status = GuidedSelfCheckAnalysisStatus.PROCESSING;
       analysis.startedAt = new Date();
-      analysis.providerKey = this.port.providerKey;
-      analysis.modelKey = this.port.modelKey;
+      analysis.completedAt = null;
+      analysis.failureCode = null;
+      analysis.providerKey = this.port?.providerKey ?? null;
+      analysis.modelKey = this.port?.modelKey ?? null;
+      analysis.promptVersion = this.port?.promptVersion ?? null;
       await repo.save(analysis);
       await this.audit(manager, analysis, 'ANALYSIS_STARTED');
-      const request = await this.input(manager, analysis);
-      try {
-        const output = await this.port.analyze(request);
-        this.validateOutput(output);
+      return analysis;
+      });
+    } catch (error) {
+      this.logInternalFailure(reference, 'claim', error);
+      throw error;
+    }
+
+    if (!('id' in claimed)) return claimed;
+    if (!this.port) {
+      return this.persistFailureAfterRollback(reference, GuidedSelfCheckAnalysisFailureCode.PROVIDER_UNAVAILABLE);
+    }
+
+    let output: NonNullable<GuidedSelfCheckAnalysis['output']>;
+    try {
+      const request = await this.input(this.data.manager, claimed);
+      output = await this.port.analyze(request);
+      this.validateOutput(output);
+    } catch (error) {
+      const failureCode = error instanceof GuidedSelfCheckAnalysisProviderError
+        ? GuidedSelfCheckAnalysisFailureCode[error.failureCode]
+        : error instanceof ConflictException
+          ? GuidedSelfCheckAnalysisFailureCode.INVALID_OUTPUT
+          : GuidedSelfCheckAnalysisFailureCode.PROCESSING_ERROR;
+      if (!(error instanceof GuidedSelfCheckAnalysisProviderError) && !(error instanceof ConflictException)) {
+        this.logInternalFailure(reference, 'provider-input', error);
+      }
+      return this.persistFailureAfterRollback(reference, failureCode);
+    }
+
+    try {
+      return await this.data.transaction(async manager => {
+        const repo = manager.getRepository(GuidedSelfCheckAnalysis);
+        const locked = await repo.findOne({ where: { reference }, lock: { mode: 'pessimistic_write' } });
+        if (!locked) throw new NotFoundException('Guided Self-Check analysis was not found');
+        const analysis = await repo.findOne({ where: { id: locked.id }, relations: { classification: { questionnaireVersion: true, selfCheck: true } } });
+        if (!analysis) throw new NotFoundException('Guided Self-Check analysis was not found');
+        if (analysis.status === GuidedSelfCheckAnalysisStatus.COMPLETED) return this.internalView(analysis);
+        if (analysis.status !== GuidedSelfCheckAnalysisStatus.PROCESSING) return this.internalView(analysis);
         analysis.output = output;
         analysis.humanReviewRecommended = output.humanReviewSuggested;
         analysis.status = GuidedSelfCheckAnalysisStatus.COMPLETED;
@@ -121,14 +157,47 @@ export class GuidedSelfCheckAnalysisService {
         if (output.humanReviewSuggested && this.reviews) await this.reviews.ensureRoutineForAnalysis(manager, analysis);
         await this.nextActions.acceptAmberAnalysisSuggestion(manager, analysis, output.recommendedAction);
         await this.audit(manager, analysis, 'ANALYSIS_COMPLETED');
-      } catch {
+        return this.internalView(analysis);
+      });
+    } catch (error) {
+      this.logInternalFailure(reference, 'completion', error);
+      return this.persistFailureAfterRollback(reference, GuidedSelfCheckAnalysisFailureCode.PROCESSING_ERROR, error);
+    }
+  }
+
+  private async persistFailureAfterRollback(reference: string, failureCode: GuidedSelfCheckAnalysisFailureCode, originalError?: unknown) {
+    try {
+      return await this.data.transaction(async manager => {
+        const repo = manager.getRepository(GuidedSelfCheckAnalysis);
+        const locked = await repo.findOne({ where: { reference }, lock: { mode: 'pessimistic_write' } });
+        if (!locked) throw new NotFoundException('Guided Self-Check analysis was not found');
+        const analysis = await repo.findOne({ where: { id: locked.id }, relations: { classification: { questionnaireVersion: true, selfCheck: true } } });
+        if (!analysis) throw new NotFoundException('Guided Self-Check analysis was not found');
+        if (analysis.status === GuidedSelfCheckAnalysisStatus.COMPLETED) return this.internalView(analysis);
         analysis.status = GuidedSelfCheckAnalysisStatus.FAILED;
-        analysis.failureCode = GuidedSelfCheckAnalysisFailureCode.INVALID_OUTPUT;
+        analysis.failureCode = failureCode;
+        analysis.completedAt = new Date();
         await repo.save(analysis);
-        await this.audit(manager, analysis, 'AI_ACTION_REJECTED', { reason: 'INVALID_OR_UNAPPLICABLE_OUTPUT' });
+        await this.audit(manager, analysis, 'AI_ACTION_REJECTED', { reason: failureCode });
         await this.audit(manager, analysis, 'ANALYSIS_FAILED');
-      }
-      return this.internalView(analysis);
+        return this.internalView(analysis);
+      });
+    } catch (failurePersistenceError) {
+      this.logInternalFailure(reference, 'failure-persistence', failurePersistenceError);
+      if (originalError) throw originalError;
+      throw failurePersistenceError;
+    }
+  }
+
+  private logInternalFailure(reference: string, phase: string, error: unknown) {
+    const diagnostic = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+    this.logger.error('Guided Self-Check analysis processing failed', {
+      analysisReference: reference,
+      phase,
+      errorName: error instanceof Error ? error.name : typeof error,
+      databaseCode: typeof diagnostic.code === 'string' ? diagnostic.code : undefined,
+      constraint: typeof diagnostic.constraint === 'string' ? diagnostic.constraint : undefined,
+      table: typeof diagnostic.table === 'string' ? diagnostic.table : undefined,
     });
   }
 
@@ -180,6 +249,7 @@ export class GuidedSelfCheckAnalysisService {
         status: analysis.status,
         providerKey: analysis.providerKey,
         modelKey: analysis.modelKey,
+        promptVersion: analysis.promptVersion,
         failureCode: analysis.failureCode,
         ...extra,
       },
@@ -193,10 +263,14 @@ export class GuidedSelfCheckAnalysisService {
       classification: analysis.classification?.classification,
       status: analysis.status,
       output: analysis.output,
+      humanReviewRecommended: analysis.humanReviewRecommended,
       providerKey: analysis.providerKey,
       modelKey: analysis.modelKey,
+      promptVersion: analysis.promptVersion,
       failureCode: analysis.failureCode,
+      requestedAt: analysis.createdAt,
       createdAt: analysis.createdAt,
+      startedAt: analysis.startedAt,
       completedAt: analysis.completedAt,
     };
   }

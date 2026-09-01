@@ -15,6 +15,13 @@ export interface AppConfiguration {
   providerMatching: { offerTtlMinutes: number };
   providerInvitations: { ttlSeconds: number; frontendUrl: string };
   healthResults: { guestAccessTtlSeconds: number };
+  guidedSelfCheckAi: {
+    provider: 'none' | 'openai';
+    openAiApiKey?: string;
+    openAiModel?: string;
+    timeoutMs: number;
+    maxRetries: number;
+  };
   clinicalAttachments: {
     provider: 'none' | 'cloudinary';
     cloudName?: string;
@@ -112,6 +119,13 @@ export function createAppConfiguration(
         environment.HEALTH_RESULT_ACCESS_TTL,
         60 * 60 * 24 * 7,
       ),
+    },
+    guidedSelfCheckAi: {
+      provider: (environment.GUIDED_SELF_CHECK_AI_PROVIDER as 'none' | 'openai' | undefined) ?? 'none',
+      openAiApiKey: environment.OPENAI_API_KEY,
+      openAiModel: environment.GUIDED_SELF_CHECK_OPENAI_MODEL,
+      timeoutMs: getNumber(environment.GUIDED_SELF_CHECK_OPENAI_TIMEOUT_MS, 15_000),
+      maxRetries: getNumber(environment.GUIDED_SELF_CHECK_OPENAI_MAX_RETRIES, 1),
     },
     clinicalAttachments: {
       provider: (environment.CLINICAL_ATTACHMENT_STORAGE_PROVIDER as 'none' | 'cloudinary' | undefined) ?? 'none',

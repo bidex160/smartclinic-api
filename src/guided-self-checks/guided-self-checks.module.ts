@@ -48,6 +48,11 @@ import { GuidedSelfCheckInternalClinicalProfessionalAdministrationController, Gu
 import { GuidedSelfCheckContactWorkItem } from "./entities/guided-self-check-contact-work-item.entity";
 import { GuidedSelfCheckContactWorkItemsService } from "./guided-self-check-contact-work-items.service";
 import { GuidedSelfCheckContactWorkItemsController } from "./guided-self-check-contact-work-items.controller";
+import OpenAI from "openai";
+import { createAppConfiguration } from "../config/environment";
+import { GUIDED_SELF_CHECK_ANALYSIS_PORT } from "./guided-self-check-analysis.port";
+import { OpenAiGuidedSelfCheckAnalysisAdapter } from "./openai-guided-self-check-analysis.adapter";
+import { GuidedSelfCheckAnalysisDispatchService } from "./guided-self-check-analysis-dispatch.service";
 @Module({
   imports: [
     AuthModule,
@@ -103,8 +108,22 @@ import { GuidedSelfCheckContactWorkItemsController } from "./guided-self-check-c
     GuidedSelfCheckClinicalGovernanceService,
     GuidedSelfCheckClassificationReprocessingService,
     GuidedSelfCheckAnalysisService,
+    GuidedSelfCheckAnalysisDispatchService,
     GuidedSelfCheckInternalClinicalProfessionalsService,
     GuidedSelfCheckContactWorkItemsService,
+    {
+      provide: GUIDED_SELF_CHECK_ANALYSIS_PORT,
+      useFactory: () => {
+        const config = createAppConfiguration().guidedSelfCheckAi;
+        if (config.provider !== 'openai' || !config.openAiApiKey || !config.openAiModel) return undefined;
+        const client = new OpenAI({
+          apiKey: config.openAiApiKey,
+          timeout: config.timeoutMs,
+          maxRetries: config.maxRetries,
+        });
+        return new OpenAiGuidedSelfCheckAnalysisAdapter(client, config.openAiModel, config.timeoutMs);
+      },
+    },
   ],
   exports: [GuidedSelfChecksService, GuidedSelfCheckNextActionsService],
 })

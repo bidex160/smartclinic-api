@@ -55,6 +55,12 @@ class EnvironmentVariables {
   @Type(() => Number) @IsInt() @Min(300)
   HEALTH_RESULT_ACCESS_TTL = 604800;
 
+  @IsIn(['none', 'openai']) GUIDED_SELF_CHECK_AI_PROVIDER = 'none';
+  @IsOptional() @IsString() OPENAI_API_KEY?: string;
+  @IsOptional() @IsString() GUIDED_SELF_CHECK_OPENAI_MODEL?: string;
+  @Type(() => Number) @IsInt() @Min(1000) GUIDED_SELF_CHECK_OPENAI_TIMEOUT_MS = 15000;
+  @Type(() => Number) @IsInt() @Min(0) GUIDED_SELF_CHECK_OPENAI_MAX_RETRIES = 1;
+
   @IsIn(['none', 'cloudinary']) CLINICAL_ATTACHMENT_STORAGE_PROVIDER = 'none';
   @IsOptional() @IsString() CLOUDINARY_CLOUD_NAME?: string;
   @IsOptional() @IsString() CLOUDINARY_API_KEY?: string;

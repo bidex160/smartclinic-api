@@ -33,6 +33,7 @@ export class GuidedSelfCheckAnalysis {
   @Column({ type: 'jsonb', nullable: true }) output!: GuidedSelfCheckAnalysisOutput | null;
   @Column({ name: 'provider_key', type: 'varchar', length: 80, nullable: true }) providerKey!: string | null;
   @Column({ name: 'model_key', type: 'varchar', length: 120, nullable: true }) modelKey!: string | null;
+  @Column({ name: 'prompt_version', type: 'varchar', length: 80, nullable: true }) promptVersion!: string | null;
   @Column({ name: 'failure_code', type: 'enum', enum: GuidedSelfCheckAnalysisFailureCode, enumName: 'guided_self_check_analysis_failure_code_enum', nullable: true }) failureCode!: GuidedSelfCheckAnalysisFailureCode | null;
   @Column({ name: 'human_review_recommended', type: 'boolean', default: false }) humanReviewRecommended!: boolean;
   @Column({ name: 'started_at', type: 'timestamptz', nullable: true }) startedAt!: Date | null;
