@@ -79,9 +79,7 @@ export class GuidedSelfCheckInternalClinicalProfessionalsService {
   }
 
   async eligible(reference: string, capability: GuidedSelfCheckInternalClinicalCapability, manager: EntityManager = this.data.manager) {
-    const professional = await manager.getRepository(GuidedSelfCheckInternalClinicalProfessional).findOne({
-      where: { reference }, relations: { user: true }, lock: manager.queryRunner ? { mode: 'pessimistic_read' } : undefined,
-    });
+    const professional = await this.loadWithOptionalLock(manager, { reference }, 'pessimistic_read');
     this.assertEligible(professional, capability);
     return professional!;
   }
@@ -93,9 +91,7 @@ export class GuidedSelfCheckInternalClinicalProfessionalsService {
   }
 
   async activeForUser(userId: string, manager: EntityManager = this.data.manager) {
-    const professional = await manager.getRepository(GuidedSelfCheckInternalClinicalProfessional).findOne({
-      where: { userId }, relations: { user: true }, lock: manager.queryRunner ? { mode: 'pessimistic_read' } : undefined,
-    });
+    const professional = await this.loadWithOptionalLock(manager, { userId }, 'pessimistic_read');
     this.assertActive(professional);
     return professional!;
   }
@@ -112,9 +108,23 @@ export class GuidedSelfCheckInternalClinicalProfessionalsService {
   }
 
   private async lock(manager: EntityManager, reference: string) {
-    const professional = await manager.getRepository(GuidedSelfCheckInternalClinicalProfessional).findOne({ where: { reference }, relations: { user: true }, lock: { mode: 'pessimistic_write' } });
+    const professional = await this.loadWithOptionalLock(manager, { reference }, 'pessimistic_write');
     if (!professional) throw new NotFoundException('Internal clinical professional was not found');
     return professional;
+  }
+
+  private async loadWithOptionalLock(
+    manager: EntityManager,
+    where: { reference: string } | { userId: string },
+    mode: 'pessimistic_read' | 'pessimistic_write',
+  ) {
+    const repo = manager.getRepository(GuidedSelfCheckInternalClinicalProfessional);
+    const locked = await repo.findOne({
+      where,
+      ...(manager.queryRunner ? { lock: { mode } } : {}),
+    });
+    if (!locked) return null;
+    return repo.findOne({ where: { id: locked.id }, relations: { user: true } });
   }
 
   private audit(manager: EntityManager, professionalId: string, event: GuidedSelfCheckInternalClinicalProfessionalEvent, actorUserId: string, metadata: Record<string, unknown>) {

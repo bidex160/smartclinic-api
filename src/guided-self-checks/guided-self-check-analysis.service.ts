@@ -80,10 +80,14 @@ export class GuidedSelfCheckAnalysisService {
   async process(reference: string) {
     return this.data.transaction(async manager => {
       const repo = manager.getRepository(GuidedSelfCheckAnalysis);
-      const analysis = await repo.findOne({
+      const locked = await repo.findOne({
         where: { reference },
-        relations: { classification: { questionnaireVersion: true, selfCheck: true } },
         lock: { mode: 'pessimistic_write' },
+      });
+      if (!locked) throw new NotFoundException('Guided Self-Check analysis was not found');
+      const analysis = await repo.findOne({
+        where: { id: locked.id },
+        relations: { classification: { questionnaireVersion: true, selfCheck: true } },
       });
       if (!analysis) throw new NotFoundException('Guided Self-Check analysis was not found');
       if (analysis.status === GuidedSelfCheckAnalysisStatus.COMPLETED || analysis.status === GuidedSelfCheckAnalysisStatus.PROCESSING) {

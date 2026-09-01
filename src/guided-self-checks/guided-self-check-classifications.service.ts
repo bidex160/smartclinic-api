@@ -1,52 +1,492 @@
-import { ConflictException,Injectable,NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { createHash } from 'node:crypto';
-import { DataSource,Repository } from 'typeorm';
-import { GuidedSelfCheckAnswer } from './entities/guided-self-check-answer.entity';
-import { GuidedSelfCheckClassificationResult } from './entities/guided-self-check-classification.entity';
-import { GuidedSelfCheckClinicalRuleset } from './entities/guided-self-check-clinical-ruleset.entity';
-import { GuidedSelfCheckHistory } from './entities/guided-self-check-history.entity';
-import { GuidedSelfCheckProfessionalReviewHistory } from './entities/guided-self-check-professional-review-history.entity';
-import { GuidedSelfCheckProfessionalReview } from './entities/guided-self-check-professional-review.entity';
-import { GuidedSelfCheckAnalysis } from './entities/guided-self-check-analysis.entity';
-import { GuidedSelfCheckQuestion } from './entities/guided-self-check-question.entity';
-import { GuidedSelfCheckQuestionnaireVersion } from './entities/guided-self-check-questionnaire-version.entity';
-import { GuidedSelfCheck } from './entities/guided-self-check.entity';
-import { GUIDED_SELF_CHECK_RECEIVED_MESSAGE,GuidedSelfCheckClassification,GuidedSelfCheckClassificationStatus,GuidedSelfCheckClinicalRule,GuidedSelfCheckPatientMessageKey,GuidedSelfCheckRuleCondition,GuidedSelfCheckRuleOperator,GuidedSelfCheckRulesetGovernanceStatus,GuidedSelfCheckRuleSeverity } from './enums/guided-self-check-classification.enum';
-import { GuidedSelfCheckAnswerState } from './enums/guided-self-check-questionnaire.enum';
-import { GuidedSelfCheckContactStatus,GuidedSelfCheckReviewEvent,GuidedSelfCheckReviewModel,GuidedSelfCheckReviewOrigin,GuidedSelfCheckReviewPriority,GuidedSelfCheckReviewStatus } from './enums/guided-self-check-review.enum';
-import { GuidedSelfCheckAnalysisStatus } from './enums/guided-self-check-analysis.enum';
-import { GuidedSelfCheckWorkflowStatus } from './enums/guided-self-check.enum';
-import { GuidedSelfCheckContactWorkItemsService } from './guided-self-check-contact-work-items.service';
-const COPY={ [GuidedSelfCheckPatientMessageKey.GREEN_COMPLETE]:{title:'Your Self-Check is complete.',message:'No immediate warning sign was detected from the information you provided. This is not a diagnosis.'},[GuidedSelfCheckPatientMessageKey.AMBER_REVIEW]:{title:'One of your answers needs professional review.',message:'A healthcare professional will review your information and contact you if clarification is required.'},[GuidedSelfCheckPatientMessageKey.RED_URGENT]:{title:'Your answers may require urgent medical attention.',message:'Please do not wait for an online review.'}};
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { createHash } from "node:crypto";
+import { DataSource, Repository } from "typeorm";
+import { GuidedSelfCheckAnswer } from "./entities/guided-self-check-answer.entity";
+import { GuidedSelfCheckClassificationResult } from "./entities/guided-self-check-classification.entity";
+import { GuidedSelfCheckClinicalRuleset } from "./entities/guided-self-check-clinical-ruleset.entity";
+import { GuidedSelfCheckHistory } from "./entities/guided-self-check-history.entity";
+import { GuidedSelfCheckProfessionalReviewHistory } from "./entities/guided-self-check-professional-review-history.entity";
+import { GuidedSelfCheckProfessionalReview } from "./entities/guided-self-check-professional-review.entity";
+import { GuidedSelfCheckAnalysis } from "./entities/guided-self-check-analysis.entity";
+import { GuidedSelfCheckQuestion } from "./entities/guided-self-check-question.entity";
+import { GuidedSelfCheckQuestionnaireVersion } from "./entities/guided-self-check-questionnaire-version.entity";
+import { GuidedSelfCheck } from "./entities/guided-self-check.entity";
+import {
+  GUIDED_SELF_CHECK_RECEIVED_MESSAGE,
+  GuidedSelfCheckClassification,
+  GuidedSelfCheckClassificationStatus,
+  GuidedSelfCheckClinicalRule,
+  GuidedSelfCheckPatientMessageKey,
+  GuidedSelfCheckRuleCondition,
+  GuidedSelfCheckRuleOperator,
+  GuidedSelfCheckRulesetGovernanceStatus,
+  GuidedSelfCheckRuleSeverity,
+} from "./enums/guided-self-check-classification.enum";
+import { GuidedSelfCheckAnswerState } from "./enums/guided-self-check-questionnaire.enum";
+import {
+  GuidedSelfCheckContactStatus,
+  GuidedSelfCheckReviewEvent,
+  GuidedSelfCheckReviewModel,
+  GuidedSelfCheckReviewOrigin,
+  GuidedSelfCheckReviewPriority,
+  GuidedSelfCheckReviewStatus,
+} from "./enums/guided-self-check-review.enum";
+import { GuidedSelfCheckAnalysisStatus } from "./enums/guided-self-check-analysis.enum";
+import { GuidedSelfCheckWorkflowStatus } from "./enums/guided-self-check.enum";
+import { GuidedSelfCheckContactWorkItemsService } from "./guided-self-check-contact-work-items.service";
+export const GUIDED_SELF_CHECK_PATIENT_MESSAGE_CATALOGUE = {
+  [GuidedSelfCheckPatientMessageKey.GREEN_COMPLETE]: {
+    title: "Your Self-Check is complete.",
+    message:
+      "No immediate warning sign was detected from the information you provided. This is not a diagnosis.",
+  },
+  [GuidedSelfCheckPatientMessageKey.AMBER_REVIEW]: {
+    title: "One of your answers needs professional review.",
+    message:
+      "A healthcare professional will review your information and contact you if clarification is required.",
+  },
+  [GuidedSelfCheckPatientMessageKey.RED_URGENT]: {
+    title: "Your answers may require urgent medical attention.",
+    message: "Please do not wait for an online review.",
+  },
+};
 @Injectable()
-export class GuidedSelfCheckClassificationsService{
- constructor(@InjectRepository(GuidedSelfCheckClassificationResult)private results:Repository<GuidedSelfCheckClassificationResult>,@InjectRepository(GuidedSelfCheck)private checks:Repository<GuidedSelfCheck>,private data:DataSource,private contacts:GuidedSelfCheckContactWorkItemsService=undefined as never){}
- async classifyCompleted(reference:string,expectedRulesetReference?:string){return this.data.transaction(async m=>{
-  const s=await m.getRepository(GuidedSelfCheck).findOne({where:{reference},lock:{mode:'pessimistic_write'}});
-  if(!s)throw new NotFoundException('Guided Self-Check was not found');
-  if(s.workflowStatus!==GuidedSelfCheckWorkflowStatus.COMPLETED||!s.questionnaireVersionId)throw new ConflictException('Only a completed questionnaire can be classified');
-  const existing=await m.getRepository(GuidedSelfCheckClassificationResult).findOne({where:{guidedSelfCheckId:s.id},relations:{ruleset:true,questionnaireVersion:true}});
-  if(existing){if(s.classificationStatus!==GuidedSelfCheckClassificationStatus.CLASSIFIED){s.classificationStatus=GuidedSelfCheckClassificationStatus.CLASSIFIED;await m.save(s);}return existing;}
-  const ruleset=await m.getRepository(GuidedSelfCheckClinicalRuleset).findOne({where:{questionnaireVersionId:s.questionnaireVersionId,isActive:true,governanceStatus:GuidedSelfCheckRulesetGovernanceStatus.READY},relations:{questionnaireVersion:true},lock:{mode:'pessimistic_read'}});
-  if(expectedRulesetReference&&ruleset?.reference!==expectedRulesetReference)throw new ConflictException('RULESET_CHANGED');
-  if(!ruleset||!this.isUsable(ruleset)){s.classificationStatus=GuidedSelfCheckClassificationStatus.CONFIGURATION_REQUIRED;s.classificationLastAttemptAt=new Date();s.classificationFailureCode='NO_USABLE_RULESET';await m.save(s);const history=m.getRepository(GuidedSelfCheckHistory);if(!await history.exists({where:{guidedSelfCheckId:s.id,event:'SELF_CHECK_CLASSIFICATION_DEFERRED'}}))await history.save({guidedSelfCheckId:s.id,event:'SELF_CHECK_CLASSIFICATION_DEFERRED',actorUserId:null,metadata:{questionnaireVersionId:s.questionnaireVersionId,reason:'NO_READY_COMPATIBLE_RULESET'}});return null;}
-  const questions=await m.getRepository(GuidedSelfCheckQuestion).find({where:{questionnaireVersionId:s.questionnaireVersionId}});const answers=await m.getRepository(GuidedSelfCheckAnswer).find({where:{guidedSelfCheckId:s.id}});const keyed=new Map(answers.flatMap(a=>{const q=questions.find(x=>x.id===a.questionId);return q?[[q.key,a] as [string,GuidedSelfCheckAnswer]]:[];}));const matched=this.evaluateRules(ruleset.rules,keyed);const classification=matched.some(x=>x.severity===GuidedSelfCheckRuleSeverity.RED)?GuidedSelfCheckClassification.RED:matched.length?GuidedSelfCheckClassification.AMBER:GuidedSelfCheckClassification.GREEN;const urgentAction=classification===GuidedSelfCheckClassification.RED;const requiresProfessionalReview=classification!==GuidedSelfCheckClassification.GREEN;const patientMessageKey=urgentAction?GuidedSelfCheckPatientMessageKey.RED_URGENT:requiresProfessionalReview?GuidedSelfCheckPatientMessageKey.AMBER_REVIEW:GuidedSelfCheckPatientMessageKey.GREEN_COMPLETE;
-  const result=await m.save(m.create(GuidedSelfCheckClassificationResult,{guidedSelfCheckId:s.id,rulesetId:ruleset.id,questionnaireVersionId:s.questionnaireVersionId,classification,matchedReasonCodes:matched.map(x=>x.code),requiresProfessionalReview,urgentAction,patientMessageKey,classifiedAt:new Date()}));
-  result.ruleset=ruleset;result.questionnaireVersion=ruleset.questionnaireVersion;
-  if(classification===GuidedSelfCheckClassification.AMBER){const ar=m.getRepository(GuidedSelfCheckAnalysis);if(!await ar.findOne({where:{classificationId:result.id}})){const analysis=await ar.save(ar.create({guidedSelfCheckId:s.id,classificationId:result.id,status:GuidedSelfCheckAnalysisStatus.PENDING,output:null,providerKey:null,modelKey:null,failureCode:null,startedAt:null,completedAt:null}));await m.getRepository(GuidedSelfCheckHistory).save({guidedSelfCheckId:s.id,event:'ANALYSIS_REQUESTED',actorUserId:null,metadata:{analysisReference:analysis.reference}});}}
-  if(classification===GuidedSelfCheckClassification.RED){const rr=m.getRepository(GuidedSelfCheckProfessionalReview);let review=await rr.findOne({where:{classificationId:result.id}});if(!review){review=await rr.save(rr.create({guidedSelfCheckId:s.id,classificationId:result.id,classificationSnapshot:classification,priority:GuidedSelfCheckReviewPriority.URGENT,origin:GuidedSelfCheckReviewOrigin.CLASSIFICATION_REQUIRED,status:GuidedSelfCheckReviewStatus.PENDING,reviewModel:GuidedSelfCheckReviewModel.INTERNAL_URGENT,assignedReviewerUserId:null,assignedReviewerProviderId:null,assignedReviewerAuthorizationId:null,decision:null,reviewerNotes:null,contactRequired:false,contactStatus:GuidedSelfCheckContactStatus.NOT_REQUIRED}));await m.getRepository(GuidedSelfCheckProfessionalReviewHistory).save({reviewId:review.id,event:GuidedSelfCheckReviewEvent.INTERNAL_REVIEW_CREATED,actorUserId:null,fromStatus:null,toStatus:GuidedSelfCheckReviewStatus.PENDING,metadata:{classification,priority:GuidedSelfCheckReviewPriority.URGENT,reviewModel:GuidedSelfCheckReviewModel.INTERNAL_URGENT}});}}
-  s.classificationStatus=GuidedSelfCheckClassificationStatus.CLASSIFIED;s.classificationLastAttemptAt=new Date();s.classificationFailureCode=null;await m.save(s);await m.getRepository(GuidedSelfCheckHistory).save({guidedSelfCheckId:s.id,event:'SELF_CHECK_CLASSIFIED',actorUserId:null,metadata:{classification,rulesetReference:ruleset.reference,rulesetVersion:ruleset.version,reasonCodes:result.matchedReasonCodes}});return result;
- });}
- async getPatientResult(reference:string,userId:string){const s=await this.checks.findOne({where:{reference,userId}});if(!s)throw new NotFoundException('Guided Self-Check was not found');const result=await this.results.findOne({where:{guidedSelfCheckId:s.id}});if(!result)return{classificationStatus:s.classificationStatus??GuidedSelfCheckClassificationStatus.PENDING,classification:null,professionalReview:null,professionalContact:null,analysis:null,...GUIDED_SELF_CHECK_RECEIVED_MESSAGE};const review=await this.data.manager.getRepository(GuidedSelfCheckProfessionalReview).findOne({where:{guidedSelfCheckId:s.id}});const analysis=await this.data.manager.getRepository(GuidedSelfCheckAnalysis).findOne({where:{guidedSelfCheckId:s.id}});const professionalContact=this.contacts?await this.contacts.patientState(s.id):null;return{classificationStatus:GuidedSelfCheckClassificationStatus.CLASSIFIED,classification:this.patientView(result),professionalReview:review?{required:true,status:review.status,completedAt:review.completedAt,patientGuidance:review.status==='COMPLETED'?review.patientGuidance:null}:{required:false,status:null,completedAt:null,patientGuidance:null},professionalContact,analysis:analysis?{required:true,status:analysis.status,humanReviewRecommended:analysis.humanReviewRecommended}:null};}
- async getInternalResult(reference:string){const s=await this.checks.findOne({where:{reference}});if(!s)throw new NotFoundException('Guided Self-Check was not found');const result=await this.results.findOne({where:{guidedSelfCheckId:s.id},relations:{ruleset:true,questionnaireVersion:true}});if(result)return{selfCheckReference:s.reference,questionnaireVersion:result.questionnaireVersion.version,classificationStatus:GuidedSelfCheckClassificationStatus.CLASSIFIED,rulesetVersion:result.ruleset.version,classification:result.classification,matchedReasonCodes:result.matchedReasonCodes,requiresProfessionalReview:result.requiresProfessionalReview,urgentAction:result.urgentAction,patientMessageKey:result.patientMessageKey,classifiedAt:result.classifiedAt};const version=s.questionnaireVersionId?await this.data.manager.getRepository(GuidedSelfCheckQuestionnaireVersion).findOne({where:{id:s.questionnaireVersionId}}):null;return{selfCheckReference:s.reference,questionnaireVersion:version?.version??null,classificationStatus:s.classificationStatus??GuidedSelfCheckClassificationStatus.PENDING,rulesetVersion:null,classification:null,classifiedAt:null};}
- evaluateRulesForGovernance(rules:GuidedSelfCheckClinicalRule[],answers:Map<string,GuidedSelfCheckAnswer>){return this.evaluateRules(rules,answers);}
- isRulesetUsable(ruleset:GuidedSelfCheckClinicalRuleset){return this.isUsable(ruleset);}
- private patientView(r:GuidedSelfCheckClassificationResult){return{classification:r.classification,requiresProfessionalReview:r.requiresProfessionalReview,urgentAction:r.urgentAction,patientMessageKey:r.patientMessageKey,...COPY[r.patientMessageKey],classifiedAt:r.classifiedAt};}
- private isUsable(r:GuidedSelfCheckClinicalRuleset){return !!r.approvedContentHash&&r.approvedContentHash===r.contentHash&&r.contentHash===this.hash({questionnaireVersion:r.questionnaireVersion.version,rules:r.rules,patientMessageKeys:r.patientMessageKeys});}
- private hash(v:any){return createHash('sha256').update(this.canonical(v)).digest('hex');}
- private canonical(v:any):string{if(Array.isArray(v))return`[${v.map(x=>this.canonical(x)).join(',')}]`;if(v&&typeof v==='object')return`{${Object.keys(v).sort().map(k=>`${JSON.stringify(k)}:${this.canonical(v[k])}`).join(',')}}`;return JSON.stringify(v);}
- private evaluateRules(rules:GuidedSelfCheckClinicalRule[],answers:Map<string,GuidedSelfCheckAnswer>){if(!Array.isArray(rules))throw new ConflictException('Clinical ruleset is invalid');const seen=new Set<string>();return rules.map(r=>{if(!r||!/^[-A-Z0-9_]{3,100}$/.test(r.code)||seen.has(r.code)||!Object.values(GuidedSelfCheckRuleSeverity).includes(r.severity))throw new ConflictException('Clinical ruleset contains an invalid rule');seen.add(r.code);return r;}).filter(r=>this.evaluate(r.condition,answers));}
- private evaluate(c:GuidedSelfCheckRuleCondition,answers:Map<string,GuidedSelfCheckAnswer>):boolean{if(!c||!Object.values(GuidedSelfCheckRuleOperator).includes(c.operator))throw new ConflictException('Clinical rule condition is invalid');if(c.operator===GuidedSelfCheckRuleOperator.AND||c.operator===GuidedSelfCheckRuleOperator.OR){if(!Array.isArray(c.conditions)||!c.conditions.length)throw new ConflictException('Clinical rule group is invalid');return c.operator===GuidedSelfCheckRuleOperator.AND?c.conditions.every(x=>this.evaluate(x,answers)):c.conditions.some(x=>this.evaluate(x,answers));}if(!c.questionKey)throw new ConflictException('Clinical rule question key is required');const a=answers.get(c.questionKey);if(c.operator===GuidedSelfCheckRuleOperator.UNANSWERED)return !a;if(c.operator===GuidedSelfCheckRuleOperator.STATE_EQUALS)return !!a&&a.state===c.state;if(!a||a.state!==GuidedSelfCheckAnswerState.KNOWN)return false;let actual:any=a.value;if(c.field){if(!actual||Array.isArray(actual)||typeof actual!=='object')return false;actual=actual[c.field];}switch(c.operator){case GuidedSelfCheckRuleOperator.EQUALS:return actual===c.value;case GuidedSelfCheckRuleOperator.INCLUDES:return Array.isArray(actual)&&actual.includes(c.value);case GuidedSelfCheckRuleOperator.LT:return this.number(actual)<this.number(c.value);case GuidedSelfCheckRuleOperator.LTE:return this.number(actual)<=this.number(c.value);case GuidedSelfCheckRuleOperator.GT:return this.number(actual)>this.number(c.value);case GuidedSelfCheckRuleOperator.GTE:return this.number(actual)>=this.number(c.value);case GuidedSelfCheckRuleOperator.BETWEEN:return this.number(actual)>=this.number(c.min)&&this.number(actual)<=this.number(c.max);default:return false;}}
- private number(v:unknown){if(typeof v!=='number'||!Number.isFinite(v))throw new ConflictException('Clinical numeric rule value is invalid');return v;}
+export class GuidedSelfCheckClassificationsService {
+  constructor(
+    @InjectRepository(GuidedSelfCheckClassificationResult)
+    private results: Repository<GuidedSelfCheckClassificationResult>,
+    @InjectRepository(GuidedSelfCheck)
+    private checks: Repository<GuidedSelfCheck>,
+    private data: DataSource,
+    private contacts: GuidedSelfCheckContactWorkItemsService = undefined as never,
+  ) {}
+  async classifyCompleted(
+    reference: string,
+    expectedRulesetReference?: string,
+  ) {
+    return this.data.transaction(async (m) => {
+      const s = await m
+        .getRepository(GuidedSelfCheck)
+        .findOne({ where: { reference }, lock: { mode: "pessimistic_write" } });
+      if (!s) throw new NotFoundException("Guided Self-Check was not found");
+      if (
+        s.workflowStatus !== GuidedSelfCheckWorkflowStatus.COMPLETED ||
+        !s.questionnaireVersionId
+      )
+        throw new ConflictException(
+          "Only a completed questionnaire can be classified",
+        );
+      const existing = await m
+        .getRepository(GuidedSelfCheckClassificationResult)
+        .findOne({
+          where: { guidedSelfCheckId: s.id },
+          relations: { ruleset: true, questionnaireVersion: true },
+        });
+      if (existing) {
+        if (
+          s.classificationStatus !==
+          GuidedSelfCheckClassificationStatus.CLASSIFIED
+        ) {
+          s.classificationStatus =
+            GuidedSelfCheckClassificationStatus.CLASSIFIED;
+          await m.save(s);
+        }
+        return existing;
+      }
+    const ruleset = await m
+  .getRepository(GuidedSelfCheckClinicalRuleset)
+  .createQueryBuilder("ruleset")
+  .leftJoinAndSelect(
+    "ruleset.questionnaireVersion",
+    "questionnaireVersion",
+  )
+  .where(
+    "ruleset.questionnaireVersionId = :questionnaireVersionId",
+    {
+      questionnaireVersionId: s.questionnaireVersionId,
+    },
+  )
+  .andWhere("ruleset.isActive = :isActive", {
+    isActive: true,
+  })
+  .andWhere("ruleset.governanceStatus = :governanceStatus", {
+    governanceStatus: GuidedSelfCheckRulesetGovernanceStatus.READY,
+  })
+  .setLock("pessimistic_read", undefined, ["ruleset"])
+  .getOne();
+      if (
+        expectedRulesetReference &&
+        ruleset?.reference !== expectedRulesetReference
+      )
+        throw new ConflictException("RULESET_CHANGED");
+      if (!ruleset || !this.isUsable(ruleset)) {
+        s.classificationStatus =
+          GuidedSelfCheckClassificationStatus.CONFIGURATION_REQUIRED;
+        s.classificationLastAttemptAt = new Date();
+        s.classificationFailureCode = "NO_USABLE_RULESET";
+        await m.save(s);
+        const history = m.getRepository(GuidedSelfCheckHistory);
+        if (
+          !(await history.exists({
+            where: {
+              guidedSelfCheckId: s.id,
+              event: "SELF_CHECK_CLASSIFICATION_DEFERRED",
+            },
+          }))
+        )
+          await history.save({
+            guidedSelfCheckId: s.id,
+            event: "SELF_CHECK_CLASSIFICATION_DEFERRED",
+            actorUserId: null,
+            metadata: {
+              questionnaireVersionId: s.questionnaireVersionId,
+              reason: "NO_READY_COMPATIBLE_RULESET",
+            },
+          });
+        return null;
+      }
+      const questions = await m
+        .getRepository(GuidedSelfCheckQuestion)
+        .find({ where: { questionnaireVersionId: s.questionnaireVersionId } });
+      const answers = await m
+        .getRepository(GuidedSelfCheckAnswer)
+        .find({ where: { guidedSelfCheckId: s.id } });
+      const keyed = new Map(
+        answers.flatMap((a) => {
+          const q = questions.find((x) => x.id === a.questionId);
+          return q ? [[q.key, a] as [string, GuidedSelfCheckAnswer]] : [];
+        }),
+      );
+      const matched = this.evaluateRules(ruleset.rules, keyed);
+      const classification = matched.some(
+        (x) => x.severity === GuidedSelfCheckRuleSeverity.RED,
+      )
+        ? GuidedSelfCheckClassification.RED
+        : matched.length
+          ? GuidedSelfCheckClassification.AMBER
+          : GuidedSelfCheckClassification.GREEN;
+      const urgentAction = classification === GuidedSelfCheckClassification.RED;
+      const requiresProfessionalReview =
+        classification !== GuidedSelfCheckClassification.GREEN;
+      const patientMessageKey = urgentAction
+        ? GuidedSelfCheckPatientMessageKey.RED_URGENT
+        : requiresProfessionalReview
+          ? GuidedSelfCheckPatientMessageKey.AMBER_REVIEW
+          : GuidedSelfCheckPatientMessageKey.GREEN_COMPLETE;
+      const result = await m.save(
+        m.create(GuidedSelfCheckClassificationResult, {
+          guidedSelfCheckId: s.id,
+          rulesetId: ruleset.id,
+          questionnaireVersionId: s.questionnaireVersionId,
+          classification,
+          matchedReasonCodes: matched.map((x) => x.code),
+          requiresProfessionalReview,
+          urgentAction,
+          patientMessageKey,
+          classifiedAt: new Date(),
+        }),
+      );
+      result.ruleset = ruleset;
+      result.questionnaireVersion = ruleset.questionnaireVersion;
+      if (classification === GuidedSelfCheckClassification.AMBER) {
+        const ar = m.getRepository(GuidedSelfCheckAnalysis);
+        if (!(await ar.findOne({ where: { classificationId: result.id } }))) {
+          const analysis = await ar.save(
+            ar.create({
+              guidedSelfCheckId: s.id,
+              classificationId: result.id,
+              status: GuidedSelfCheckAnalysisStatus.PENDING,
+              output: null,
+              providerKey: null,
+              modelKey: null,
+              failureCode: null,
+              startedAt: null,
+              completedAt: null,
+            }),
+          );
+          await m
+            .getRepository(GuidedSelfCheckHistory)
+            .save({
+              guidedSelfCheckId: s.id,
+              event: "ANALYSIS_REQUESTED",
+              actorUserId: null,
+              metadata: { analysisReference: analysis.reference },
+            });
+        }
+      }
+      if (classification === GuidedSelfCheckClassification.RED) {
+        const rr = m.getRepository(GuidedSelfCheckProfessionalReview);
+        let review = await rr.findOne({
+          where: { classificationId: result.id },
+        });
+        if (!review) {
+          review = await rr.save(
+            rr.create({
+              guidedSelfCheckId: s.id,
+              classificationId: result.id,
+              classificationSnapshot: classification,
+              priority: GuidedSelfCheckReviewPriority.URGENT,
+              origin: GuidedSelfCheckReviewOrigin.CLASSIFICATION_REQUIRED,
+              status: GuidedSelfCheckReviewStatus.PENDING,
+              reviewModel: GuidedSelfCheckReviewModel.INTERNAL_URGENT,
+              assignedReviewerUserId: null,
+              assignedReviewerProviderId: null,
+              assignedReviewerAuthorizationId: null,
+              decision: null,
+              reviewerNotes: null,
+              contactRequired: false,
+              contactStatus: GuidedSelfCheckContactStatus.NOT_REQUIRED,
+            }),
+          );
+          await m
+            .getRepository(GuidedSelfCheckProfessionalReviewHistory)
+            .save({
+              reviewId: review.id,
+              event: GuidedSelfCheckReviewEvent.INTERNAL_REVIEW_CREATED,
+              actorUserId: null,
+              fromStatus: null,
+              toStatus: GuidedSelfCheckReviewStatus.PENDING,
+              metadata: {
+                classification,
+                priority: GuidedSelfCheckReviewPriority.URGENT,
+                reviewModel: GuidedSelfCheckReviewModel.INTERNAL_URGENT,
+              },
+            });
+        }
+      }
+      s.classificationStatus = GuidedSelfCheckClassificationStatus.CLASSIFIED;
+      s.classificationLastAttemptAt = new Date();
+      s.classificationFailureCode = null;
+      await m.save(s);
+      await m
+        .getRepository(GuidedSelfCheckHistory)
+        .save({
+          guidedSelfCheckId: s.id,
+          event: "SELF_CHECK_CLASSIFIED",
+          actorUserId: null,
+          metadata: {
+            classification,
+            rulesetReference: ruleset.reference,
+            rulesetVersion: ruleset.version,
+            reasonCodes: result.matchedReasonCodes,
+          },
+        });
+      return result;
+    });
+  }
+  async getPatientResult(reference: string, userId: string) {
+    const s = await this.checks.findOne({ where: { reference, userId } });
+    if (!s) throw new NotFoundException("Guided Self-Check was not found");
+    const result = await this.results.findOne({
+      where: { guidedSelfCheckId: s.id },
+    });
+    if (!result)
+      return {
+        classificationStatus:
+          s.classificationStatus ?? GuidedSelfCheckClassificationStatus.PENDING,
+        classification: null,
+        professionalReview: null,
+        professionalContact: null,
+        analysis: null,
+        ...GUIDED_SELF_CHECK_RECEIVED_MESSAGE,
+      };
+    const review = await this.data.manager
+      .getRepository(GuidedSelfCheckProfessionalReview)
+      .findOne({ where: { guidedSelfCheckId: s.id } });
+    const analysis = await this.data.manager
+      .getRepository(GuidedSelfCheckAnalysis)
+      .findOne({ where: { guidedSelfCheckId: s.id } });
+    const professionalContact = this.contacts
+      ? await this.contacts.patientState(s.id)
+      : null;
+    return {
+      classificationStatus: GuidedSelfCheckClassificationStatus.CLASSIFIED,
+      classification: this.patientView(result),
+      professionalReview: review
+        ? {
+            required: true,
+            status: review.status,
+            completedAt: review.completedAt,
+            patientGuidance:
+              review.status === "COMPLETED" ? review.patientGuidance : null,
+          }
+        : {
+            required: false,
+            status: null,
+            completedAt: null,
+            patientGuidance: null,
+          },
+      professionalContact,
+      analysis: analysis
+        ? {
+            required: true,
+            status: analysis.status,
+            humanReviewRecommended: analysis.humanReviewRecommended,
+          }
+        : null,
+    };
+  }
+  async getInternalResult(reference: string) {
+    const s = await this.checks.findOne({ where: { reference } });
+    if (!s) throw new NotFoundException("Guided Self-Check was not found");
+    const result = await this.results.findOne({
+      where: { guidedSelfCheckId: s.id },
+      relations: { ruleset: true, questionnaireVersion: true },
+    });
+    if (result)
+      return {
+        selfCheckReference: s.reference,
+        questionnaireVersion: result.questionnaireVersion.version,
+        classificationStatus: GuidedSelfCheckClassificationStatus.CLASSIFIED,
+        rulesetVersion: result.ruleset.version,
+        classification: result.classification,
+        matchedReasonCodes: result.matchedReasonCodes,
+        requiresProfessionalReview: result.requiresProfessionalReview,
+        urgentAction: result.urgentAction,
+        patientMessageKey: result.patientMessageKey,
+        classifiedAt: result.classifiedAt,
+      };
+    const version = s.questionnaireVersionId
+      ? await this.data.manager
+          .getRepository(GuidedSelfCheckQuestionnaireVersion)
+          .findOne({ where: { id: s.questionnaireVersionId } })
+      : null;
+    return {
+      selfCheckReference: s.reference,
+      questionnaireVersion: version?.version ?? null,
+      classificationStatus:
+        s.classificationStatus ?? GuidedSelfCheckClassificationStatus.PENDING,
+      rulesetVersion: null,
+      classification: null,
+      classifiedAt: null,
+    };
+  }
+  evaluateRulesForGovernance(
+    rules: GuidedSelfCheckClinicalRule[],
+    answers: Map<string, GuidedSelfCheckAnswer>,
+  ) {
+    return this.evaluateRules(rules, answers);
+  }
+  isRulesetUsable(ruleset: GuidedSelfCheckClinicalRuleset) {
+    return this.isUsable(ruleset);
+  }
+  private patientView(r: GuidedSelfCheckClassificationResult) {
+    return {
+      classification: r.classification,
+      requiresProfessionalReview: r.requiresProfessionalReview,
+      urgentAction: r.urgentAction,
+      patientMessageKey: r.patientMessageKey,
+      ...GUIDED_SELF_CHECK_PATIENT_MESSAGE_CATALOGUE[r.patientMessageKey],
+      classifiedAt: r.classifiedAt,
+    };
+  }
+  private isUsable(r: GuidedSelfCheckClinicalRuleset) {
+    return (
+      !!r.approvedContentHash &&
+      r.approvedContentHash === r.contentHash &&
+      r.contentHash ===
+        this.hash({
+          questionnaireVersion: r.questionnaireVersion.version,
+          rules: r.rules,
+          patientMessageKeys: r.patientMessageKeys,
+        })
+    );
+  }
+  private hash(v: any) {
+    return createHash("sha256").update(this.canonical(v)).digest("hex");
+  }
+  private canonical(v: any): string {
+    if (Array.isArray(v))
+      return `[${v.map((x) => this.canonical(x)).join(",")}]`;
+    if (v && typeof v === "object")
+      return `{${Object.keys(v)
+        .sort()
+        .map((k) => `${JSON.stringify(k)}:${this.canonical(v[k])}`)
+        .join(",")}}`;
+    return JSON.stringify(v);
+  }
+  private evaluateRules(
+    rules: GuidedSelfCheckClinicalRule[],
+    answers: Map<string, GuidedSelfCheckAnswer>,
+  ) {
+    if (!Array.isArray(rules))
+      throw new ConflictException("Clinical ruleset is invalid");
+    const seen = new Set<string>();
+    return rules
+      .map((r) => {
+        if (
+          !r ||
+          !/^[-A-Z0-9_]{3,100}$/.test(r.code) ||
+          seen.has(r.code) ||
+          !Object.values(GuidedSelfCheckRuleSeverity).includes(r.severity)
+        )
+          throw new ConflictException(
+            "Clinical ruleset contains an invalid rule",
+          );
+        seen.add(r.code);
+        return r;
+      })
+      .filter((r) => this.evaluate(r.condition, answers));
+  }
+  private evaluate(
+    c: GuidedSelfCheckRuleCondition,
+    answers: Map<string, GuidedSelfCheckAnswer>,
+  ): boolean {
+    if (!c || !Object.values(GuidedSelfCheckRuleOperator).includes(c.operator))
+      throw new ConflictException("Clinical rule condition is invalid");
+    if (
+      c.operator === GuidedSelfCheckRuleOperator.AND ||
+      c.operator === GuidedSelfCheckRuleOperator.OR
+    ) {
+      if (!Array.isArray(c.conditions) || !c.conditions.length)
+        throw new ConflictException("Clinical rule group is invalid");
+      return c.operator === GuidedSelfCheckRuleOperator.AND
+        ? c.conditions.every((x) => this.evaluate(x, answers))
+        : c.conditions.some((x) => this.evaluate(x, answers));
+    }
+    if (!c.questionKey)
+      throw new ConflictException("Clinical rule question key is required");
+    const a = answers.get(c.questionKey);
+    if (c.operator === GuidedSelfCheckRuleOperator.UNANSWERED) return !a;
+    if (c.operator === GuidedSelfCheckRuleOperator.STATE_EQUALS)
+      return !!a && a.state === c.state;
+    if (!a || a.state !== GuidedSelfCheckAnswerState.KNOWN) return false;
+    let actual: any = a.value;
+    if (c.field) {
+      if (!actual || Array.isArray(actual) || typeof actual !== "object")
+        return false;
+      actual = actual[c.field];
+    }
+    switch (c.operator) {
+      case GuidedSelfCheckRuleOperator.EQUALS:
+        return actual === c.value;
+      case GuidedSelfCheckRuleOperator.INCLUDES:
+        return Array.isArray(actual) && actual.includes(c.value);
+      case GuidedSelfCheckRuleOperator.LT:
+        return this.number(actual) < this.number(c.value);
+      case GuidedSelfCheckRuleOperator.LTE:
+        return this.number(actual) <= this.number(c.value);
+      case GuidedSelfCheckRuleOperator.GT:
+        return this.number(actual) > this.number(c.value);
+      case GuidedSelfCheckRuleOperator.GTE:
+        return this.number(actual) >= this.number(c.value);
+      case GuidedSelfCheckRuleOperator.BETWEEN:
+        return (
+          this.number(actual) >= this.number(c.min) &&
+          this.number(actual) <= this.number(c.max)
+        );
+      default:
+        return false;
+    }
+  }
+  private number(v: unknown) {
+    if (typeof v !== "number" || !Number.isFinite(v))
+      throw new ConflictException("Clinical numeric rule value is invalid");
+    return v;
+  }
 }

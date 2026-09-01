@@ -1,33 +1,775 @@
-import { BadRequestException,ConflictException,ForbiddenException,Injectable,NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource,EntityManager,Repository } from 'typeorm';
-import { User } from '../users/entities/user.entity';
-import { AssignInternalClinicalProfessionalDto,CancelGuidedSelfCheckReviewDto,CompleteGuidedSelfCheckReviewDto,GuidedSelfCheckMyReviewListQueryDto,GuidedSelfCheckReviewListQueryDto } from './dto/guided-self-check-review.dto';
-import { GuidedSelfCheckAnswer } from './entities/guided-self-check-answer.entity';import { GuidedSelfCheckClassificationResult } from './entities/guided-self-check-classification.entity';import { GuidedSelfCheckProfessionalReviewHistory } from './entities/guided-self-check-professional-review-history.entity';import { GuidedSelfCheckProfessionalReview } from './entities/guided-self-check-professional-review.entity';import { GuidedSelfCheckQuestionnaireVersion } from './entities/guided-self-check-questionnaire-version.entity';
-import { GuidedSelfCheckClassification } from './enums/guided-self-check-classification.enum';import { GuidedSelfCheckContactStatus,GuidedSelfCheckReviewDecision,GuidedSelfCheckReviewEvent,GuidedSelfCheckReviewModel,GuidedSelfCheckReviewOrigin,GuidedSelfCheckReviewPriority,GuidedSelfCheckReviewStatus } from './enums/guided-self-check-review.enum';import { GuidedSelfCheckNextActionsService } from './guided-self-check-next-actions.service';
-import { GuidedSelfCheckInternalClinicalCapability } from './enums/guided-self-check-internal-clinical-professional.enum';
-import { GuidedSelfCheckInternalClinicalProfessionalsService } from './guided-self-check-internal-clinical-professionals.service';
-import { GuidedSelfCheckAnalysis } from './entities/guided-self-check-analysis.entity';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { DataSource, EntityManager, Repository } from "typeorm";
+import { User } from "../users/entities/user.entity";
+import {
+  AssignInternalClinicalProfessionalDto,
+  CancelGuidedSelfCheckReviewDto,
+  CompleteGuidedSelfCheckReviewDto,
+  GuidedSelfCheckMyReviewListQueryDto,
+  GuidedSelfCheckReviewListQueryDto,
+} from "./dto/guided-self-check-review.dto";
+import { GuidedSelfCheckAnswer } from "./entities/guided-self-check-answer.entity";
+import { GuidedSelfCheckClassificationResult } from "./entities/guided-self-check-classification.entity";
+import { GuidedSelfCheckProfessionalReviewHistory } from "./entities/guided-self-check-professional-review-history.entity";
+import { GuidedSelfCheckProfessionalReview } from "./entities/guided-self-check-professional-review.entity";
+import { GuidedSelfCheckQuestionnaireVersion } from "./entities/guided-self-check-questionnaire-version.entity";
+import { GuidedSelfCheckClassification } from "./enums/guided-self-check-classification.enum";
+import {
+  GuidedSelfCheckContactStatus,
+  GuidedSelfCheckReviewDecision,
+  GuidedSelfCheckReviewEvent,
+  GuidedSelfCheckReviewModel,
+  GuidedSelfCheckReviewOrigin,
+  GuidedSelfCheckReviewPriority,
+  GuidedSelfCheckReviewStatus,
+} from "./enums/guided-self-check-review.enum";
+import { GuidedSelfCheckNextActionsService } from "./guided-self-check-next-actions.service";
+import { GuidedSelfCheckInternalClinicalCapability } from "./enums/guided-self-check-internal-clinical-professional.enum";
+import { GuidedSelfCheckInternalClinicalProfessionalsService } from "./guided-self-check-internal-clinical-professionals.service";
+import { GuidedSelfCheckAnalysis } from "./entities/guided-self-check-analysis.entity";
 @Injectable()
-export class GuidedSelfCheckProfessionalReviewsService{
- constructor(@InjectRepository(GuidedSelfCheckProfessionalReview)private reviews:Repository<GuidedSelfCheckProfessionalReview>,private data:DataSource,private nextActions:GuidedSelfCheckNextActionsService=undefined as never,private internalProfessionals:GuidedSelfCheckInternalClinicalProfessionalsService=undefined as never){}
- async ensureForClassification(m:EntityManager,result:GuidedSelfCheckClassificationResult){if(!result.requiresProfessionalReview||result.classification!==GuidedSelfCheckClassification.RED)return null;const repo=m.getRepository(GuidedSelfCheckProfessionalReview);const existing=await repo.findOne({where:{classificationId:result.id}});if(existing)return existing;const priority=GuidedSelfCheckReviewPriority.URGENT;const review=await repo.save(repo.create({guidedSelfCheckId:result.guidedSelfCheckId,classificationId:result.id,classificationSnapshot:result.classification,reviewModel:GuidedSelfCheckReviewModel.INTERNAL_URGENT,priority,origin:GuidedSelfCheckReviewOrigin.CLASSIFICATION_REQUIRED,status:GuidedSelfCheckReviewStatus.PENDING,assignedReviewerUserId:null,assignedReviewerProviderId:null,assignedReviewerAuthorizationId:null,assignedAt:null,startedAt:null,completedAt:null,cancelledAt:null,decision:null,reviewerNotes:null,contactRequired:false,contactStatus:GuidedSelfCheckContactStatus.NOT_REQUIRED,contactedAt:null}));await this.history(m,review.id,GuidedSelfCheckReviewEvent.INTERNAL_REVIEW_CREATED,null,null,GuidedSelfCheckReviewStatus.PENDING,{classification:result.classification,priority});return review;}
- async ensureRoutineForAnalysis(m:EntityManager,analysis:GuidedSelfCheckAnalysis){if(!analysis.humanReviewRecommended||analysis.classification.classification!==GuidedSelfCheckClassification.AMBER)return null;const repo=m.getRepository(GuidedSelfCheckProfessionalReview);const existing=await repo.findOne({where:{classificationId:analysis.classificationId}});if(existing)return existing;const review=await repo.save(repo.create({guidedSelfCheckId:analysis.guidedSelfCheckId,classificationId:analysis.classificationId,classificationSnapshot:GuidedSelfCheckClassification.AMBER,reviewModel:GuidedSelfCheckReviewModel.INTERNAL_ROUTINE,priority:GuidedSelfCheckReviewPriority.ROUTINE,origin:GuidedSelfCheckReviewOrigin.CLASSIFICATION_REQUIRED,status:GuidedSelfCheckReviewStatus.PENDING,assignedReviewerUserId:null,assignedReviewerProviderId:null,assignedReviewerAuthorizationId:null,assignedAt:null,startedAt:null,completedAt:null,cancelledAt:null,decision:null,reviewerNotes:null,contactRequired:false,contactStatus:GuidedSelfCheckContactStatus.NOT_REQUIRED,contactedAt:null}));await this.history(m,review.id,GuidedSelfCheckReviewEvent.AMBER_ROUTINE_REVIEW_CREATED,null,null,GuidedSelfCheckReviewStatus.PENDING,{classification:GuidedSelfCheckClassification.AMBER,priority:GuidedSelfCheckReviewPriority.ROUTINE,analysisReference:analysis.reference});await this.history(m,review.id,GuidedSelfCheckReviewEvent.HUMAN_REVIEW_TRIGGERED,null,GuidedSelfCheckReviewStatus.PENDING,GuidedSelfCheckReviewStatus.PENDING,{source:'AI_ANALYSIS',analysisReference:analysis.reference});return review;}
- async list(q:GuidedSelfCheckReviewListQueryDto){const b=this.reviews.createQueryBuilder('review').innerJoinAndSelect('review.selfCheck','selfCheck').leftJoinAndSelect('review.assignedInternalClinicalProfessional','internalProfessional');b.andWhere('review.reviewModel = :reviewModel',{reviewModel:q.reviewModel??GuidedSelfCheckReviewModel.INTERNAL_URGENT});if(q.status)b.andWhere('review.status = :status',{status:q.status});if(q.priority)b.andWhere('review.priority = :priority',{priority:q.priority});if(q.classification)b.andWhere('review.classificationSnapshot = :classification',{classification:q.classification});if(q.assigned!==undefined)b.andWhere(q.assigned?'review.assignedInternalClinicalProfessionalId IS NOT NULL':'review.assignedInternalClinicalProfessionalId IS NULL');b.orderBy(`CASE WHEN review.priority = 'URGENT' THEN 0 ELSE 1 END`,'ASC').addOrderBy('review.createdAt','ASC').addOrderBy('review.id','ASC').skip((q.page-1)*q.limit).take(q.limit);const[rows,total]=await b.getManyAndCount();return{items:rows.map(x=>this.queueView(x)),total,page:q.page,limit:q.limit};}
- async listMine(user:User,q:GuidedSelfCheckMyReviewListQueryDto){const p=await this.internalProfessionals.activeForUser(user.id);const models=[];if(p.capabilities.includes(GuidedSelfCheckInternalClinicalCapability.URGENT_SELF_CHECK_REVIEW))models.push(GuidedSelfCheckReviewModel.INTERNAL_URGENT);if(p.capabilities.includes(GuidedSelfCheckInternalClinicalCapability.SELF_CHECK_CLINICAL_REVIEW))models.push(GuidedSelfCheckReviewModel.INTERNAL_ROUTINE);if(!models.length)throw new ForbiddenException('Active internal clinical professional capability is required');const b=this.reviews.createQueryBuilder('review').innerJoinAndSelect('review.selfCheck','selfCheck');b.andWhere('review.reviewModel IN (:...reviewModels)',{reviewModels:q.reviewModel?[q.reviewModel]:models}).andWhere('review.assignedInternalClinicalProfessionalId = :professionalId',{professionalId:p.id});if(q.reviewModel&&!models.includes(q.reviewModel))throw new ForbiddenException('Active internal clinical professional capability is required');if(q.classification)b.andWhere('review.classificationSnapshot = :classification',{classification:q.classification});if(q.status)b.andWhere('review.status = :status',{status:q.status});else b.andWhere('review.status IN (:...actionableStatuses)',{actionableStatuses:[GuidedSelfCheckReviewStatus.ASSIGNED,GuidedSelfCheckReviewStatus.IN_REVIEW]});if(q.priority)b.andWhere('review.priority = :priority',{priority:q.priority});b.orderBy(`CASE WHEN review.priority = 'URGENT' THEN 0 ELSE 1 END`,'ASC').addOrderBy('review.assignedAt','ASC','NULLS LAST').addOrderBy('review.id','ASC').skip((q.page-1)*q.limit).take(q.limit);const[rows,total]=await b.getManyAndCount();return{items:rows.map(x=>this.myWorkView(x)),total,page:q.page,limit:q.limit};}
- async getAdmin(reference:string){const r=await this.reviews.findOne({where:{reference},relations:{selfCheck:true,classificationResult:true,assignedInternalClinicalProfessional:true,history:{actor:true}},order:{history:{createdAt:'ASC'}}});if(!r)throw new NotFoundException('Professional review was not found');return this.adminView(r);}
- async assignInternal(reference:string,dto:AssignInternalClinicalProfessionalDto,actorId:string){return this.data.transaction(async m=>{const r=await this.lock(m,reference);if(![GuidedSelfCheckReviewModel.INTERNAL_URGENT,GuidedSelfCheckReviewModel.INTERNAL_ROUTINE].includes(r.reviewModel))throw new ConflictException('Only an internal Guided Self-Check review can be assigned');if([GuidedSelfCheckReviewStatus.COMPLETED,GuidedSelfCheckReviewStatus.CANCELLED].includes(r.status))throw new ConflictException('Internal review cannot be assigned in its current state');const capability=this.requiredCapability(r);const p=await this.internalProfessionals.eligible(dto.professionalReference,capability,m);if(r.assignedInternalClinicalProfessionalId===p.id&&r.status!==GuidedSelfCheckReviewStatus.IN_REVIEW)return this.adminView(r);const from=r.status;const previous=r.assignedInternalClinicalProfessional?.reference??null;const event=r.assignedInternalClinicalProfessionalId?GuidedSelfCheckReviewEvent.INTERNAL_REVIEW_REASSIGNED:r.reviewModel===GuidedSelfCheckReviewModel.INTERNAL_ROUTINE?GuidedSelfCheckReviewEvent.AMBER_ROUTINE_REVIEW_ASSIGNED:GuidedSelfCheckReviewEvent.INTERNAL_REVIEW_ASSIGNED;r.assignedInternalClinicalProfessionalId=p.id;r.assignedInternalClinicalProfessional=p;r.assignedReviewerUserId=p.userId;r.assignedReviewerUser=p.user;r.assignedReviewerProviderId=null;r.assignedReviewerAuthorizationId=null;r.assignedAt=new Date();r.startedAt=null;r.status=GuidedSelfCheckReviewStatus.ASSIGNED;await m.save(r);await this.history(m,r.id,event,actorId,from,r.status,{previousProfessionalReference:previous,professionalReference:p.reference});return this.adminView(r);});}
- async getInternalClinical(reference:string,user:User){const p=await this.internalProfessionals.activeForUser(user.id);const r=await this.reviews.findOne({where:{reference,assignedInternalClinicalProfessionalId:p.id},relations:{selfCheck:true,classificationResult:true,assignedInternalClinicalProfessional:true,history:{actor:true}},order:{history:{createdAt:'ASC'}}});if(!r)throw new NotFoundException('Assigned internal clinical review was not found');this.internalProfessionals.requireCapability(p,this.requiredCapability(r));const version=await this.data.manager.getRepository(GuidedSelfCheckQuestionnaireVersion).findOne({where:{id:r.classificationResult.questionnaireVersionId},relations:{groups:{questions:true}},order:{groups:{sortOrder:'ASC',questions:{sortOrder:'ASC'}}}});if(!version)throw new ConflictException('Questionnaire version is unavailable');const answers=await this.data.manager.getRepository(GuidedSelfCheckAnswer).find({where:{guidedSelfCheckId:r.guidedSelfCheckId}});const analysis=r.reviewModel===GuidedSelfCheckReviewModel.INTERNAL_ROUTINE?await this.data.manager.getRepository(GuidedSelfCheckAnalysis).findOne({where:{classificationId:r.classificationId}}):null;const byQuestion=new Map(answers.map(x=>[x.questionId,x]));return{...this.adminView(r),analysis:analysis?{status:analysis.status,humanReviewRecommended:analysis.humanReviewRecommended,output:analysis.output}:null,nextAction:await this.nextActions.operational(r.guidedSelfCheckId),allowedNextActionsByDecision:Object.fromEntries(Object.values(GuidedSelfCheckReviewDecision).map(d=>[d,this.nextActions.allowed(d,r.classificationSnapshot)])),questionnaire:{version:version.version,groups:version.groups.map(g=>({key:g.key,title:g.title,sortOrder:g.sortOrder,questions:g.questions.map(q=>{const x=byQuestion.get(q.id);return{key:q.key,text:q.text,type:q.type,sortOrder:q.sortOrder,answer:x?{state:x.state,value:x.value,provenance:x.provenance,updatedAt:x.updatedAt}:null};})}))}};}
- async startInternal(reference:string,user:User){return this.data.transaction(async m=>{const p=await this.internalProfessionals.activeForUser(user.id,m);const r=await this.lock(m,reference);this.internalProfessionals.requireCapability(p,this.requiredCapability(r));if(r.assignedInternalClinicalProfessionalId!==p.id)throw new ForbiddenException('Internal review is assigned to another clinical professional');if(r.status===GuidedSelfCheckReviewStatus.IN_REVIEW)return this.adminView(r);if(r.status!==GuidedSelfCheckReviewStatus.ASSIGNED)throw new ConflictException('Only an assigned internal review can be started');r.status=GuidedSelfCheckReviewStatus.IN_REVIEW;r.startedAt=new Date();await m.save(r);await this.history(m,r.id,GuidedSelfCheckReviewEvent.CLINICAL_REVIEW_STARTED,user.id,GuidedSelfCheckReviewStatus.ASSIGNED,r.status,{professionalReference:p.reference,reviewModel:r.reviewModel});return this.adminView(r);});}
- async completeInternal(reference:string,user:User,dto:CompleteGuidedSelfCheckReviewDto){return this.data.transaction(async m=>{const p=await this.internalProfessionals.activeForUser(user.id,m);const r=await this.lock(m,reference);this.internalProfessionals.requireCapability(p,this.requiredCapability(r));if(r.assignedInternalClinicalProfessionalId!==p.id)throw new ForbiddenException('Internal review is assigned to another clinical professional');if(r.status===GuidedSelfCheckReviewStatus.COMPLETED)return this.adminView(r);if(r.status!==GuidedSelfCheckReviewStatus.IN_REVIEW)throw new ConflictException('Only an internal clinical review in progress can be completed');const patientGuidance=dto.patientGuidance?.trim()||null;const internalClinicalNote=dto.internalClinicalNote?.trim()||null;if(patientGuidance&&(patientGuidance.length>1000||/<[^>]*>|https?:\/\/|javascript:/i.test(patientGuidance)))throw new BadRequestException('Patient guidance must be bounded plain text without HTML or executable links');if(internalClinicalNote&&internalClinicalNote.length>3000)throw new BadRequestException('Internal clinical note exceeds the maximum length');r.decision=dto.decision;await this.nextActions.selectForReview(m,r,dto.nextActionType,user.id);r.patientGuidance=patientGuidance;r.internalClinicalNote=internalClinicalNote;r.reviewerNotes=null;r.contactRequired=dto.contactRequired===true||dto.decision===GuidedSelfCheckReviewDecision.PATIENT_CONTACT_REQUIRED;r.contactStatus=r.contactRequired?GuidedSelfCheckContactStatus.REQUIRED:GuidedSelfCheckContactStatus.NOT_REQUIRED;r.completedAt=new Date();r.status=GuidedSelfCheckReviewStatus.COMPLETED;await m.save(r);await this.history(m,r.id,GuidedSelfCheckReviewEvent.CLINICAL_REVIEW_COMPLETED,user.id,GuidedSelfCheckReviewStatus.IN_REVIEW,r.status,{decision:r.decision,nextActionType:dto.nextActionType,contactRequired:r.contactRequired,professionalReference:p.reference,reviewModel:r.reviewModel,hasPatientGuidance:!!r.patientGuidance,hasInternalClinicalNote:!!r.internalClinicalNote});await this.history(m,r.id,GuidedSelfCheckReviewEvent.NEXT_ACTION_RECOMMENDED,user.id,r.status,r.status,{nextActionType:dto.nextActionType,source:'INTERNAL_CLINICAL_PROFESSIONAL'});return this.adminView(r);});}
- async cancel(reference:string,dto:CancelGuidedSelfCheckReviewDto,actorId:string){return this.data.transaction(async m=>{const r=await this.lock(m,reference);if(r.status===GuidedSelfCheckReviewStatus.CANCELLED)return this.adminView(r);if(r.status===GuidedSelfCheckReviewStatus.COMPLETED)throw new ConflictException('Completed professional review cannot be cancelled');const from=r.status;r.status=GuidedSelfCheckReviewStatus.CANCELLED;r.cancelledAt=new Date();await m.save(r);await this.history(m,r.id,GuidedSelfCheckReviewEvent.REVIEW_CANCELLED,actorId,from,r.status,{reason:dto.reason?.trim()||null});return this.adminView(r);});}
- async acknowledge(reference:string,actorId:string){return this.data.transaction(async m=>{const r=await this.lock(m,reference);if(![GuidedSelfCheckReviewModel.INTERNAL_URGENT,GuidedSelfCheckReviewModel.INTERNAL_ROUTINE].includes(r.reviewModel))throw new ConflictException('Only an internal review can be acknowledged');if([GuidedSelfCheckReviewStatus.ACKNOWLEDGED,GuidedSelfCheckReviewStatus.ESCALATED].includes(r.status))return this.adminView(r);if(r.status!==GuidedSelfCheckReviewStatus.PENDING)throw new ConflictException('Internal review cannot be acknowledged in its current state');r.status=GuidedSelfCheckReviewStatus.ACKNOWLEDGED;r.acknowledgedByUserId=actorId;r.acknowledgedAt=new Date();await m.save(r);await this.history(m,r.id,GuidedSelfCheckReviewEvent.ACKNOWLEDGED,actorId,GuidedSelfCheckReviewStatus.PENDING,r.status,{reviewModel:r.reviewModel});return this.adminView(r);});}
- async escalate(reference:string,note:string|undefined,actorId:string){return this.data.transaction(async m=>{const r=await this.lock(m,reference);if(r.classificationSnapshot!==GuidedSelfCheckClassification.RED)throw new ConflictException('Only a RED internal urgent review can be escalated');if(r.status===GuidedSelfCheckReviewStatus.ESCALATED)return this.adminView(r);if(![GuidedSelfCheckReviewStatus.ACKNOWLEDGED,GuidedSelfCheckReviewStatus.PENDING].includes(r.status))throw new ConflictException('Urgent review cannot be escalated in its current state');const from=r.status;r.status=GuidedSelfCheckReviewStatus.ESCALATED;r.operationalNote=note?.trim()||null;if(!r.acknowledgedAt){r.acknowledgedAt=new Date();r.acknowledgedByUserId=actorId;}await m.save(r);await this.history(m,r.id,GuidedSelfCheckReviewEvent.ESCALATED,actorId,from,r.status,{hasOperationalNote:!!r.operationalNote});return this.adminView(r);});}
- async getPatientState(guidedSelfCheckId:string){const r=await this.reviews.findOne({where:{guidedSelfCheckId}});return r?{required:true,status:r.status,completedAt:r.completedAt,patientGuidance:r.status===GuidedSelfCheckReviewStatus.COMPLETED?r.patientGuidance:null}:null;}
- private async lock(m:EntityManager,reference:string){const r=await m.getRepository(GuidedSelfCheckProfessionalReview).findOne({where:{reference},lock:{mode:'pessimistic_write'},relations:{selfCheck:true,classificationResult:true,assignedReviewerUser:true,assignedReviewerProvider:true,assignedReviewerAuthorization:true,assignedInternalClinicalProfessional:{user:true}}});if(!r)throw new NotFoundException('Professional review was not found');return r;}
- private requiredCapability(r:GuidedSelfCheckProfessionalReview){return r.reviewModel===GuidedSelfCheckReviewModel.INTERNAL_ROUTINE?GuidedSelfCheckInternalClinicalCapability.SELF_CHECK_CLINICAL_REVIEW:GuidedSelfCheckInternalClinicalCapability.URGENT_SELF_CHECK_REVIEW;}
- private history(m:EntityManager,reviewId:string,event:GuidedSelfCheckReviewEvent,actorUserId:string|null,fromStatus:GuidedSelfCheckReviewStatus|null,toStatus:GuidedSelfCheckReviewStatus|null,metadata:Record<string,unknown>){return m.getRepository(GuidedSelfCheckProfessionalReviewHistory).save({reviewId,event,actorUserId,fromStatus,toStatus,metadata});}
- private queueView(r:GuidedSelfCheckProfessionalReview){return{reference:r.reference,selfCheckReference:r.selfCheck.reference,reviewModel:r.reviewModel,classification:r.classificationSnapshot,priority:r.priority,status:r.status,questionnaireCompletedAt:r.selfCheck.completedAt,acknowledgedAt:r.acknowledgedAt,assignedProfessional:r.assignedInternalClinicalProfessional?{reference:r.assignedInternalClinicalProfessional.reference,displayName:r.assignedInternalClinicalProfessional.displayName,professionalType:r.assignedInternalClinicalProfessional.professionalType}:null,assignedAt:r.assignedAt,createdAt:r.createdAt};}
- private myWorkView(r:GuidedSelfCheckProfessionalReview){return{reference:r.reference,selfCheckReference:r.selfCheck.reference,classification:r.classificationSnapshot,priority:r.priority,status:r.status,assignedAt:r.assignedAt,startedAt:r.startedAt,createdAt:r.createdAt};}
- private adminView(r:GuidedSelfCheckProfessionalReview){return{...this.queueView(r),origin:r.origin,patientMessageKey:r.classificationResult?.patientMessageKey??null,matchedReasonCodes:r.classificationResult?.matchedReasonCodes??[],urgentAction:r.classificationResult?.urgentAction??r.priority===GuidedSelfCheckReviewPriority.URGENT,startedAt:r.startedAt,completedAt:r.completedAt,cancelledAt:r.cancelledAt,decision:r.decision,patientGuidance:r.patientGuidance,internalClinicalNote:r.internalClinicalNote,contactRequired:r.contactRequired,contactStatus:r.contactStatus,contactedAt:r.contactedAt,history:r.history?.map(h=>({event:h.event,fromStatus:h.fromStatus,toStatus:h.toStatus,actor:h.actor?{displayName:h.actor.displayName}:null,metadata:h.metadata,createdAt:h.createdAt}))??[]};}
+export class GuidedSelfCheckProfessionalReviewsService {
+  constructor(
+    @InjectRepository(GuidedSelfCheckProfessionalReview)
+    private reviews: Repository<GuidedSelfCheckProfessionalReview>,
+    private data: DataSource,
+    private nextActions: GuidedSelfCheckNextActionsService = undefined as never,
+    private internalProfessionals: GuidedSelfCheckInternalClinicalProfessionalsService = undefined as never,
+  ) {}
+  async ensureForClassification(
+    m: EntityManager,
+    result: GuidedSelfCheckClassificationResult,
+  ) {
+    if (
+      !result.requiresProfessionalReview ||
+      result.classification !== GuidedSelfCheckClassification.RED
+    )
+      return null;
+    const repo = m.getRepository(GuidedSelfCheckProfessionalReview);
+    const existing = await repo.findOne({
+      where: { classificationId: result.id },
+    });
+    if (existing) return existing;
+    const priority = GuidedSelfCheckReviewPriority.URGENT;
+    const review = await repo.save(
+      repo.create({
+        guidedSelfCheckId: result.guidedSelfCheckId,
+        classificationId: result.id,
+        classificationSnapshot: result.classification,
+        reviewModel: GuidedSelfCheckReviewModel.INTERNAL_URGENT,
+        priority,
+        origin: GuidedSelfCheckReviewOrigin.CLASSIFICATION_REQUIRED,
+        status: GuidedSelfCheckReviewStatus.PENDING,
+        assignedReviewerUserId: null,
+        assignedReviewerProviderId: null,
+        assignedReviewerAuthorizationId: null,
+        assignedAt: null,
+        startedAt: null,
+        completedAt: null,
+        cancelledAt: null,
+        decision: null,
+        reviewerNotes: null,
+        contactRequired: false,
+        contactStatus: GuidedSelfCheckContactStatus.NOT_REQUIRED,
+        contactedAt: null,
+      }),
+    );
+    await this.history(
+      m,
+      review.id,
+      GuidedSelfCheckReviewEvent.INTERNAL_REVIEW_CREATED,
+      null,
+      null,
+      GuidedSelfCheckReviewStatus.PENDING,
+      { classification: result.classification, priority },
+    );
+    return review;
+  }
+  async ensureRoutineForAnalysis(
+    m: EntityManager,
+    analysis: GuidedSelfCheckAnalysis,
+  ) {
+    if (
+      !analysis.humanReviewRecommended ||
+      analysis.classification.classification !==
+        GuidedSelfCheckClassification.AMBER
+    )
+      return null;
+    const repo = m.getRepository(GuidedSelfCheckProfessionalReview);
+    const existing = await repo.findOne({
+      where: { classificationId: analysis.classificationId },
+    });
+    if (existing) return existing;
+    const review = await repo.save(
+      repo.create({
+        guidedSelfCheckId: analysis.guidedSelfCheckId,
+        classificationId: analysis.classificationId,
+        classificationSnapshot: GuidedSelfCheckClassification.AMBER,
+        reviewModel: GuidedSelfCheckReviewModel.INTERNAL_ROUTINE,
+        priority: GuidedSelfCheckReviewPriority.ROUTINE,
+        origin: GuidedSelfCheckReviewOrigin.CLASSIFICATION_REQUIRED,
+        status: GuidedSelfCheckReviewStatus.PENDING,
+        assignedReviewerUserId: null,
+        assignedReviewerProviderId: null,
+        assignedReviewerAuthorizationId: null,
+        assignedAt: null,
+        startedAt: null,
+        completedAt: null,
+        cancelledAt: null,
+        decision: null,
+        reviewerNotes: null,
+        contactRequired: false,
+        contactStatus: GuidedSelfCheckContactStatus.NOT_REQUIRED,
+        contactedAt: null,
+      }),
+    );
+    await this.history(
+      m,
+      review.id,
+      GuidedSelfCheckReviewEvent.AMBER_ROUTINE_REVIEW_CREATED,
+      null,
+      null,
+      GuidedSelfCheckReviewStatus.PENDING,
+      {
+        classification: GuidedSelfCheckClassification.AMBER,
+        priority: GuidedSelfCheckReviewPriority.ROUTINE,
+        analysisReference: analysis.reference,
+      },
+    );
+    await this.history(
+      m,
+      review.id,
+      GuidedSelfCheckReviewEvent.HUMAN_REVIEW_TRIGGERED,
+      null,
+      GuidedSelfCheckReviewStatus.PENDING,
+      GuidedSelfCheckReviewStatus.PENDING,
+      { source: "AI_ANALYSIS", analysisReference: analysis.reference },
+    );
+    return review;
+  }
+async list(q: GuidedSelfCheckReviewListQueryDto) {
+  const b = this.reviews
+    .createQueryBuilder("review")
+    .innerJoinAndSelect("review.selfCheck", "selfCheck")
+    .leftJoinAndSelect(
+      "review.assignedInternalClinicalProfessional",
+      "internalProfessional",
+    );
+
+  b.andWhere("review.reviewModel = :reviewModel", {
+    reviewModel:
+      q.reviewModel ?? GuidedSelfCheckReviewModel.INTERNAL_URGENT,
+  });
+
+  if (q.status) {
+    b.andWhere("review.status = :status", {
+      status: q.status,
+    });
+  }
+
+  if (q.priority) {
+    b.andWhere("review.priority = :priority", {
+      priority: q.priority,
+    });
+  }
+
+  if (q.classification) {
+    b.andWhere("review.classificationSnapshot = :classification", {
+      classification: q.classification,
+    });
+  }
+
+  if (q.assigned !== undefined) {
+    b.andWhere(
+      q.assigned
+        ? "review.assignedInternalClinicalProfessionalId IS NOT NULL"
+        : "review.assignedInternalClinicalProfessionalId IS NULL",
+    );
+  }
+
+  b.addSelect(
+    `CASE WHEN review.priority = 'URGENT' THEN 0 ELSE 1 END`,
+    "priority_order",
+  );
+
+  b.orderBy("priority_order", "ASC")
+    .addOrderBy("review.createdAt", "ASC")
+    .addOrderBy("review.id", "ASC")
+    .skip((q.page - 1) * q.limit)
+    .take(q.limit);
+
+  const [rows, total] = await b.getManyAndCount();
+
+  return {
+    items: rows.map((x) => this.queueView(x)),
+    total,
+    page: q.page,
+    limit: q.limit,
+  };
+}
+  async listMine(user: User, q: GuidedSelfCheckMyReviewListQueryDto) {
+    const p = await this.internalProfessionals.activeForUser(user.id);
+    const models = [];
+    if (
+      p.capabilities.includes(
+        GuidedSelfCheckInternalClinicalCapability.URGENT_SELF_CHECK_REVIEW,
+      )
+    )
+      models.push(GuidedSelfCheckReviewModel.INTERNAL_URGENT);
+    if (
+      p.capabilities.includes(
+        GuidedSelfCheckInternalClinicalCapability.SELF_CHECK_CLINICAL_REVIEW,
+      )
+    )
+      models.push(GuidedSelfCheckReviewModel.INTERNAL_ROUTINE);
+    if (!models.length)
+      throw new ForbiddenException(
+        "Active internal clinical professional capability is required",
+      );
+    const b = this.reviews
+      .createQueryBuilder("review")
+      .innerJoinAndSelect("review.selfCheck", "selfCheck");
+    b.andWhere("review.reviewModel IN (:...reviewModels)", {
+      reviewModels: q.reviewModel ? [q.reviewModel] : models,
+    }).andWhere(
+      "review.assignedInternalClinicalProfessionalId = :professionalId",
+      { professionalId: p.id },
+    );
+    if (q.reviewModel && !models.includes(q.reviewModel))
+      throw new ForbiddenException(
+        "Active internal clinical professional capability is required",
+      );
+    if (q.classification)
+      b.andWhere("review.classificationSnapshot = :classification", {
+        classification: q.classification,
+      });
+    if (q.status) b.andWhere("review.status = :status", { status: q.status });
+    else
+      b.andWhere("review.status IN (:...actionableStatuses)", {
+        actionableStatuses: [
+          GuidedSelfCheckReviewStatus.ASSIGNED,
+          GuidedSelfCheckReviewStatus.IN_REVIEW,
+        ],
+      });
+    if (q.priority)
+      b.andWhere("review.priority = :priority", { priority: q.priority });
+     b.addSelect(
+  `CASE WHEN review.priority = 'URGENT' THEN 0 ELSE 1 END`,
+  'priority_order',
+);
+
+b.orderBy('priority_order', 'ASC')
+  .addOrderBy('review.createdAt', 'ASC')
+  .addOrderBy('review.id', 'ASC')
+      .skip((q.page - 1) * q.limit)
+      .take(q.limit);
+    const [rows, total] = await b.getManyAndCount();
+    return {
+      items: rows.map((x) => this.myWorkView(x)),
+      total,
+      page: q.page,
+      limit: q.limit,
+    };
+  }
+  async getAdmin(reference: string) {
+    const r = await this.reviews.findOne({
+      where: { reference },
+      relations: {
+        selfCheck: true,
+        classificationResult: true,
+        assignedInternalClinicalProfessional: true,
+        history: { actor: true },
+      },
+      order: { history: { createdAt: "ASC" } },
+    });
+    if (!r) throw new NotFoundException("Professional review was not found");
+    return this.adminView(r);
+  }
+  async assignInternal(
+    reference: string,
+    dto: AssignInternalClinicalProfessionalDto,
+    actorId: string,
+  ) {
+    return this.data.transaction(async (m) => {
+      const r = await this.lock(m, reference);
+      if (
+        ![
+          GuidedSelfCheckReviewModel.INTERNAL_URGENT,
+          GuidedSelfCheckReviewModel.INTERNAL_ROUTINE,
+        ].includes(r.reviewModel)
+      )
+        throw new ConflictException(
+          "Only an internal Guided Self-Check review can be assigned",
+        );
+      if (
+        [
+          GuidedSelfCheckReviewStatus.COMPLETED,
+          GuidedSelfCheckReviewStatus.CANCELLED,
+        ].includes(r.status)
+      )
+        throw new ConflictException(
+          "Internal review cannot be assigned in its current state",
+        );
+      const capability = this.requiredCapability(r);
+      const p = await this.internalProfessionals.eligible(
+        dto.professionalReference,
+        capability,
+        m,
+      );
+      if (
+        r.assignedInternalClinicalProfessionalId === p.id &&
+        r.status !== GuidedSelfCheckReviewStatus.IN_REVIEW
+      )
+        return this.adminView(r);
+      const from = r.status;
+      const previous =
+        r.assignedInternalClinicalProfessional?.reference ?? null;
+      const event = r.assignedInternalClinicalProfessionalId
+        ? GuidedSelfCheckReviewEvent.INTERNAL_REVIEW_REASSIGNED
+        : r.reviewModel === GuidedSelfCheckReviewModel.INTERNAL_ROUTINE
+          ? GuidedSelfCheckReviewEvent.AMBER_ROUTINE_REVIEW_ASSIGNED
+          : GuidedSelfCheckReviewEvent.INTERNAL_REVIEW_ASSIGNED;
+      r.assignedInternalClinicalProfessionalId = p.id;
+      r.assignedInternalClinicalProfessional = p;
+      r.assignedReviewerUserId = p.userId;
+      r.assignedReviewerUser = p.user;
+      r.assignedReviewerProviderId = null;
+      r.assignedReviewerAuthorizationId = null;
+      r.assignedAt = new Date();
+      r.startedAt = null;
+      r.status = GuidedSelfCheckReviewStatus.ASSIGNED;
+      await m.save(r);
+      await this.history(m, r.id, event, actorId, from, r.status, {
+        previousProfessionalReference: previous,
+        professionalReference: p.reference,
+      });
+      return this.adminView(r);
+    });
+  }
+  async getInternalClinical(reference: string, user: User) {
+    const p = await this.internalProfessionals.activeForUser(user.id);
+    const r = await this.reviews.findOne({
+      where: { reference, assignedInternalClinicalProfessionalId: p.id },
+      relations: {
+        selfCheck: true,
+        classificationResult: true,
+        assignedInternalClinicalProfessional: true,
+        history: { actor: true },
+      },
+      order: { history: { createdAt: "ASC" } },
+    });
+    if (!r)
+      throw new NotFoundException(
+        "Assigned internal clinical review was not found",
+      );
+    this.internalProfessionals.requireCapability(p, this.requiredCapability(r));
+    const version = await this.data.manager
+      .getRepository(GuidedSelfCheckQuestionnaireVersion)
+      .findOne({
+        where: { id: r.classificationResult.questionnaireVersionId },
+        relations: { groups: { questions: true } },
+        order: {
+          groups: { sortOrder: "ASC", questions: { sortOrder: "ASC" } },
+        },
+      });
+    if (!version)
+      throw new ConflictException("Questionnaire version is unavailable");
+    const answers = await this.data.manager
+      .getRepository(GuidedSelfCheckAnswer)
+      .find({ where: { guidedSelfCheckId: r.guidedSelfCheckId } });
+    const analysis =
+      r.reviewModel === GuidedSelfCheckReviewModel.INTERNAL_ROUTINE
+        ? await this.data.manager
+            .getRepository(GuidedSelfCheckAnalysis)
+            .findOne({ where: { classificationId: r.classificationId } })
+        : null;
+    const byQuestion = new Map(answers.map((x) => [x.questionId, x]));
+    return {
+      ...this.adminView(r),
+      analysis: analysis
+        ? {
+            status: analysis.status,
+            humanReviewRecommended: analysis.humanReviewRecommended,
+            output: analysis.output,
+          }
+        : null,
+      nextAction: await this.nextActions.operational(r.guidedSelfCheckId),
+      allowedNextActionsByDecision: Object.fromEntries(
+        Object.values(GuidedSelfCheckReviewDecision).map((d) => [
+          d,
+          this.nextActions.allowed(d, r.classificationSnapshot),
+        ]),
+      ),
+      questionnaire: {
+        version: version.version,
+        groups: version.groups.map((g) => ({
+          key: g.key,
+          title: g.title,
+          sortOrder: g.sortOrder,
+          questions: g.questions.map((q) => {
+            const x = byQuestion.get(q.id);
+            return {
+              key: q.key,
+              text: q.text,
+              type: q.type,
+              sortOrder: q.sortOrder,
+              answer: x
+                ? {
+                    state: x.state,
+                    value: x.value,
+                    provenance: x.provenance,
+                    updatedAt: x.updatedAt,
+                  }
+                : null,
+            };
+          }),
+        })),
+      },
+    };
+  }
+  async startInternal(reference: string, user: User) {
+    return this.data.transaction(async (m) => {
+      const p = await this.internalProfessionals.activeForUser(user.id, m);
+      const r = await this.lock(m, reference);
+      this.internalProfessionals.requireCapability(
+        p,
+        this.requiredCapability(r),
+      );
+      if (r.assignedInternalClinicalProfessionalId !== p.id)
+        throw new ForbiddenException(
+          "Internal review is assigned to another clinical professional",
+        );
+      if (r.status === GuidedSelfCheckReviewStatus.IN_REVIEW)
+        return this.adminView(r);
+      if (r.status !== GuidedSelfCheckReviewStatus.ASSIGNED)
+        throw new ConflictException(
+          "Only an assigned internal review can be started",
+        );
+      r.status = GuidedSelfCheckReviewStatus.IN_REVIEW;
+      r.startedAt = new Date();
+      await m.save(r);
+      await this.history(
+        m,
+        r.id,
+        GuidedSelfCheckReviewEvent.CLINICAL_REVIEW_STARTED,
+        user.id,
+        GuidedSelfCheckReviewStatus.ASSIGNED,
+        r.status,
+        { professionalReference: p.reference, reviewModel: r.reviewModel },
+      );
+      return this.adminView(r);
+    });
+  }
+  async completeInternal(
+    reference: string,
+    user: User,
+    dto: CompleteGuidedSelfCheckReviewDto,
+  ) {
+    return this.data.transaction(async (m) => {
+      const p = await this.internalProfessionals.activeForUser(user.id, m);
+      const r = await this.lock(m, reference);
+      this.internalProfessionals.requireCapability(
+        p,
+        this.requiredCapability(r),
+      );
+      if (r.assignedInternalClinicalProfessionalId !== p.id)
+        throw new ForbiddenException(
+          "Internal review is assigned to another clinical professional",
+        );
+      if (r.status === GuidedSelfCheckReviewStatus.COMPLETED)
+        return this.adminView(r);
+      if (r.status !== GuidedSelfCheckReviewStatus.IN_REVIEW)
+        throw new ConflictException(
+          "Only an internal clinical review in progress can be completed",
+        );
+      const patientGuidance = dto.patientGuidance?.trim() || null;
+      const internalClinicalNote = dto.internalClinicalNote?.trim() || null;
+      if (
+        patientGuidance &&
+        (patientGuidance.length > 1000 ||
+          /<[^>]*>|https?:\/\/|javascript:/i.test(patientGuidance))
+      )
+        throw new BadRequestException(
+          "Patient guidance must be bounded plain text without HTML or executable links",
+        );
+      if (internalClinicalNote && internalClinicalNote.length > 3000)
+        throw new BadRequestException(
+          "Internal clinical note exceeds the maximum length",
+        );
+      r.decision = dto.decision;
+      await this.nextActions.selectForReview(m, r, dto.nextActionType, user.id);
+      r.patientGuidance = patientGuidance;
+      r.internalClinicalNote = internalClinicalNote;
+      r.reviewerNotes = null;
+      r.contactRequired =
+        dto.contactRequired === true ||
+        dto.decision === GuidedSelfCheckReviewDecision.PATIENT_CONTACT_REQUIRED;
+      r.contactStatus = r.contactRequired
+        ? GuidedSelfCheckContactStatus.REQUIRED
+        : GuidedSelfCheckContactStatus.NOT_REQUIRED;
+      r.completedAt = new Date();
+      r.status = GuidedSelfCheckReviewStatus.COMPLETED;
+      await m.save(r);
+      await this.history(
+        m,
+        r.id,
+        GuidedSelfCheckReviewEvent.CLINICAL_REVIEW_COMPLETED,
+        user.id,
+        GuidedSelfCheckReviewStatus.IN_REVIEW,
+        r.status,
+        {
+          decision: r.decision,
+          nextActionType: dto.nextActionType,
+          contactRequired: r.contactRequired,
+          professionalReference: p.reference,
+          reviewModel: r.reviewModel,
+          hasPatientGuidance: !!r.patientGuidance,
+          hasInternalClinicalNote: !!r.internalClinicalNote,
+        },
+      );
+      await this.history(
+        m,
+        r.id,
+        GuidedSelfCheckReviewEvent.NEXT_ACTION_RECOMMENDED,
+        user.id,
+        r.status,
+        r.status,
+        {
+          nextActionType: dto.nextActionType,
+          source: "INTERNAL_CLINICAL_PROFESSIONAL",
+        },
+      );
+      return this.adminView(r);
+    });
+  }
+  async cancel(
+    reference: string,
+    dto: CancelGuidedSelfCheckReviewDto,
+    actorId: string,
+  ) {
+    return this.data.transaction(async (m) => {
+      const r = await this.lock(m, reference);
+      if (r.status === GuidedSelfCheckReviewStatus.CANCELLED)
+        return this.adminView(r);
+      if (r.status === GuidedSelfCheckReviewStatus.COMPLETED)
+        throw new ConflictException(
+          "Completed professional review cannot be cancelled",
+        );
+      const from = r.status;
+      r.status = GuidedSelfCheckReviewStatus.CANCELLED;
+      r.cancelledAt = new Date();
+      await m.save(r);
+      await this.history(
+        m,
+        r.id,
+        GuidedSelfCheckReviewEvent.REVIEW_CANCELLED,
+        actorId,
+        from,
+        r.status,
+        { reason: dto.reason?.trim() || null },
+      );
+      return this.adminView(r);
+    });
+  }
+  async acknowledge(reference: string, actorId: string) {
+    return this.data.transaction(async (m) => {
+      const r = await this.lock(m, reference);
+      if (
+        ![
+          GuidedSelfCheckReviewModel.INTERNAL_URGENT,
+          GuidedSelfCheckReviewModel.INTERNAL_ROUTINE,
+        ].includes(r.reviewModel)
+      )
+        throw new ConflictException(
+          "Only an internal review can be acknowledged",
+        );
+      if (
+        [
+          GuidedSelfCheckReviewStatus.ACKNOWLEDGED,
+          GuidedSelfCheckReviewStatus.ESCALATED,
+        ].includes(r.status)
+      )
+        return this.adminView(r);
+      if (r.status !== GuidedSelfCheckReviewStatus.PENDING)
+        throw new ConflictException(
+          "Internal review cannot be acknowledged in its current state",
+        );
+      r.status = GuidedSelfCheckReviewStatus.ACKNOWLEDGED;
+      r.acknowledgedByUserId = actorId;
+      r.acknowledgedAt = new Date();
+      await m.save(r);
+      await this.history(
+        m,
+        r.id,
+        GuidedSelfCheckReviewEvent.ACKNOWLEDGED,
+        actorId,
+        GuidedSelfCheckReviewStatus.PENDING,
+        r.status,
+        { reviewModel: r.reviewModel },
+      );
+      return this.adminView(r);
+    });
+  }
+  async escalate(reference: string, note: string | undefined, actorId: string) {
+    return this.data.transaction(async (m) => {
+      const r = await this.lock(m, reference);
+      if (r.classificationSnapshot !== GuidedSelfCheckClassification.RED)
+        throw new ConflictException(
+          "Only a RED internal urgent review can be escalated",
+        );
+      if (r.status === GuidedSelfCheckReviewStatus.ESCALATED)
+        return this.adminView(r);
+      if (
+        ![
+          GuidedSelfCheckReviewStatus.ACKNOWLEDGED,
+          GuidedSelfCheckReviewStatus.PENDING,
+        ].includes(r.status)
+      )
+        throw new ConflictException(
+          "Urgent review cannot be escalated in its current state",
+        );
+      const from = r.status;
+      r.status = GuidedSelfCheckReviewStatus.ESCALATED;
+      r.operationalNote = note?.trim() || null;
+      if (!r.acknowledgedAt) {
+        r.acknowledgedAt = new Date();
+        r.acknowledgedByUserId = actorId;
+      }
+      await m.save(r);
+      await this.history(
+        m,
+        r.id,
+        GuidedSelfCheckReviewEvent.ESCALATED,
+        actorId,
+        from,
+        r.status,
+        { hasOperationalNote: !!r.operationalNote },
+      );
+      return this.adminView(r);
+    });
+  }
+  async getPatientState(guidedSelfCheckId: string) {
+    const r = await this.reviews.findOne({ where: { guidedSelfCheckId } });
+    return r
+      ? {
+          required: true,
+          status: r.status,
+          completedAt: r.completedAt,
+          patientGuidance:
+            r.status === GuidedSelfCheckReviewStatus.COMPLETED
+              ? r.patientGuidance
+              : null,
+        }
+      : null;
+  }
+  private async lock(m: EntityManager, reference: string) {
+    const repo = m.getRepository(GuidedSelfCheckProfessionalReview);
+    const locked = await repo.findOne({
+      where: { reference },
+      lock: { mode: "pessimistic_write" },
+    });
+    if (!locked)
+      throw new NotFoundException("Professional review was not found");
+    const r = await repo.findOne({
+      where: { id: locked.id },
+      relations: {
+        selfCheck: true,
+        classificationResult: true,
+        assignedReviewerUser: true,
+        assignedReviewerProvider: true,
+        assignedReviewerAuthorization: true,
+        assignedInternalClinicalProfessional: { user: true },
+      },
+    });
+    if (!r) throw new NotFoundException("Professional review was not found");
+    return r;
+  }
+  private requiredCapability(r: GuidedSelfCheckProfessionalReview) {
+    return r.reviewModel === GuidedSelfCheckReviewModel.INTERNAL_ROUTINE
+      ? GuidedSelfCheckInternalClinicalCapability.SELF_CHECK_CLINICAL_REVIEW
+      : GuidedSelfCheckInternalClinicalCapability.URGENT_SELF_CHECK_REVIEW;
+  }
+  private history(
+    m: EntityManager,
+    reviewId: string,
+    event: GuidedSelfCheckReviewEvent,
+    actorUserId: string | null,
+    fromStatus: GuidedSelfCheckReviewStatus | null,
+    toStatus: GuidedSelfCheckReviewStatus | null,
+    metadata: Record<string, unknown>,
+  ) {
+    return m
+      .getRepository(GuidedSelfCheckProfessionalReviewHistory)
+      .save({ reviewId, event, actorUserId, fromStatus, toStatus, metadata });
+  }
+  private queueView(r: GuidedSelfCheckProfessionalReview) {
+    return {
+      reference: r.reference,
+      selfCheckReference: r.selfCheck.reference,
+      reviewModel: r.reviewModel,
+      classification: r.classificationSnapshot,
+      priority: r.priority,
+      status: r.status,
+      questionnaireCompletedAt: r.selfCheck.completedAt,
+      acknowledgedAt: r.acknowledgedAt,
+      assignedProfessional: r.assignedInternalClinicalProfessional
+        ? {
+            reference: r.assignedInternalClinicalProfessional.reference,
+            displayName: r.assignedInternalClinicalProfessional.displayName,
+            professionalType:
+              r.assignedInternalClinicalProfessional.professionalType,
+          }
+        : null,
+      assignedAt: r.assignedAt,
+      createdAt: r.createdAt,
+    };
+  }
+  private myWorkView(r: GuidedSelfCheckProfessionalReview) {
+    return {
+      reference: r.reference,
+      selfCheckReference: r.selfCheck.reference,
+      classification: r.classificationSnapshot,
+      priority: r.priority,
+      status: r.status,
+      assignedAt: r.assignedAt,
+      startedAt: r.startedAt,
+      createdAt: r.createdAt,
+    };
+  }
+  private adminView(r: GuidedSelfCheckProfessionalReview) {
+    return {
+      ...this.queueView(r),
+      origin: r.origin,
+      patientMessageKey: r.classificationResult?.patientMessageKey ?? null,
+      matchedReasonCodes: r.classificationResult?.matchedReasonCodes ?? [],
+      urgentAction:
+        r.classificationResult?.urgentAction ??
+        r.priority === GuidedSelfCheckReviewPriority.URGENT,
+      startedAt: r.startedAt,
+      completedAt: r.completedAt,
+      cancelledAt: r.cancelledAt,
+      decision: r.decision,
+      patientGuidance: r.patientGuidance,
+      internalClinicalNote: r.internalClinicalNote,
+      contactRequired: r.contactRequired,
+      contactStatus: r.contactStatus,
+      contactedAt: r.contactedAt,
+      history:
+        r.history?.map((h) => ({
+          event: h.event,
+          fromStatus: h.fromStatus,
+          toStatus: h.toStatus,
+          actor: h.actor ? { displayName: h.actor.displayName } : null,
+          metadata: h.metadata,
+          createdAt: h.createdAt,
+        })) ?? [],
+    };
+  }
 }

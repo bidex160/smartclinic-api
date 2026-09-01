@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -10,6 +10,7 @@ import {
   CreateClinicalRulesetDto,
   DisableClinicalGovernanceDto,
   GovernanceNoteDto,
+  GovernanceAuthorizationListQueryDto,
   RulesetListQueryDto,
   SimulateClinicalRulesetDto,
   UpdateClinicalRulesetDto,
@@ -23,7 +24,7 @@ import { GuidedSelfCheckClinicalGovernanceService } from './guided-self-check-cl
 @Controller('admin/guided-self-check-clinical-governance-authorizations')
 export class GuidedSelfCheckClinicalGovernanceAuthorizationsController {
   constructor(private service: GuidedSelfCheckClinicalGovernanceService) {}
-  @Get() list() { return this.service.listAuthorizations(); }
+  @Get() list(@Query() query: GovernanceAuthorizationListQueryDto) { return this.service.listAuthorizations(query); }
   @Post('authorize') authorize(@Body() dto: AuthorizeClinicalGovernanceDto, @Req() request: { user: User }) { return this.service.authorizeInternal(dto, request.user.id); }
   @Post(':reference/disable') disable(@Param('reference') reference: string, @Body() dto: DisableClinicalGovernanceDto, @Req() request: { user: User }) { return this.service.disable(reference, dto, request.user.id); }
 }
@@ -36,6 +37,8 @@ export class GuidedSelfCheckClinicalGovernanceAuthorizationsController {
 export class GuidedSelfCheckClinicalRulesetsController {
   constructor(private service: GuidedSelfCheckClinicalGovernanceService) {}
   @Get() list(@Query() query: RulesetListQueryDto, @Req() request: { user: User }) { return this.service.list(query, request.user.id); }
+  @Get('metadata') metadata(@Req() request: { user: User }) { return this.service.metadata(request.user.id); }
+  @Get('questionnaires/:version') questionnaire(@Param('version',ParseIntPipe) version: number, @Req() request: { user: User }) { return this.service.questionnaireMetadata(version, request.user.id); }
   @Get(':reference') get(@Param('reference') reference: string, @Req() request: { user: User }) { return this.service.get(reference, request.user.id); }
   @Post() create(@Body() dto: CreateClinicalRulesetDto, @Req() request: { user: User }) { return this.service.create(dto, request.user.id); }
   @Patch(':reference') update(@Param('reference') reference: string, @Body() dto: UpdateClinicalRulesetDto, @Req() request: { user: User }) { return this.service.update(reference, dto, request.user.id); }

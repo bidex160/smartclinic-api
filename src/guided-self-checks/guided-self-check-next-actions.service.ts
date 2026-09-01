@@ -28,12 +28,25 @@ export class GuidedSelfCheckNextActionsService {
     return classification === GuidedSelfCheckClassification.GREEN ? GuidedSelfCheckNextActionType.CONTINUE_STAYING_WELL : classification === GuidedSelfCheckClassification.AMBER ? GuidedSelfCheckNextActionType.REQUEST_PROFESSIONAL_CONTACT : GuidedSelfCheckNextActionType.SEEK_URGENT_ASSESSMENT;
   }
 
-  async ensureForReference(reference: string) {
-    return this.data.transaction(async manager => {
-      const result = await manager.getRepository(GuidedSelfCheckClassificationResult).createQueryBuilder('classification').innerJoin('classification.selfCheck', 'selfCheck').where('selfCheck.reference = :reference', { reference }).setLock('pessimistic_write').getOne();
-      return result ? this.ensureClassificationAction(manager, result) : null;
-    });
-  }
+async ensureForReference(reference: string) {
+  return this.data.transaction(async (manager) => {
+    const result = await manager
+      .getRepository(GuidedSelfCheckClassificationResult)
+      .createQueryBuilder("classification")
+      .innerJoin("classification.selfCheck", "selfCheck")
+      .where("selfCheck.reference = :reference", { reference })
+      .setLock(
+        "pessimistic_write",
+        undefined,
+        ["classification"],
+      )
+      .getOne();
+
+    return result
+      ? this.ensureClassificationAction(manager, result)
+      : null;
+  });
+}
 
   async ensureClassificationAction(manager: EntityManager, result: GuidedSelfCheckClassificationResult) {
     const type = this.classificationType(result.classification);
