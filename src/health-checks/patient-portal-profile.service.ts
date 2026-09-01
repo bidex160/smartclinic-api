@@ -6,6 +6,7 @@ import { PatientStatus } from '../patients/enums/patient-status.enum';
 import { User } from '../users/entities/user.entity';
 import { PatientPortalProfileDto } from './dto/patient-portal-profile.dto';
 import { UpdatePatientPortalProfileDto } from './dto/update-patient-portal-profile.dto';
+import { normalizePhoneNumber } from '../users/phone-normalization';
 
 @Injectable()
 export class PatientPortalProfileService {
@@ -26,11 +27,20 @@ export class PatientPortalProfileService {
       if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE) throw new NotFoundException('Patient profile was not found for the authenticated user');
       if (dto.givenName !== undefined) patient.givenName = dto.givenName;
       if (dto.familyName !== undefined) patient.familyName = dto.familyName;
-      if (dto.phone !== undefined) patient.phone = dto.phone;
+      const normalizedPhone = dto.phone ? normalizePhoneNumber(dto.phone) : null;
+      if (dto.phone && !normalizedPhone) throw new BadRequestException('phone must be a valid phone number');
+      if (normalizedPhone) {
+        const owner = await manager.getRepository(User).findOne({ where: { phoneNormalized: normalizedPhone } });
+        if (owner && owner.id !== user.id) throw new BadRequestException('phone number is already associated with another account');
+      }
+      if (dto.phone !== undefined) patient.phone = normalizedPhone;
       if (dto.dateOfBirth !== undefined) patient.dateOfBirth = dto.dateOfBirth;
       const saved = await patientRepository.save(patient);
       const displayName = `${saved.givenName} ${saved.familyName}`.trim();
-      if (displayName !== user.displayName) await manager.getRepository(User).update(user.id, { displayName });
+      const userChanges: { displayName?: string; phoneNormalized?: string | null } = {};
+      if (displayName !== user.displayName) userChanges.displayName = displayName;
+      if (dto.phone !== undefined) userChanges.phoneNormalized = normalizedPhone;
+      if (Object.keys(userChanges).length) await manager.getRepository(User).update(user.id, userChanges);
       return this.project({ ...user, displayName }, saved);
     });
   }

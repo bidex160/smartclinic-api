@@ -15,6 +15,10 @@ import { UserCredential } from './user-credential.entity';
   unique: true,
   where: '"email_normalized" IS NOT NULL',
 })
+@Index('UQ_users_phone_normalized', ['phoneNormalized'], {
+  unique: true,
+  where: '"phone_normalized" IS NOT NULL',
+})
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -24,6 +28,9 @@ export class User {
 
   @Column({ name: 'email_normalized', type: 'varchar', nullable: true })
   emailNormalized!: string | null;
+
+  @Column({ name: 'phone_normalized', type: 'varchar', nullable: true })
+  phoneNormalized!: string | null;
 
   @Column({ name: 'display_name', type: 'varchar', nullable: true })
   displayName!: string | null;

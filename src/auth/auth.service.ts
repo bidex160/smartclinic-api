@@ -26,6 +26,8 @@ import {
   MAX_PATIENT_REFERENCE_GENERATION_ATTEMPTS,
 } from "../patients/patient-reference";
 import { ReferralsService } from "../rewards/referrals.service";
+import { isEmail } from "class-validator";
+import { normalizePhoneNumber } from "../users/phone-normalization";
 
 @Injectable()
 export class AuthService {
@@ -40,8 +42,13 @@ export class AuthService {
   ) {}
   async register(dto: RegisterDto): Promise<UserResponseDto> {
     const email = dto.email.trim().toLowerCase();
+    const phone = dto.phone ? normalizePhoneNumber(dto.phone) : null;
+    if (dto.phone && !phone)
+      throw new ConflictException("A valid phone number is required");
     if (await this.users.exists({ where: { emailNormalized: email } }))
       throw new ConflictException("An account already exists for this email");
+    if (phone && await this.users.exists({ where: { phoneNormalized: phone }, withDeleted: true }))
+      throw new ConflictException("An account already exists for this phone number");
     const passwordHash = await bcrypt.hash(dto.password, 12);
     for (
       let attempt = 0;
@@ -58,6 +65,7 @@ export class AuthService {
                 .create({
                   email,
                   emailNormalized: email,
+                  phoneNormalized: phone,
                   displayName: `${dto.givenName.trim()} ${dto.familyName.trim()}`,
                   status: UserStatus.ACTIVE,
                   roles: [UserRole.USER],
@@ -81,7 +89,7 @@ export class AuthService {
                   givenName: dto.givenName.trim(),
                   familyName: dto.familyName.trim(),
                   dateOfBirth: null,
-                  phone: dto.phone?.trim() || null,
+                  phone,
                   email,
                   status: PatientStatus.ACTIVE,
                 }),
@@ -100,11 +108,12 @@ export class AuthService {
       } catch (error) {
         if (
           error instanceof QueryFailedError &&
-          (error.driverError as { constraint?: string }).constraint ===
-            "UQ_users_email_normalized"
+          ["UQ_users_email_normalized", "UQ_users_phone_normalized"].includes(
+            (error.driverError as { constraint?: string }).constraint ?? "",
+          )
         )
           throw new ConflictException(
-            "An account already exists for this email",
+            "An account already exists for this email or phone number",
           );
         if (
           !isPatientReferenceCollision(error) ||
@@ -118,8 +127,13 @@ export class AuthService {
     );
   }
   async login(dto: LoginDto): Promise<LoginResponseDto> {
+    if (dto.identifier && dto.email && dto.identifier.trim().toLowerCase() !== dto.email.trim().toLowerCase())
+      throw new UnauthorizedException("Invalid email or password");
+    const identifier = (dto.identifier ?? dto.email ?? '').trim();
+    const email = isEmail(identifier) ? identifier.toLowerCase() : null;
+    const phone = email ? null : normalizePhoneNumber(identifier);
     const user = await this.users.findOne({
-      where: { emailNormalized: dto.email.trim().toLowerCase() },
+      where: email ? { emailNormalized: email } : { phoneNormalized: phone ?? '__invalid__' },
       relations: { credential: true },
     });
     if (

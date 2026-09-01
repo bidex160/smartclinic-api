@@ -39,12 +39,28 @@ describe('AuthService', () => {
     const hash = await bcrypt.hash(dto.password, 4);
     const user = { id: 'a1', email: 'ada@example.com', displayName: 'Ada', status: UserStatus.ACTIVE, roles: [UserRole.USER], deletedAt: null, credential: { passwordHash: hash } };
     const { service, jwt } = setup(user);
-    await expect(service.login(dto)).resolves.toMatchObject({ accessToken: 'token', user: { email: 'ada@example.com' } });
+    await expect(service.login({ identifier: ' Ada@Example.COM ', password: dto.password })).resolves.toMatchObject({ accessToken: 'token', user: { email: 'ada@example.com' } });
     expect(jwt.signAsync).toHaveBeenCalledWith({ sub: 'a1' });
+  });
+  it.each(['08012345678', '2348012345678', '+2348012345678'])('logs in with equivalent phone identifier %s', async (identifier) => {
+    const hash = await bcrypt.hash(dto.password, 4);
+    const user = { id: 'a1', email: 'ada@example.com', displayName: 'Ada', status: UserStatus.ACTIVE, roles: [UserRole.USER], deletedAt: null, credential: { passwordHash: hash } };
+    const context = setup(user);
+    await expect(context.service.login({ identifier, password: dto.password })).resolves.toMatchObject({ accessToken: 'token' });
+    expect(context.userRepo.findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { phoneNormalized: '+2348012345678' } }));
+  });
+  it('preserves the legacy email request field', async () => {
+    const hash = await bcrypt.hash(dto.password, 4);
+    const context = setup({ id: 'a1', email: 'ada@example.com', displayName: 'Ada', status: UserStatus.ACTIVE, roles: [UserRole.USER], deletedAt: null, credential: { passwordHash: hash } });
+    await expect(context.service.login({ email: 'ADA@example.com', password: dto.password })).resolves.toMatchObject({ accessToken: 'token' });
   });
   it('uses one generic error for unknown email, bad password, and inactive accounts', async () => {
     for (const user of [null, { status: UserStatus.SUSPENDED, credential: { passwordHash: 'x' } }, { status: UserStatus.ACTIVE, credential: { passwordHash: await bcrypt.hash('other', 4) } }]) {
-      await expect(setup(user).service.login(dto)).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(setup(user).service.login({ identifier: 'unknown@example.com', password: dto.password })).rejects.toThrow('Invalid email or password');
     }
+  });
+  it('uses the same generic error for an unknown phone and conflicting legacy fields', async () => {
+    await expect(setup(null).service.login({ identifier: '+2348099999999', password: dto.password })).rejects.toThrow('Invalid email or password');
+    await expect(setup(null).service.login({ identifier: 'a@example.com', email: 'b@example.com', password: dto.password })).rejects.toThrow('Invalid email or password');
   });
 });

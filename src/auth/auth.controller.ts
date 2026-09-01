@@ -16,7 +16,7 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
   @Post('register') @ApiOperation({ summary: 'Register a standard user account' }) @ApiCreatedResponse({ type: UserResponseDto }) @ApiConflictResponse({ description: 'An account already exists for the email.' })
   register(@Body() dto: RegisterDto): Promise<UserResponseDto> { return this.auth.register(dto); }
-  @Post('login') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Authenticate with email and password' }) @ApiOkResponse({ type: LoginResponseDto }) @ApiUnauthorizedResponse({ description: 'Invalid email or password.' })
+  @Post('login') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Authenticate with email or phone number and password' }) @ApiOkResponse({ type: LoginResponseDto }) @ApiUnauthorizedResponse({ description: 'Invalid email or password.' })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) response: Response): Promise<LoginResponseDto> { return this.withCookie(await this.auth.login(dto), response); }
   @Post('refresh') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Rotate the HttpOnly refresh cookie and issue a new access token' }) @ApiOkResponse({ type: LoginResponseDto }) @ApiUnauthorizedResponse()
   async refresh(@Req() request: { headers: { cookie?: string } }, @Res({ passthrough: true }) response: Response): Promise<LoginResponseDto> { return this.withCookie(await this.auth.refresh(this.cookie(request.headers.cookie)), response); }

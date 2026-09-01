@@ -14,7 +14,7 @@ describe('PatientPortalProfileService', () => {
   it('updates only the authenticated Patient and preserves omitted fields', async () => {
     const row: any = { id: 'patient-a', patientReference: 'SCP-8K4M-27QD', userId: user.id, givenName: 'Ada', familyName: 'Okafor', email: user.email, phone: null, dateOfBirth: null, status: PatientStatus.ACTIVE, deletedAt: null };
     const patientRepository: any = { findOne: jest.fn().mockResolvedValue(row), save: jest.fn(async (value) => value) };
-    const userRepository: any = { update: jest.fn().mockResolvedValue({ affected: 1 }) };
+    const userRepository: any = { findOne: jest.fn().mockResolvedValue(null), update: jest.fn().mockResolvedValue({ affected: 1 }) };
     const manager: any = { getRepository: jest.fn((entity) => entity.name === 'Patient' ? patientRepository : userRepository), transaction: jest.fn(async (callback) => callback(manager)) };
     const patients: any = { manager };
 
@@ -22,7 +22,7 @@ describe('PatientPortalProfileService', () => {
 
     expect(patientRepository.findOne).toHaveBeenCalledWith({ where: { userId: user.id }, withDeleted: true });
     expect(patientRepository.save).toHaveBeenCalledWith(expect.objectContaining({ givenName: 'Adanna', familyName: 'Okafor', email: user.email, phone: '+2348012345678', dateOfBirth: '1990-01-01' }));
-    expect(userRepository.update).toHaveBeenCalledWith(user.id, { displayName: 'Adanna Okafor' });
+    expect(userRepository.update).toHaveBeenCalledWith(user.id, { displayName: 'Adanna Okafor', phoneNormalized: '+2348012345678' });
     expect(result).toEqual({ user: { displayName: 'Adanna Okafor', email: user.email }, patient: { patientReference: 'SCP-8K4M-27QD', givenName: 'Adanna', familyName: 'Okafor', phone: '+2348012345678', dateOfBirth: '1990-01-01' } });
     expect(result.patient).not.toHaveProperty('id');
     expect(result.patient).not.toHaveProperty('userId');
@@ -31,7 +31,8 @@ describe('PatientPortalProfileService', () => {
   it('supports explicit clearing of nullable phone and date of birth', async () => {
     const row: any = { patientReference: 'SCP-8K4M-27QD', userId: user.id, givenName: 'Ada', familyName: 'Okafor', phone: '+2348012345678', dateOfBirth: '1990-01-01', status: PatientStatus.ACTIVE, deletedAt: null };
     const patientRepository: any = { findOne: jest.fn().mockResolvedValue(row), save: jest.fn(async (value) => value) };
-    const manager: any = { getRepository: jest.fn(() => patientRepository), transaction: jest.fn(async (callback) => callback(manager)) };
+    const userRepository: any = { findOne: jest.fn(), update: jest.fn() };
+    const manager: any = { getRepository: jest.fn((entity) => entity.name === 'Patient' ? patientRepository : userRepository), transaction: jest.fn(async (callback) => callback(manager)) };
 
     const result = await new PatientPortalProfileService({ manager } as any).update(user, { phone: null, dateOfBirth: null });
 
