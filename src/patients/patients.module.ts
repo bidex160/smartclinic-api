@@ -8,6 +8,7 @@ import { PatientProviderConnection } from '../patient-provider-connections/entit
 import { Patient } from './entities/patient.entity';
 import { MePatientDashboardController } from './patient-dashboard.controller';
 import { PatientDashboardService } from './patient-dashboard.service';
+import { PatientDashboardActionProjectionService } from './patient-dashboard-action-projection.service';
 import { User } from 'src/users/entities/user.entity';
 
 @Module({
@@ -22,6 +23,6 @@ import { User } from 'src/users/entities/user.entity';
     ]),
   ],
   controllers: [MePatientDashboardController],
-  providers: [PatientDashboardService],
+  providers: [PatientDashboardService, PatientDashboardActionProjectionService],
 })
 export class PatientsModule {}

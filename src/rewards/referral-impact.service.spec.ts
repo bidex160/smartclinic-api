@@ -39,11 +39,13 @@ describe('ReferralImpactService', () => {
     await expect(service.leaderboard()).resolves.toEqual({ people: [], cities: [], countries: [] });
   });
 
-  it('updates only the authenticated user consent field', async () => {
+  it('lets the authenticated user opt out and back in without changing other account fields', async () => {
     const update = jest.fn().mockResolvedValue({ affected: 1 });
     const service = new ReferralImpactService({} as any, { update } as any, {} as any);
+    await expect(service.updatePreference('user-1', false)).resolves.toEqual({ publicLeaderboard: false });
+    expect(update).toHaveBeenNthCalledWith(1, { id: 'user-1' }, { publicLeaderboard: false });
     await expect(service.updatePreference('user-1', true)).resolves.toEqual({ publicLeaderboard: true });
-    expect(update).toHaveBeenCalledWith({ id: 'user-1' }, { publicLeaderboard: true });
+    expect(update).toHaveBeenNthCalledWith(2, { id: 'user-1' }, { publicLeaderboard: true });
   });
 
   it('composes impact from existing summary and returns rank only for opted-in users', async () => {
@@ -65,5 +67,16 @@ describe('ReferralImpactService', () => {
     const service = new ReferralImpactService({ query } as any, { findOne: jest.fn().mockResolvedValue({ id: 'u1', publicLeaderboard: false }) } as any, { summary: jest.fn().mockResolvedValue(summary) } as any);
     await expect(service.impact('u1')).resolves.toMatchObject({ leaderboard: { optedIn: false, position: null } });
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('makes a default-participating user rankable without changing ranking mathematics', async () => {
+    const query = jest.fn().mockResolvedValue([{ position: '4' }]);
+    const users = { findOne: jest.fn().mockResolvedValue({ id: 'new-user', publicLeaderboard: true }) };
+    const service = new ReferralImpactService({ query } as any, users as any, { summary: jest.fn().mockResolvedValue(summary) } as any);
+
+    await expect(service.impact('new-user')).resolves.toMatchObject({
+      leaderboard: { optedIn: true, position: 4 },
+    });
+    expect(query.mock.calls[0][0]).toContain('ROW_NUMBER() OVER (ORDER BY points DESC, referrals DESC, "userId" ASC)');
   });
 });

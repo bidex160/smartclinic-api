@@ -3,6 +3,7 @@ import { PatientProviderConnectionStatus } from '../patient-provider-connections
 import { User } from '../users/entities/user.entity';
 import {
   PatientDashboardMode,
+  PatientDashboardActionTargetType,
   PatientDashboardRecommendedAction,
 } from './dto/patient-dashboard.dto';
 import { PatientStatus } from './enums/patient-status.enum';
@@ -24,6 +25,7 @@ describe('PatientDashboardService', () => {
   let connections: { exists: jest.Mock };
   let careRequests: { exists: jest.Mock };
   let bookings: { exists: jest.Mock };
+  let actions: { project: jest.Mock };
   let service: PatientDashboardService;
 
   beforeEach(() => {
@@ -31,11 +33,13 @@ describe('PatientDashboardService', () => {
     connections = { exists: jest.fn().mockResolvedValue(false) };
     careRequests = { exists: jest.fn().mockResolvedValue(false) };
     bookings = { exists: jest.fn().mockResolvedValue(false) };
+    actions = { project: jest.fn().mockResolvedValue({ type: PatientDashboardRecommendedAction.NONE, resource: null, target: { type: PatientDashboardActionTargetType.STAY_WELL } }) };
     service = new PatientDashboardService(
       patients as never,
       connections as never,
       careRequests as never,
       bookings as never,
+      actions as never,
     );
   });
 
@@ -58,13 +62,19 @@ describe('PatientDashboardService', () => {
         hasHealthCheckBooking: false,
         hasStartedCareJourney: false,
       },
-      recommendedAction: PatientDashboardRecommendedAction.CONNECT_PROVIDER,
+      recommendedAction: PatientDashboardRecommendedAction.NONE,
+      recommendedActionDetail: {
+        type: PatientDashboardRecommendedAction.NONE,
+        resource: null,
+        target: { type: PatientDashboardActionTargetType.STAY_WELL },
+      },
       dashboardMode: PatientDashboardMode.GETTING_STARTED,
     });
   });
 
   it('recommends completing the profile using only required V1 identity fields', async () => {
     patients.findOne.mockResolvedValue({ ...patient, familyName: ' ' });
+    actions.project.mockResolvedValue({ type: PatientDashboardRecommendedAction.COMPLETE_PROFILE, resource: null, target: { type: PatientDashboardActionTargetType.PROFILE } });
     const result = await service.get(user);
 
     expect(result.setup).toMatchObject({
@@ -80,6 +90,9 @@ describe('PatientDashboardService', () => {
     patients.findOne
       .mockResolvedValueOnce({ ...patient, givenName: ' ' })
       .mockResolvedValueOnce({ ...patient, givenName: 'Ada' });
+    actions.project
+      .mockResolvedValueOnce({ type: PatientDashboardRecommendedAction.COMPLETE_PROFILE, resource: null, target: { type: PatientDashboardActionTargetType.PROFILE } })
+      .mockResolvedValueOnce({ type: PatientDashboardRecommendedAction.NONE, resource: null, target: { type: PatientDashboardActionTargetType.STAY_WELL } });
 
     const before = await service.get(user);
     const after = await service.get(user);
@@ -87,13 +100,14 @@ describe('PatientDashboardService', () => {
     expect(before.setup.profileComplete).toBe(false);
     expect(before.recommendedAction).toBe(PatientDashboardRecommendedAction.COMPLETE_PROFILE);
     expect(after.setup.profileComplete).toBe(true);
-    expect(after.recommendedAction).toBe(PatientDashboardRecommendedAction.CONNECT_PROVIDER);
+    expect(after.recommendedAction).toBe(PatientDashboardRecommendedAction.NONE);
   });
 
   it('recognizes a meaningful in-progress Provider connection and excludes terminal attempts', async () => {
     connections.exists
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);
+    actions.project.mockResolvedValue({ type: PatientDashboardRecommendedAction.VIEW_PROVIDER_CONNECTION, resource: { domain: 'PROVIDER_CONNECTION', reference: 'SC-PC-X' }, target: { type: 'PROVIDER_CONNECTION' } });
 
     const result = await service.get(user);
 
@@ -124,18 +138,19 @@ describe('PatientDashboardService', () => {
     expect(meaningfulStatuses).not.toContain(PatientProviderConnectionStatus.CANCELLED);
   });
 
-  it('recommends Find Care for a connected patient without a care journey', async () => {
+  it('does not let a connected Provider create an action when no care journey needs attention', async () => {
     connections.exists.mockResolvedValue(true);
 
     const result = await service.get(user);
 
     expect(result.setup.hasConnectedProvider).toBe(true);
-    expect(result.recommendedAction).toBe(PatientDashboardRecommendedAction.FIND_CARE);
+    expect(result.recommendedAction).toBe(PatientDashboardRecommendedAction.NONE);
     expect(result.dashboardMode).toBe(PatientDashboardMode.ESTABLISHED);
   });
 
-  it('treats a General Care request as a started journey without requiring a manual connection', async () => {
+  it('recommends continuing an active Find Care request without requiring a connection', async () => {
     careRequests.exists.mockResolvedValue(true);
+    actions.project.mockResolvedValue({ type: PatientDashboardRecommendedAction.FIND_CARE, resource: { domain: 'CARE_REQUEST', reference: 'SC-CARE-X' }, target: { type: 'FIND_CARE' } });
 
     const result = await service.get(user);
 
@@ -144,8 +159,33 @@ describe('PatientDashboardService', () => {
       hasCareRequest: true,
       hasStartedCareJourney: true,
     });
-    expect(result.recommendedAction).toBe(PatientDashboardRecommendedAction.NONE);
+    expect(result.recommendedAction).toBe(PatientDashboardRecommendedAction.FIND_CARE);
     expect(result.dashboardMode).toBe(PatientDashboardMode.ESTABLISHED);
+  });
+
+  it('keeps historical care setup progress without recommending a completed journey', async () => {
+    careRequests.exists
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    const result = await service.get(user);
+
+    expect(result.setup).toMatchObject({
+      hasCareRequest: true,
+      hasStartedCareJourney: true,
+    });
+    expect(result.recommendedAction).toBe(PatientDashboardRecommendedAction.NONE);
+  });
+
+  it('does not let a connected Provider override an active Find Care continuation', async () => {
+    connections.exists.mockResolvedValue(true);
+    careRequests.exists.mockResolvedValue(true);
+    actions.project.mockResolvedValue({ type: PatientDashboardRecommendedAction.FIND_CARE, resource: { domain: 'CARE_REQUEST', reference: 'SC-CARE-X' }, target: { type: 'FIND_CARE' } });
+
+    const result = await service.get(user);
+
+    expect(result.setup.hasConnectedProvider).toBe(true);
+    expect(result.recommendedAction).toBe(PatientDashboardRecommendedAction.FIND_CARE);
   });
 
   it('treats a non-draft Health Check booking as a started journey', async () => {
@@ -202,5 +242,10 @@ describe('PatientDashboardService', () => {
         status: PatientProviderConnectionStatus.CONNECTED,
       },
     });
+  });
+
+  it('delegates action selection using the resolved Patient and profile state', async () => {
+    await service.get(user);
+    expect(actions.project).toHaveBeenCalledWith('patient-a', true);
   });
 });

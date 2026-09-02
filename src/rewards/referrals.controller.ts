@@ -58,7 +58,7 @@ export class MeReferralsController {
     return this.referrals.history(request.user.id, query);
   }
   @Patch("preferences")
-  @ApiOperation({ summary: "Opt in or out of public referral rankings" })
+  @ApiOperation({ summary: "Opt out of or back into public referral rankings" })
   preferences(
     @Req() request: { user: User },
     @Body() body: UpdateReferralPreferencesDto,
@@ -93,7 +93,7 @@ export class PublicReferralsController {
   constructor(private readonly impactService: ReferralImpactService) {}
   @Get("leaderboard")
   @Header("Cache-Control", "public, max-age=60")
-  @ApiOperation({ summary: "Get the opt-in public referral leaderboard" })
+  @ApiOperation({ summary: "Get the privacy-masked public referral leaderboard" })
   @ApiOkResponse({ type: PublicReferralLeaderboardDto })
   leaderboard() {
     return this.impactService.leaderboard();

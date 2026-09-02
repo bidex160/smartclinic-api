@@ -11,10 +11,10 @@ import { User } from '../users/entities/user.entity';
 import {
   PatientDashboardDto,
   PatientDashboardMode,
-  PatientDashboardRecommendedAction,
 } from './dto/patient-dashboard.dto';
 import { Patient } from './entities/patient.entity';
 import { PatientStatus } from './enums/patient-status.enum';
+import { PatientDashboardActionProjectionService } from './patient-dashboard-action-projection.service';
 
 const MEANINGFUL_CONNECTION_STATUSES = [
   PatientProviderConnectionStatus.AWAITING_FUNDING,
@@ -36,6 +36,7 @@ export class PatientDashboardService {
     private readonly careRequests: Repository<CareRequest>,
     @InjectRepository(Booking)
     private readonly bookings: Repository<Booking>,
+    private readonly actions: PatientDashboardActionProjectionService,
   ) {}
 
   async get(user: User): Promise<PatientDashboardDto> {
@@ -81,6 +82,7 @@ export class PatientDashboardService {
     const missingProfileFields = this.missingProfileFields(patient);
     const profileComplete = missingProfileFields.length === 0;
     const hasStartedCareJourney = hasCareRequest || hasHealthCheckBooking;
+    const recommendedActionDetail = await this.actions.project(patient.id, profileComplete);
 
     return {
       patient: {
@@ -98,12 +100,8 @@ export class PatientDashboardService {
         hasHealthCheckBooking,
         hasStartedCareJourney,
       },
-      recommendedAction: this.recommendedAction({
-        profileComplete,
-        hasProviderConnection,
-        hasConnectedProvider,
-        hasStartedCareJourney,
-      }),
+      recommendedAction: recommendedActionDetail.type,
+      recommendedActionDetail,
       dashboardMode:
         hasStartedCareJourney || hasConnectedProvider
           ? PatientDashboardMode.ESTABLISHED
@@ -118,20 +116,4 @@ export class PatientDashboardService {
     return missing;
   }
 
-  private recommendedAction(input: {
-    profileComplete: boolean;
-    hasProviderConnection: boolean;
-    hasConnectedProvider: boolean;
-    hasStartedCareJourney: boolean;
-  }): PatientDashboardRecommendedAction {
-    if (!input.profileComplete) return PatientDashboardRecommendedAction.COMPLETE_PROFILE;
-    if (!input.hasProviderConnection && !input.hasStartedCareJourney) {
-      return PatientDashboardRecommendedAction.CONNECT_PROVIDER;
-    }
-    if (input.hasProviderConnection && !input.hasConnectedProvider) {
-      return PatientDashboardRecommendedAction.VIEW_PROVIDER_CONNECTION;
-    }
-    if (!input.hasStartedCareJourney) return PatientDashboardRecommendedAction.FIND_CARE;
-    return PatientDashboardRecommendedAction.NONE;
-  }
 }

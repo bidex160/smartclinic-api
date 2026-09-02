@@ -76,7 +76,7 @@ export class AdminReferralQueryDto extends ReferralHistoryQueryDto {
 }
 
 export class UpdateReferralPreferencesDto {
-  @ApiProperty({ description: 'Explicit consent to appear in public referral rankings.' })
+  @ApiProperty({ description: 'Whether the authenticated patient participates in the privacy-masked public leaderboard.' })
   @IsBoolean()
   publicLeaderboard!: boolean;
 }
