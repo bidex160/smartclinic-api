@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 
 import { BookingStatusHistory } from './entities/booking-status-history.entity';
@@ -10,6 +10,8 @@ import { BookingStatus } from './enums/booking-status.enum';
 import { PatientStatus } from '../patients/enums/patient-status.enum';
 import { UserStatus } from '../users/enums/user-status.enum';
 import { ProviderService } from '../providers/entities/provider-service.entity';
+import { HealthCheckConfigurationQuote } from '../health-checks/entities/health-check-configuration-quote.entity';
+import { BookingVisitAddress } from './entities/booking-visit-address.entity';
 
 describe('BookingsService', () => {
   const createBookingDto: CreateBookingDto = {
@@ -51,9 +53,10 @@ describe('BookingsService', () => {
       save: jest.fn().mockResolvedValue(undefined),
     };
     const providerService = { id: 'provider-service', providerId: 'provider-1', healthCheckPackageId: createBookingDto.healthCheckPackageId, fulfilmentModeId: createBookingDto.fulfilmentModeId, priceMinor: '1250000', currency: 'NGN', isActive: true };
+    const transactionalProviderServiceRepository = { findOne: jest.fn().mockResolvedValue(providerService) };
     const manager = {
       getRepository: jest.fn((entity: unknown) =>
-        entity === Booking ? transactionalBookingRepository : entity === ProviderService ? { findOne: jest.fn().mockResolvedValue(providerService) } : transactionalHistoryRepository,
+        entity === Booking ? transactionalBookingRepository : entity === ProviderService ? transactionalProviderServiceRepository : transactionalHistoryRepository,
       ),
     };
     const bookingRepository = {
@@ -79,6 +82,7 @@ describe('BookingsService', () => {
       manager,
       transactionalBookingRepository,
       transactionalHistoryRepository,
+      transactionalProviderServiceRepository,
       referenceRepository,
       packagePricingService: providerCapabilities,
     };
@@ -108,6 +112,19 @@ describe('BookingsService', () => {
       fromStatus: null,
       toStatus: BookingStatus.DRAFT,
       actorUserId: createBookingDto.bookerUserId,
+    });
+  });
+  it('scopes the legacy offering lock to its base row before loading joined configuration', async () => {
+    const { service, transactionalProviderServiceRepository } = createService();
+    await service.create(createBookingDto);
+    expect(transactionalProviderServiceRepository.findOne).toHaveBeenNthCalledWith(1, {
+      where: expect.objectContaining({ id: 'provider-service', isActive: true }),
+      lock: { mode: 'pessimistic_read' },
+    });
+    expect(transactionalProviderServiceRepository.findOne.mock.calls[0][0]).not.toHaveProperty('relations');
+    expect(transactionalProviderServiceRepository.findOne).toHaveBeenNthCalledWith(2, {
+      where: { id: 'provider-service' },
+      relations: { healthCheckPackage: { contents: { clinicalContent: true }, addonAvailability: { clinicalContent: true } }, fulfilmentMode: true },
     });
   });
   it('requires a structured address for PROVIDER_LOCATION registered bookings', async () => { const { service } = createService(); await expect(service.create({ ...createBookingDto, visitAddress: undefined })).rejects.toBeInstanceOf(BadRequestException); });
@@ -237,5 +254,99 @@ describe('BookingsService', () => {
       2,
       expect.objectContaining({ bookingReference: 'SC-2026-RETRIEDREF01' }),
     );
+  });
+});
+
+describe('BookingsService quote-backed PostgreSQL locking', () => {
+  const user = { id: 'user-1' } as any;
+  const patient = { id: 'patient-1', userId: user.id, status: PatientStatus.ACTIVE, deletedAt: null } as any;
+  const dto = {
+    configurationReference: 'SC-HCQ-C8EA40D524DFB230',
+    preferredDate: '2026-09-10',
+    preferredTimeWindowStart: '09:00',
+    preferredTimezone: 'Africa/Lagos',
+    visitAddress: { addressLine1: 'Mokola', city: 'Ibadan', stateOrRegion: 'Oyo', countryCode: 'NG' },
+  } as any;
+
+  function harness(overrides: Partial<HealthCheckConfigurationQuote> = {}) {
+    const quote = {
+      id: 'quote-1', reference: dto.configurationReference, userId: user.id, patientId: patient.id,
+      providerServiceId: 'offering-1', providerLocationId: 'location-1', currency: 'NGN',
+      basePackagePriceMinor: '300000', clinicalAddonsTotalMinor: '0', fulfilmentFeeMinor: '0', totalMinor: '300000',
+      configurationSnapshot: { package: { code: 'ESSENTIAL', name: 'Essential' }, selectedAddons: [] },
+      expiresAt: new Date(Date.now() + 60_000), consumedAt: null, bookingId: null, ...overrides,
+    } as HealthCheckConfigurationQuote;
+    const offering = {
+      id: quote.providerServiceId, providerId: 'provider-1', healthCheckPackageId: 'package-1', fulfilmentModeId: 'mode-1',
+      isActive: true, healthCheckPackage: { isActive: true, estimatedDurationMinutes: 30 }, fulfilmentMode: { isActive: true },
+    } as any;
+    const savedBooking = { id: 'booking-1', bookingReference: 'SC-2026-QUOTELOCK001' } as Booking;
+    const quoteRepository = { findOne: jest.fn().mockResolvedValue(quote), save: jest.fn(async (value) => value) };
+    const offeringRepository = { findOne: jest.fn().mockResolvedValue(offering) };
+    const bookingRepositoryInTransaction = { create: jest.fn((value) => value), save: jest.fn().mockResolvedValue(savedBooking), findOne: jest.fn().mockResolvedValue(savedBooking) };
+    const addressRepository = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) };
+    const historyRepository = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) };
+    const manager = { getRepository: jest.fn((entity) => {
+      if (entity === HealthCheckConfigurationQuote) return quoteRepository;
+      if (entity === ProviderService) return offeringRepository;
+      if (entity === Booking) return bookingRepositoryInTransaction;
+      if (entity === BookingVisitAddress) return addressRepository;
+      return historyRepository;
+    }) };
+    const bookingRepository = {
+      manager: { transaction: jest.fn((work) => work(manager)) },
+      findOne: jest.fn(),
+    };
+    const patientRepository = { findOne: jest.fn().mockResolvedValue(patient) };
+    const fulfilmentModes = { findOne: jest.fn().mockResolvedValue({ id: 'mode-1', code: 'PROVIDER_LOCATION' }) };
+    const capabilities = { findEligibleProviders: jest.fn().mockResolvedValue([{ id: offering.id }]) };
+    const service = new BookingsService(
+      bookingRepository as never, {} as never, patientRepository as never, {} as never, {} as never,
+      fulfilmentModes as never, capabilities as never, quoteRepository as never,
+    );
+    jest.spyOn(service, 'findByReference').mockResolvedValue({ bookingReference: savedBooking.bookingReference } as any);
+    return { service, quote, quoteRepository, offeringRepository, bookingRepositoryInTransaction, bookingRepository, capabilities };
+  }
+
+  it('locks only the quote base row and loads optional related configuration separately', async () => {
+    const value = harness();
+    await expect(value.service.createSelf(user, dto)).resolves.toMatchObject({ bookingReference: 'SC-2026-QUOTELOCK001' });
+
+    expect(value.quoteRepository.findOne).toHaveBeenCalledWith({
+      where: { reference: dto.configurationReference, userId: user.id, patientId: patient.id },
+      lock: { mode: 'pessimistic_write' },
+    });
+    expect(value.quoteRepository.findOne.mock.calls[0][0]).not.toHaveProperty('relations');
+    expect(value.offeringRepository.findOne).toHaveBeenCalledWith({
+      where: { id: value.quote.providerServiceId },
+      relations: { healthCheckPackage: true, fulfilmentMode: true },
+    });
+    expect(value.quoteRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      bookingId: 'booking-1', consumedAt: expect.any(Date),
+    }));
+  });
+
+  it('rejects expired, consumed, and wrong-owner quotes before creating a booking', async () => {
+    const expired = harness({ expiresAt: new Date(Date.now() - 1) });
+    await expect(expired.service.createSelf(user, dto)).rejects.toThrow('quote has expired');
+    expect(expired.bookingRepositoryInTransaction.save).not.toHaveBeenCalled();
+
+    const consumed = harness({ consumedAt: new Date(), bookingId: null });
+    await expect(consumed.service.createSelf(user, dto)).rejects.toThrow('already been consumed');
+    expect(consumed.bookingRepositoryInTransaction.save).not.toHaveBeenCalled();
+
+    const wrongOwner = harness();
+    wrongOwner.quoteRepository.findOne.mockResolvedValue(null);
+    await expect(wrongOwner.service.createSelf({ id: 'other-user' } as any, dto)).rejects.toBeInstanceOf(NotFoundException);
+    expect(wrongOwner.bookingRepositoryInTransaction.save).not.toHaveBeenCalled();
+  });
+
+  it('returns the booking already bound under the quote lock and never creates a duplicate', async () => {
+    const value = harness({ bookingId: 'booking-1', consumedAt: new Date() });
+    await expect(value.service.createSelf(user, dto)).resolves.toMatchObject({ bookingReference: 'SC-2026-QUOTELOCK001' });
+    expect(value.bookingRepositoryInTransaction.findOne).toHaveBeenCalledWith({ where: { id: 'booking-1' } });
+    expect(value.bookingRepositoryInTransaction.save).not.toHaveBeenCalled();
+    expect(value.quoteRepository.save).not.toHaveBeenCalled();
+    expect(value.capabilities.findEligibleProviders).not.toHaveBeenCalled();
   });
 });

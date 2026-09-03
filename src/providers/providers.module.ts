@@ -69,7 +69,7 @@ import { ProviderCareServicesService } from './provider-care-services.service';
 import { FindCareService } from './find-care.service';
 import { ProviderCareEligibilityService } from './provider-care-eligibility.service';
 import { ProviderServiceAddon } from './entities/provider-service-addon.entity';
-import { HealthCheckAddon } from '../health-checks/entities/health-check-addon.entity';
+import { HealthCheckClinicalContent } from '../health-checks/entities/health-check-clinical-content.entity';
 import { HealthCheckPackageAddon } from '../health-checks/entities/health-check-package-addon.entity';
 @Module({
   imports: [
@@ -104,7 +104,7 @@ import { HealthCheckPackageAddon } from '../health-checks/entities/health-check-
       ProviderCareServiceDeliveryOption,
       ProviderCareServiceClinicalTemplate,
       ProviderServiceAddon,
-      HealthCheckAddon,
+      HealthCheckClinicalContent,
       HealthCheckPackageAddon,
     ]),
   ],

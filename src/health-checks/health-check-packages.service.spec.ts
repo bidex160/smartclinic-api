@@ -75,7 +75,25 @@ describe('HealthCheckPackagesService', () => {
     expect(healthCheckPackageRepository.find).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ isActive: true }),
       order: { code: 'ASC' },
-      relations: { contents: true, addonAvailability: { addon: true } },
+      relations: { contents: { clinicalContent: true }, addonAvailability: { clinicalContent: true } },
     }));
+  });
+
+  it('preserves normalized ESSENTIAL and COMPLETE composition ordering', async () => {
+    const content = (code: string, sortOrder: number, category = 'MEASUREMENT') => ({
+      isActive: true,
+      sortOrder,
+      clinicalContent: { code, name: code, description: null, category, isActive: true },
+    });
+    const repository = { find: jest.fn().mockResolvedValue([
+      { id: 'essential', code: 'ESSENTIAL', name: 'Essential', description: null, benefits: [], estimatedDurationMinutes: 15, isActive: true, contents: ['PULSE', 'OXYGEN_SATURATION', 'TEMPERATURE', 'BMI', 'BLOOD_GLUCOSE', 'BLOOD_PRESSURE'].map((code, index) => content(code, 6 - index)), addonAvailability: [] },
+      { id: 'complete', code: 'COMPLETE', name: 'Complete', description: null, benefits: [], estimatedDurationMinutes: 30, isActive: true, contents: [...['BLOOD_PRESSURE', 'BLOOD_GLUCOSE', 'BMI', 'TEMPERATURE', 'OXYGEN_SATURATION', 'PULSE'].map((code, index) => content(code, index + 1)), content('CLINICIAN_REVIEW', 7, 'REVIEW'), content('EXPANDED_INTERPRETATION', 8, 'REVIEW')], addonAvailability: [] },
+    ]) };
+    const service = new HealthCheckPackagesService(repository as never, { find: jest.fn().mockResolvedValue([]) } as never);
+
+    const result = await service.findActive();
+
+    expect(result.find((item) => item.code === 'ESSENTIAL')?.includedContents.map((item) => item.code)).toEqual(['BLOOD_PRESSURE', 'BLOOD_GLUCOSE', 'BMI', 'TEMPERATURE', 'OXYGEN_SATURATION', 'PULSE']);
+    expect(result.find((item) => item.code === 'COMPLETE')?.includedContents.map((item) => item.code)).toEqual(['BLOOD_PRESSURE', 'BLOOD_GLUCOSE', 'BMI', 'TEMPERATURE', 'OXYGEN_SATURATION', 'PULSE', 'CLINICIAN_REVIEW', 'EXPANDED_INTERPRETATION']);
   });
 });

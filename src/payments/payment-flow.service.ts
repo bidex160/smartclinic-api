@@ -248,21 +248,31 @@ export class PaymentFlowService {
             null,
           );
         funding.status = BookingFundingStatus.SETTLED;
-        const fromStatus = booking.status;
-        booking.status = BookingStatus.PENDING_PROVIDER_MATCH;
-        await manager.getRepository(Booking).save(booking);
-        const history = manager.getRepository(BookingStatusHistory);
-        await history.save(
-          history.create({
-            bookingId: booking.id,
-            fromStatus,
-            toStatus: booking.status,
-            actorUserId: userId,
-            reasonCode: "REWARD_POINTS_FUNDING_CONFIRMED",
-            reasonNote: null,
-          }),
-        );
-        settledReference = booking.bookingReference;
+        if (this.matching) {
+          const providerBoundBooking = await this.matching.bindCommercialProviderAfterSettlement(
+            manager,
+            booking.id,
+            userId,
+            "REWARD_POINTS_FUNDING_CONFIRMED",
+          );
+          booking.status = providerBoundBooking.status;
+        } else {
+          const fromStatus = booking.status;
+          booking.status = BookingStatus.PENDING_PROVIDER_MATCH;
+          await manager.getRepository(Booking).save(booking);
+          const history = manager.getRepository(BookingStatusHistory);
+          await history.save(
+            history.create({
+              bookingId: booking.id,
+              fromStatus,
+              toStatus: booking.status,
+              actorUserId: userId,
+              reasonCode: "REWARD_POINTS_FUNDING_CONFIRMED",
+              reasonNote: null,
+            }),
+          );
+          settledReference = booking.bookingReference;
+        }
       }
       await fundingRepository.save(funding);
       return {
@@ -1702,13 +1712,19 @@ async initializePatientProviderConnectionFunding(
   }
 
   private async ensureMatchingStarted(booking: Booking): Promise<void> {
-    if (
-      !this.matching ||
-      booking.status !== BookingStatus.PENDING_PROVIDER_MATCH
-    )
-      return;
+    if (!this.matching) return;
     try {
-      await this.matching.startMatching(booking.bookingReference, null);
+      if (
+        booking.commercialProviderId &&
+        booking.commercialProviderServiceId &&
+        [BookingStatus.PENDING_PROVIDER_MATCH, BookingStatus.PROVIDER_ASSIGNED].includes(booking.status)
+      )
+        await this.matching.recoverCommercialProviderBinding(
+          booking.bookingReference,
+          null,
+        );
+      else if (booking.status === BookingStatus.PENDING_PROVIDER_MATCH)
+        await this.matching.startMatching(booking.bookingReference, null);
     } catch {
       this.logger.error(
         `Provider matching recovery failed for booking ${booking.bookingReference}`,
@@ -1882,25 +1898,32 @@ async initializePatientProviderConnectionFunding(
         funding.status = BookingFundingStatus.SETTLED;
         await fundingRepository.save(funding);
 
-        const fromStatus = booking.status;
-
-        booking.status = BookingStatus.PENDING_PROVIDER_MATCH;
-        await bookingRepository.save(booking);
-
-        const historyRepository = manager.getRepository(BookingStatusHistory);
-
-        await historyRepository.save(
-          historyRepository.create({
-            bookingId: booking.id,
-            fromStatus,
-            toStatus: BookingStatus.PENDING_PROVIDER_MATCH,
+        if (this.matching) {
+          const providerBoundBooking = await this.matching.bindCommercialProviderAfterSettlement(
+            manager,
+            booking.id,
             actorUserId,
-            reasonCode: "SELF_PAYMENT_CONFIRMED",
-            reasonNote: null,
-          }),
-        );
-
-        settledBookingReference = booking.bookingReference;
+            "SELF_PAYMENT_CONFIRMED",
+            verified.occurredAt,
+          );
+          booking.status = providerBoundBooking.status;
+        } else {
+          const fromStatus = booking.status;
+          booking.status = BookingStatus.PENDING_PROVIDER_MATCH;
+          await bookingRepository.save(booking);
+          const historyRepository = manager.getRepository(BookingStatusHistory);
+          await historyRepository.save(
+            historyRepository.create({
+              bookingId: booking.id,
+              fromStatus,
+              toStatus: BookingStatus.PENDING_PROVIDER_MATCH,
+              actorUserId,
+              reasonCode: "SELF_PAYMENT_CONFIRMED",
+              reasonNote: null,
+            }),
+          );
+          settledBookingReference = booking.bookingReference;
+        }
 
         return this.response(booking, funding, attempt);
       },

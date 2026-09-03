@@ -12,6 +12,8 @@ import { appConfig } from "../config/app.config";
 import { BookingStatusHistory } from "../bookings/entities/booking-status-history.entity";
 import { Booking } from "../bookings/entities/booking.entity";
 import { BookingStatus } from "../bookings/enums/booking-status.enum";
+import { BookingFunding } from "../bookings/entities/booking-funding.entity";
+import { BookingFundingStatus } from "../bookings/enums/booking-funding-status.enum";
 import { bookingToAvailabilityWindow } from "./booking-availability-context";
 import {
   MatchingResultResponseDto,
@@ -58,6 +60,139 @@ export class ProviderMatchingService {
     const booking = await this.requireBookingByReference(bookingReference);
     this.assertCanStartMatching(booking);
     return this.offerNext(booking, actorUserId, now);
+  }
+
+  async bindCommercialProviderAfterSettlement(
+    manager: EntityManager,
+    bookingId: string,
+    actorUserId: string | null,
+    reasonCode: string,
+    now = new Date(),
+  ): Promise<Booking> {
+    const bookingRepository = manager.getRepository(Booking);
+    const booking = await bookingRepository.findOne({ where: { id: bookingId }, lock: { mode: "pessimistic_write" } });
+    if (!booking) throw new NotFoundException("Booking not found");
+    if ([BookingStatus.PROVIDER_ASSIGNED, BookingStatus.SCHEDULED].includes(booking.status)) return booking;
+    if (![BookingStatus.AWAITING_FUNDING, BookingStatus.PENDING_PROVIDER_MATCH, BookingStatus.AWAITING_PROVIDER_RESPONSE].includes(booking.status))
+      throw new ConflictException(`Booking in ${booking.status} cannot bind its quoted provider`);
+    if (!booking.commercialProviderId || !booking.commercialProviderServiceId)
+      throw new ConflictException("Booking does not have an authoritative quoted provider binding");
+
+    const contextBooking = await bookingRepository.findOne({
+      where: { id: booking.id },
+      relations: { healthCheckPackage: true, fulfilmentMode: true, visitAddress: true },
+    });
+    if (!contextBooking) throw new NotFoundException("Booking not found");
+    const window = this.requireAvailabilityContext(contextBooking);
+    const assignmentRepository = manager.getRepository(ProviderAssignment);
+    let assignment = await assignmentRepository.findOne({
+      where: { bookingId: booking.id, status: In(ACTIVE_ASSIGNMENT_STATUSES) },
+      order: { createdAt: "DESC", id: "DESC" },
+      lock: { mode: "pessimistic_write" },
+    });
+    if (assignment && assignment.providerId !== booking.commercialProviderId)
+      throw new ConflictException("Active assignment does not match the quoted provider");
+
+    const eligible = await this.capabilities.findEligibleProviders(
+      booking.healthCheckPackageId,
+      booking.fulfilmentModeId,
+      window,
+      assignment?.id,
+    );
+    const capability = eligible.find((service) =>
+      service.id === booking.commercialProviderServiceId &&
+      service.providerId === booking.commercialProviderId,
+    );
+    if (!capability) throw new ConflictException("Quoted provider is no longer eligible for this booking");
+    const providerLocationId = contextBooking.fulfilmentMode.code === "PROVIDER_LOCATION"
+      ? booking.providerLocationId
+      : null;
+    if (
+      contextBooking.fulfilmentMode.code === "PROVIDER_LOCATION" &&
+      (!providerLocationId || !capability.providerLocationIds.includes(providerLocationId))
+    )
+      throw new ConflictException("Quoted provider location is no longer eligible");
+
+    if (assignment && assignment.status !== ProviderAssignmentStatus.OFFERED)
+      throw new ConflictException("Quoted provider assignment is no longer awaiting a response");
+    const isNewAssignment = !assignment;
+    if (!assignment) {
+      assignment = assignmentRepository.create({
+        bookingId: booking.id,
+        providerId: booking.commercialProviderId,
+        status: ProviderAssignmentStatus.OFFERED,
+        offeredAt: now,
+        respondedAt: null,
+        acceptedAt: null,
+        confirmedAt: null,
+        expiresAt: new Date(now.getTime() + this.config.providerMatching.offerTtlMinutes * 60_000),
+        reasonCode,
+        reasonNote: null,
+      });
+      assignment = await assignmentRepository.save(assignment);
+    }
+
+    const reservationRepository = manager.getRepository(ProviderBookingReservation);
+    let reservation = await reservationRepository.findOne({ where: { providerAssignmentId: assignment.id }, lock: { mode: "pessimistic_write" } });
+    if (!reservation) {
+      reservation = reservationRepository.create({
+        providerId: assignment.providerId,
+        bookingId: booking.id,
+        providerAssignmentId: assignment.id,
+        providerLocationId,
+        scheduledDate: window.requestedDate,
+        startTime: window.requestedStartTime,
+        endTime: window.requestedEndTime,
+        timezone: window.requestedTimezone,
+        status: ProviderBookingReservationStatus.HELD,
+        releasedAt: null,
+      });
+      await reservationRepository.save(reservation);
+    } else {
+      if (reservation.bookingId !== booking.id || reservation.providerId !== assignment.providerId)
+        throw new ConflictException("Existing capacity reservation does not match the quoted provider");
+      if (reservation.status !== ProviderBookingReservationStatus.HELD)
+        throw new ConflictException("Quoted provider offer does not have an active capacity hold");
+    }
+    if (isNewAssignment)
+      await this.appendAssignmentHistory(
+        manager.getRepository(ProviderAssignmentHistory), assignment.id,
+        null, ProviderAssignmentStatus.OFFERED,
+        actorUserId, reasonCode, null,
+      );
+    if (booking.status !== BookingStatus.AWAITING_PROVIDER_RESPONSE)
+      await this.transitionBooking(
+        bookingRepository, manager.getRepository(BookingStatusHistory), booking,
+        BookingStatus.AWAITING_PROVIDER_RESPONSE, actorUserId, reasonCode,
+      );
+    return booking;
+  }
+
+  async recoverCommercialProviderBinding(
+    bookingReference: string,
+    actorUserId: string | null,
+    now = new Date(),
+  ): Promise<Booking> {
+    return this.assignments.manager.transaction(async (manager) => {
+      const booking = await manager.getRepository(Booking).findOne({
+        where: { bookingReference },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!booking) throw new NotFoundException("Booking not found");
+      if ([BookingStatus.PROVIDER_ASSIGNED, BookingStatus.SCHEDULED].includes(booking.status)) return booking;
+      const funding = await manager.getRepository(BookingFunding).findOne({
+        where: { bookingId: booking.id, status: BookingFundingStatus.SETTLED },
+        lock: { mode: "pessimistic_read" },
+      });
+      if (!funding) throw new ConflictException("Booking funding is not settled");
+      return this.bindCommercialProviderAfterSettlement(
+        manager,
+        booking.id,
+        actorUserId,
+        "SETTLED_QUOTED_PROVIDER_BINDING_RECOVERED",
+        now,
+      );
+    });
   }
 
   async retryMatching(bookingReference: string, actorUserId: string, now = new Date()): Promise<MatchingResultResponseDto> {
@@ -323,7 +458,7 @@ export class ProviderMatchingService {
     declined: ProviderAssignmentResponseDto;
     next: MatchingResultResponseDto;
   }> {
-    const declined = await this.assignments.manager.transaction(
+    const outcome = await this.assignments.manager.transaction(
       async (manager) => {
         const repository = manager.getRepository(ProviderAssignment);
         const bookingRepository = manager.getRepository(Booking);
@@ -364,13 +499,31 @@ export class ProviderMatchingService {
           reservation.releasedAt = now;
           await manager.getRepository(ProviderBookingReservation).save(reservation);
         }
+        const quoteBound =
+          lockedBooking.status === BookingStatus.AWAITING_PROVIDER_RESPONSE &&
+          Boolean(lockedBooking.commercialProviderId) &&
+          Boolean(lockedBooking.commercialProviderServiceId);
+        if (quoteBound)
+          await this.transitionBooking(
+            bookingRepository,
+            manager.getRepository(BookingStatusHistory),
+            lockedBooking,
+            BookingStatus.UNFULFILLABLE,
+            null,
+            "QUOTED_PROVIDER_DECLINED",
+          );
         assignment.booking = lockedBooking;
-        return assignment;
+        return { assignment, quoteBound };
       },
     );
-    const booking = await this.requireBookingById(declined.bookingId);
+    if (outcome.quoteBound)
+      return {
+        declined: ProviderAssignmentResponseDto.fromEntity(outcome.assignment),
+        next: { bookingStatus: BookingStatus.UNFULFILLABLE, assignment: null },
+      };
+    const booking = await this.requireBookingById(outcome.assignment.bookingId);
     return {
-      declined: ProviderAssignmentResponseDto.fromEntity(declined),
+      declined: ProviderAssignmentResponseDto.fromEntity(outcome.assignment),
       next: await this.offerNext(booking, null, now),
     };
   }
@@ -517,6 +670,72 @@ private async finalizeAcceptedAssignment(
   const historyRepository = manager.getRepository(BookingStatusHistory);
   const automatic = confirmationReasonCode === "PROVIDER_ACCEPTANCE_AUTO_CONFIRMED";
   await this.transitionBooking(bookingRepository, historyRepository, booking, BookingStatus.PROVIDER_ASSIGNED, actorUserId, automatic ? "PROVIDER_ASSIGNMENT_AUTO_CONFIRMED" : "PROVIDER_ASSIGNMENT_CONFIRMED");
+  await this.finalizeConfirmedAssignmentSchedule(
+    manager,
+    assignment,
+    booking,
+    reservation,
+    healthCheckPackage,
+    fulfilmentMode,
+    actorUserId,
+    automatic ? "BOOKING_AUTOMATICALLY_SCHEDULED" : "BOOKING_RECOVERY_SCHEDULED",
+    now,
+  );
+  assignment.booking = booking;
+  return assignment;
+}
+
+private async finalizeConfirmedAssignmentSchedule(
+  manager: EntityManager,
+  assignment: ProviderAssignment,
+  booking: Booking,
+  reservation: ProviderBookingReservation,
+  healthCheckPackage: HealthCheckPackage,
+  fulfilmentMode: FulfilmentMode,
+  actorUserId: string | null,
+  reasonCode: string,
+  now: Date,
+): Promise<void> {
+  if (!healthCheckPackage.isActive || !healthCheckPackage.estimatedDurationMinutes || healthCheckPackage.estimatedDurationMinutes <= 0)
+    throw new ConflictException("Health Check package has no valid appointment duration");
+  if (!fulfilmentMode.isActive)
+    throw new ConflictException("Booking fulfilment mode is inactive");
+  if (!booking.preferredDate || !booking.preferredTimeWindowStart || !booking.preferredTimezone)
+    throw new ConflictException("Booking does not have complete appointment scheduling information");
+  if (assignment.status !== ProviderAssignmentStatus.CONFIRMED)
+    throw new ConflictException("Booking requires a confirmed provider assignment before scheduling");
+  if (reservation.status !== ProviderBookingReservationStatus.CONFIRMED)
+    throw new ConflictException("Confirmed assignment does not have confirmed capacity");
+  if (reservation.bookingId !== booking.id || reservation.providerId !== assignment.providerId || reservation.providerAssignmentId !== assignment.id)
+    throw new ConflictException("Confirmed reservation does not belong to this assignment");
+
+  const scheduledTimeFrom = booking.preferredTimeWindowStart.slice(0, 5);
+  const scheduledTimeTo = this.addMinutesToTime(scheduledTimeFrom, healthCheckPackage.estimatedDurationMinutes);
+  if (
+    reservation.scheduledDate !== booking.preferredDate ||
+    reservation.startTime.slice(0, 5) !== scheduledTimeFrom ||
+    reservation.endTime.slice(0, 5) !== scheduledTimeTo ||
+    reservation.timezone !== booking.preferredTimezone
+  )
+    throw new ConflictException("Confirmed reservation no longer matches the authoritative appointment window");
+  const providerLocationId = fulfilmentMode.code === "PROVIDER_LOCATION" ? reservation.providerLocationId : null;
+  if (fulfilmentMode.code === "PROVIDER_LOCATION" && !providerLocationId)
+    throw new ConflictException("Confirmed appointment does not identify one authoritative provider location");
+
+  if (booking.status === BookingStatus.SCHEDULED) {
+    if (
+      booking.scheduledDate !== booking.preferredDate ||
+      booking.scheduledTimeFrom?.slice(0, 5) !== scheduledTimeFrom ||
+      booking.scheduledTimeTo?.slice(0, 5) !== scheduledTimeTo ||
+      booking.scheduledTimezone !== booking.preferredTimezone ||
+      booking.providerLocationId !== providerLocationId
+    )
+      throw new ConflictException("Booking is already scheduled with different appointment details");
+    return;
+  }
+  if (booking.status !== BookingStatus.PROVIDER_ASSIGNED)
+    throw new ConflictException(`Booking in ${booking.status} cannot be scheduled`);
+
   booking.scheduledDate = booking.preferredDate;
   booking.scheduledTimeFrom = scheduledTimeFrom;
   booking.scheduledTimeTo = scheduledTimeTo;
@@ -524,10 +743,14 @@ private async finalizeAcceptedAssignment(
   booking.providerLocationId = providerLocationId;
   booking.scheduledAt = now;
   booking.scheduledByUserId = actorUserId;
-  await bookingRepository.save(booking);
-  await this.transitionBooking(bookingRepository, historyRepository, booking, BookingStatus.SCHEDULED, actorUserId, automatic ? "BOOKING_AUTOMATICALLY_SCHEDULED" : "BOOKING_RECOVERY_SCHEDULED");
-  assignment.booking = booking;
-  return assignment;
+  await this.transitionBooking(
+    manager.getRepository(Booking),
+    manager.getRepository(BookingStatusHistory),
+    booking,
+    BookingStatus.SCHEDULED,
+    actorUserId,
+    reasonCode,
+  );
 }
 
 private addMinutesToTime(
@@ -625,6 +848,19 @@ private addMinutesToTime(
             reservation.releasedAt = now;
             await manager.getRepository(ProviderBookingReservation).save(reservation);
           }
+          if (
+            assignment.booking.status === BookingStatus.AWAITING_PROVIDER_RESPONSE &&
+            assignment.booking.commercialProviderId &&
+            assignment.booking.commercialProviderServiceId
+          )
+            await this.transitionBooking(
+              manager.getRepository(Booking),
+              manager.getRepository(BookingStatusHistory),
+              assignment.booking,
+              BookingStatus.UNFULFILLABLE,
+              actorUserId,
+              "QUOTED_PROVIDER_OFFER_EXPIRED",
+            );
         }
         return stale;
       },
@@ -803,9 +1039,9 @@ private addMinutesToTime(
       );
   }
   private assertBookingAwaitingMatch(booking: Booking): void {
-    if (booking.status !== BookingStatus.PENDING_PROVIDER_MATCH)
+    if (![BookingStatus.PENDING_PROVIDER_MATCH, BookingStatus.AWAITING_PROVIDER_RESPONSE].includes(booking.status))
       throw new ConflictException(
-        "Booking is no longer awaiting provider matching",
+        "Booking is no longer awaiting a provider response",
       );
   }
   private assertProviderOwnsOffer(

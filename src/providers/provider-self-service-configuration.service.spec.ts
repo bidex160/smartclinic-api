@@ -11,6 +11,9 @@ describe('ProviderSelfServiceConfigurationService', () => {
   let locations: any;
   let availability: any;
   let exceptions: any;
+  let serviceAddons: any;
+  let clinicalContents: any;
+  let packageAddons: any;
   let subject: ProviderSelfServiceConfigurationService;
 
   beforeEach(() => {
@@ -22,7 +25,10 @@ describe('ProviderSelfServiceConfigurationService', () => {
     locations = { findOne: jest.fn().mockResolvedValue({ id: 'location-1', providerId: 'provider-1' }) };
     availability = { findOne: jest.fn().mockResolvedValue({ id: 'availability-1', providerId: 'provider-1' }) };
     exceptions = { findOne: jest.fn().mockResolvedValue({ id: 'exception-1', providerId: 'provider-1' }) };
-    subject = new ProviderSelfServiceConfigurationService(context, capabilities, weekly, exceptionsService, services, locations, availability, exceptions, {} as never, { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() } as never, { findOne: jest.fn() } as never, { exists: jest.fn() } as never);
+    serviceAddons = { find: jest.fn(), findOne: jest.fn().mockResolvedValue(null), create: jest.fn((value) => value), save: jest.fn(async (value) => value), createQueryBuilder: jest.fn() };
+    clinicalContents = { findOne: jest.fn().mockResolvedValue({ id: 'content-1', code: 'CHOLESTEROL', name: 'Cholesterol', category: 'LAB', isActive: true }) };
+    packageAddons = { exists: jest.fn().mockResolvedValue(true) };
+    subject = new ProviderSelfServiceConfigurationService(context, capabilities, weekly, exceptionsService, services, locations, availability, exceptions, {} as never, serviceAddons, clinicalContents, packageAddons);
   });
 
   it('derives provider identity for capability creation and activation', async () => {
@@ -52,5 +58,16 @@ describe('ProviderSelfServiceConfigurationService', () => {
     services.findOne.mockResolvedValue(null);
     await expect(subject.activateService(user, 'other-service')).rejects.toBeInstanceOf(NotFoundException);
     expect(capabilities.activateService).not.toHaveBeenCalled();
+  });
+
+  it('prices only canonical content approved for the offered package', async () => {
+    services.findOne.mockResolvedValue({ id: 'service-1', providerId: 'provider-1', healthCheckPackageId: 'package-1', currency: 'NGN' });
+
+    await expect(subject.configureServiceAddon(user, 'service-1', { addonCode: 'CHOLESTEROL', priceMinor: 150000, currency: 'NGN' })).resolves.toMatchObject({ code: 'CHOLESTEROL', priceMinor: 150000 });
+    expect(packageAddons.exists).toHaveBeenCalledWith({ where: { healthCheckPackageId: 'package-1', clinicalContentId: 'content-1', isActive: true } });
+    expect(serviceAddons.create).toHaveBeenCalledWith(expect.objectContaining({ providerServiceId: 'service-1', clinicalContentId: 'content-1' }));
+
+    packageAddons.exists.mockResolvedValue(false);
+    await expect(subject.configureServiceAddon(user, 'service-1', { addonCode: 'CHOLESTEROL', priceMinor: 150000, currency: 'NGN' })).rejects.toThrow('Clinical add-on is incompatible with this package');
   });
 });

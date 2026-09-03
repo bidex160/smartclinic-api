@@ -6,8 +6,8 @@ describe('HealthCheckConfigurationService', () => {
     priceMinor: '800000', fulfilmentFeeMinor: '250000', currency: 'NGN',
     provider: { providerReference: 'SCPR-ONE', displayName: 'Clinic' },
     fulfilmentMode: { code: 'HOME_VISIT', name: 'Home visit' },
-    healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential', contents: [{ code: 'BLOOD_PRESSURE', name: 'Blood pressure', category: 'MEASUREMENT', sortOrder: 1 }], addonAvailability: [{ isActive: true, addon: { code: 'CHOLESTEROL', name: 'Cholesterol', category: 'LAB', isActive: true } }] },
-    addons: [{ priceMinor: '150000', currency: 'NGN', addon: { code: 'CHOLESTEROL', name: 'Cholesterol' } }], ...changes,
+    healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential', contents: [{ clinicalContent: { code: 'BLOOD_PRESSURE', name: 'Blood pressure', category: 'MEASUREMENT', isActive: true }, sortOrder: 1, isActive: true }], addonAvailability: [{ isActive: true, clinicalContentId: 'cholesterol', clinicalContent: { id: 'cholesterol', code: 'CHOLESTEROL', name: 'Cholesterol', category: 'LAB', isActive: true } }] },
+    addons: [{ clinicalContentId: 'cholesterol', priceMinor: '150000', currency: 'NGN', clinicalContent: { id: 'cholesterol', code: 'CHOLESTEROL', name: 'Cholesterol', category: 'LAB', isActive: true } }], ...changes,
   });
   const create = (row: any) => {
     const qb: any = {}; for (const name of ['innerJoinAndSelect', 'leftJoinAndSelect', 'where', 'andWhere']) qb[name] = jest.fn().mockReturnValue(qb);
@@ -26,7 +26,7 @@ describe('HealthCheckConfigurationService', () => {
     await expect(create(serviceRow()).quote({id:'user'} as never,{ packageCode: 'ESSENTIAL', providerReference: 'SCPR-ONE', fulfilmentModeCode: 'HOME_VISIT', addonCodes: ['BLOOD_PRESSURE'] })).rejects.toBeInstanceOf(ConflictException);
   });
   it('rejects provider capability currency mismatch', async () => {
-    const row = serviceRow({ addons: [{ priceMinor: '150000', currency: 'USD', addon: { code: 'CHOLESTEROL', name: 'Cholesterol' } }] });
+    const row = serviceRow({ addons: [{ clinicalContentId: 'cholesterol', priceMinor: '150000', currency: 'USD', clinicalContent: { id: 'cholesterol', code: 'CHOLESTEROL', name: 'Cholesterol' } }] });
     await expect(create(row).quote({id:'user'} as never,{ packageCode: 'ESSENTIAL', providerReference: 'SCPR-ONE', fulfilmentModeCode: 'HOME_VISIT', addonCodes: ['CHOLESTEROL'] })).rejects.toBeInstanceOf(ConflictException);
   });
   it('does not create an unowned quote when no active patient belongs to the user',async()=>{const qb:any={};for(const name of ['innerJoinAndSelect','leftJoinAndSelect','where','andWhere'])qb[name]=jest.fn().mockReturnValue(qb);qb.getOne=jest.fn().mockResolvedValue(serviceRow());const subject=new HealthCheckConfigurationService({createQueryBuilder:jest.fn().mockReturnValue(qb)}as never,{findOne:jest.fn().mockResolvedValue(null)}as never,{create:jest.fn(),save:jest.fn()}as never,{}as never,{}as never,{}as never,{}as never);await expect(subject.quote({id:'user'}as never,{packageCode:'ESSENTIAL',providerReference:'SCPR-ONE',fulfilmentModeCode:'HOME_VISIT',addonCodes:[]})).rejects.toThrow('Patient profile not found');});

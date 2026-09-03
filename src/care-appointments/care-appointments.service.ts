@@ -292,7 +292,7 @@ async schedule(
          * INDIVIDUAL:
          * One person cannot attend two appointments simultaneously.
          *
-         * CLINIC / DIAGNOSTIC_CENTRE / PHARMACY / OTHER:
+         * CLINIC / HOSPITAL / DIAGNOSTIC_CENTRE / PHARMACY / OTHER:
          * The Provider represents an institution and may have multiple
          * clinicians/resources serving patients concurrently.
          *

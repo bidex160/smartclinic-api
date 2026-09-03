@@ -56,7 +56,109 @@ export class BookingsService {
     return this.create({ ...dto, healthCheckPackageId:dto.healthCheckPackageId,fulfilmentModeId:dto.fulfilmentModeId,bookerUserId: user.id, participantPatientId: patient.id });
   }
 
-  private async createFromQuote(user:User,patient:Patient,dto:CreateSelfBookingDto):Promise<BookingResponseDto>{validateBookingSchedulingPreference(dto as CreateBookingDto);for(let attempt=0;attempt<MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS;attempt+=1){try{const saved=await this.bookingRepository.manager.transaction(async manager=>{const quote=await manager.getRepository(HealthCheckConfigurationQuote).findOne({where:{reference:dto.configurationReference!,userId:user.id,patientId:patient.id},relations:{providerService:{provider:true,healthCheckPackage:true,fulfilmentMode:true},providerLocation:true},lock:{mode:'pessimistic_write'}});if(!quote)throw new NotFoundException('Health Check configuration quote not found');if(quote.bookingId){const existing=await manager.getRepository(Booking).findOne({where:{id:quote.bookingId}});if(existing)return existing;}if(quote.consumedAt)throw new ConflictException('Health Check configuration quote has already been consumed');if(quote.expiresAt.getTime()<=Date.now())throw new ConflictException('Health Check configuration quote has expired');const offering=quote.providerService;if(!offering?.isActive||!offering.healthCheckPackage.isActive||!offering.fulfilmentMode.isActive)throw new ConflictException('Quoted Health Check offering is no longer available');await this.validateVisitAddress(offering.fulfilmentModeId,dto.visitAddress);const end=offering.healthCheckPackage.estimatedDurationMinutes?deriveAppointmentEndTime(dto.preferredTimeWindowStart,offering.healthCheckPackage.estimatedDurationMinutes):null;if(!end)throw new BadRequestException('Health Check package has no valid appointment duration');const address=dto.visitAddress?this.normalizedAddress(dto.visitAddress):null;const eligible=await this.providerCapabilities.findEligibleProviders(offering.healthCheckPackageId,offering.fulfilmentModeId,{requestedDate:dto.preferredDate,requestedStartTime:dto.preferredTimeWindowStart,requestedEndTime:end,requestedTimezone:dto.preferredTimezone,visitAddress:address});if(!eligible.some((x)=>x.id===offering.id))throw new ConflictException('Selected Provider is unavailable for the requested appointment');const bookingRepo=manager.getRepository(Booking);const booking=bookingRepo.create({bookingReference:generateBookingReference(),bookerUserId:user.id,participantPatientId:patient.id,organisationContextId:null,healthCheckPackageId:offering.healthCheckPackageId,fulfilmentModeId:offering.fulfilmentModeId,providerLocationId:quote.providerLocationId,commercialProviderId:offering.providerId,commercialProviderServiceId:offering.id,preferredDate:dto.preferredDate,preferredTimeWindowStart:dto.preferredTimeWindowStart,preferredTimeWindowEnd:null,preferredTimezone:dto.preferredTimezone,preferredLocationNote:dto.preferredLocationNote??null,status:BookingStatus.DRAFT,currency:quote.currency,quotedAmount:this.fromMinor(quote.totalMinor),basePackagePriceMinor:quote.basePackagePriceMinor,clinicalAddonsTotalMinor:quote.clinicalAddonsTotalMinor,fulfilmentFeeMinor:quote.fulfilmentFeeMinor,commercialConfigurationSnapshot:quote.configurationSnapshot});const row=await bookingRepo.save(booking);if(dto.visitAddress)await manager.getRepository(BookingVisitAddress).save(manager.getRepository(BookingVisitAddress).create({...this.normalizedAddress(dto.visitAddress),bookingId:row.id}));await manager.getRepository(BookingStatusHistory).save(manager.getRepository(BookingStatusHistory).create({bookingId:row.id,fromStatus:null,toStatus:BookingStatus.DRAFT,actorUserId:user.id}));quote.bookingId=row.id;quote.consumedAt=new Date();await manager.getRepository(HealthCheckConfigurationQuote).save(quote);return row;});return this.findByReference(saved.bookingReference);}catch(error){if(!isBookingReferenceCollision(error)||attempt===MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS-1)throw error;}}throw new ConflictException('Unable to generate a unique booking reference');}
+  private async createFromQuote(user: User, patient: Patient, dto: CreateSelfBookingDto): Promise<BookingResponseDto> {
+    validateBookingSchedulingPreference(dto as CreateBookingDto);
+    for (let attempt = 0; attempt < MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS; attempt += 1) {
+      try {
+        const saved = await this.bookingRepository.manager.transaction(async (manager) => {
+          const quoteRepository = manager.getRepository(HealthCheckConfigurationQuote);
+          // Lock only the quote base row. Loading optional relations in this query
+          // makes PostgreSQL reject FOR UPDATE on the nullable side of the joins.
+          const quote = await quoteRepository.findOne({
+            where: {
+              reference: dto.configurationReference!,
+              userId: user.id,
+              patientId: patient.id,
+            },
+            lock: { mode: 'pessimistic_write' },
+          });
+          if (!quote) throw new NotFoundException('Health Check configuration quote not found');
+          if (quote.bookingId) {
+            const existing = await manager.getRepository(Booking).findOne({ where: { id: quote.bookingId } });
+            if (existing) return existing;
+          }
+          if (quote.consumedAt) throw new ConflictException('Health Check configuration quote has already been consumed');
+          if (quote.expiresAt.getTime() <= Date.now()) throw new ConflictException('Health Check configuration quote has expired');
+
+          const offering = await manager.getRepository(ProviderService).findOne({
+            where: { id: quote.providerServiceId },
+            relations: { healthCheckPackage: true, fulfilmentMode: true },
+          });
+          if (!offering?.isActive || !offering.healthCheckPackage.isActive || !offering.fulfilmentMode.isActive) {
+            throw new ConflictException('Quoted Health Check offering is no longer available');
+          }
+          await this.validateVisitAddress(offering.fulfilmentModeId, dto.visitAddress);
+          const end = offering.healthCheckPackage.estimatedDurationMinutes
+            ? deriveAppointmentEndTime(dto.preferredTimeWindowStart, offering.healthCheckPackage.estimatedDurationMinutes)
+            : null;
+          if (!end) throw new BadRequestException('Health Check package has no valid appointment duration');
+          const address = dto.visitAddress ? this.normalizedAddress(dto.visitAddress) : null;
+          const eligible = await this.providerCapabilities.findEligibleProviders(
+            offering.healthCheckPackageId,
+            offering.fulfilmentModeId,
+            {
+              requestedDate: dto.preferredDate,
+              requestedStartTime: dto.preferredTimeWindowStart,
+              requestedEndTime: end,
+              requestedTimezone: dto.preferredTimezone,
+              visitAddress: address,
+            },
+          );
+          if (!eligible.some((candidate) => candidate.id === offering.id)) {
+            throw new ConflictException('Selected Provider is unavailable for the requested appointment');
+          }
+
+          const bookingRepo = manager.getRepository(Booking);
+          const booking = bookingRepo.create({
+            bookingReference: generateBookingReference(),
+            bookerUserId: user.id,
+            participantPatientId: patient.id,
+            organisationContextId: null,
+            healthCheckPackageId: offering.healthCheckPackageId,
+            fulfilmentModeId: offering.fulfilmentModeId,
+            providerLocationId: quote.providerLocationId,
+            commercialProviderId: offering.providerId,
+            commercialProviderServiceId: offering.id,
+            preferredDate: dto.preferredDate,
+            preferredTimeWindowStart: dto.preferredTimeWindowStart,
+            preferredTimeWindowEnd: null,
+            preferredTimezone: dto.preferredTimezone,
+            preferredLocationNote: dto.preferredLocationNote ?? null,
+            status: BookingStatus.DRAFT,
+            currency: quote.currency,
+            quotedAmount: this.fromMinor(quote.totalMinor),
+            basePackagePriceMinor: quote.basePackagePriceMinor,
+            clinicalAddonsTotalMinor: quote.clinicalAddonsTotalMinor,
+            fulfilmentFeeMinor: quote.fulfilmentFeeMinor,
+            commercialConfigurationSnapshot: quote.configurationSnapshot,
+          });
+          const row = await bookingRepo.save(booking);
+          if (dto.visitAddress) {
+            const addressRepository = manager.getRepository(BookingVisitAddress);
+            await addressRepository.save(addressRepository.create({
+              ...this.normalizedAddress(dto.visitAddress),
+              bookingId: row.id,
+            }));
+          }
+          const historyRepository = manager.getRepository(BookingStatusHistory);
+          await historyRepository.save(historyRepository.create({
+            bookingId: row.id,
+            fromStatus: null,
+            toStatus: BookingStatus.DRAFT,
+            actorUserId: user.id,
+          }));
+          quote.bookingId = row.id;
+          quote.consumedAt = new Date();
+          await quoteRepository.save(quote);
+          return row;
+        });
+        return this.findByReference(saved.bookingReference);
+      } catch (error) {
+        if (!isBookingReferenceCollision(error) || attempt === MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS - 1) throw error;
+      }
+    }
+    throw new ConflictException('Unable to generate a unique booking reference');
+  }
 
   async requireSelfBooking(user: User, bookingReference: string): Promise<Booking> {
     if (user.deletedAt || user.status !== UserStatus.ACTIVE) this.selfBookingNotFound();
@@ -85,18 +187,27 @@ export class BookingsService {
           const bookingRepository = manager.getRepository(Booking);
           const historyRepository = manager.getRepository(BookingStatusHistory);
           const addressRepository = manager.getRepository(BookingVisitAddress);
-          const providerService = await manager.getRepository(ProviderService).findOne({ where: { id: capability.id, providerId: capability.providerId, healthCheckPackageId: createBookingDto.healthCheckPackageId, fulfilmentModeId: createBookingDto.fulfilmentModeId, isActive: true }, relations: { healthCheckPackage: { contents: true, addonAvailability: { addon: true } }, fulfilmentMode: true }, lock: { mode: 'pessimistic_read' } });
+          const providerServiceRepository = manager.getRepository(ProviderService);
+          const lockedProviderService = await providerServiceRepository.findOne({
+            where: { id: capability.id, providerId: capability.providerId, healthCheckPackageId: createBookingDto.healthCheckPackageId, fulfilmentModeId: createBookingDto.fulfilmentModeId, isActive: true },
+            lock: { mode: 'pessimistic_read' },
+          });
+          if (!lockedProviderService) throw new ConflictException('Selected provider Health Check offering is no longer available');
+          const providerService = await providerServiceRepository.findOne({
+            where: { id: lockedProviderService.id },
+            relations: { healthCheckPackage: { contents: { clinicalContent: true }, addonAvailability: { clinicalContent: true } }, fulfilmentMode: true },
+          });
           if (!providerService) throw new ConflictException('Selected provider Health Check offering is no longer available');
           const packageConfiguration: Pick<HealthCheckPackage, 'code' | 'name' | 'contents' | 'addonAvailability'> = providerService.healthCheckPackage ?? { code: '', name: '', contents: [], addonAvailability: [] };
           const modeConfiguration: Pick<FulfilmentMode, 'code' | 'name'> = providerService.fulfilmentMode ?? { code: '', name: '' };
           const addonCodes = createBookingDto.addonCodes ?? [];
           if (addonCodes.includes('HOME_VISIT')) throw new BadRequestException('HOME_VISIT is a fulfilment mode, not a clinical add-on');
-          const included = new Set((packageConfiguration.contents ?? []).filter((x) => x.isActive).map((x) => x.code));
+          const included = new Set((packageConfiguration.contents ?? []).filter((x) => x.isActive).map((x) => x.clinicalContent.code));
           const duplicateIncluded = addonCodes.find((code) => included.has(code));
           if (duplicateIncluded) throw new ConflictException(`Clinical add-on is already included in the package: ${duplicateIncluded}`);
-          const compatible = new Set((packageConfiguration.addonAvailability ?? []).filter((x) => x.isActive && x.addon.isActive).map((x) => x.addon.code));
-          const capabilities = addonCodes.length ? await manager.getRepository(ProviderServiceAddon).createQueryBuilder('capability').innerJoinAndSelect('capability.addon', 'addon').where('capability.providerServiceId=:serviceId', { serviceId: providerService.id }).andWhere('capability.isActive=true').andWhere('addon.isActive=true').andWhere('addon.code IN (:...codes)', { codes: addonCodes }).setLock('pessimistic_read').getMany() : [];
-          for (const code of addonCodes) { if (!compatible.has(code)) throw new BadRequestException(`Clinical add-on is unavailable for this package: ${code}`); if (!capabilities.some((x) => x.addon.code === code)) throw new ConflictException(`Provider does not offer clinical add-on: ${code}`); }
+          const compatible = new Set((packageConfiguration.addonAvailability ?? []).filter((x) => x.isActive && x.clinicalContent.isActive).map((x) => x.clinicalContent.code));
+          const capabilities = addonCodes.length ? await manager.getRepository(ProviderServiceAddon).createQueryBuilder('capability').innerJoinAndSelect('capability.clinicalContent', 'content').where('capability.providerServiceId=:serviceId', { serviceId: providerService.id }).andWhere('capability.isActive=true').andWhere('content.isActive=true').andWhere('content.code IN (:...codes)', { codes: addonCodes }).setLock('pessimistic_read').getMany() : [];
+          for (const code of addonCodes) { if (!compatible.has(code)) throw new BadRequestException(`Clinical add-on is unavailable for this package: ${code}`); if (!capabilities.some((x) => x.clinicalContent.code === code)) throw new ConflictException(`Provider does not offer clinical add-on: ${code}`); }
           if (capabilities.some((x) => x.currency !== providerService.currency)) throw new ConflictException('Clinical add-on currency does not match package currency');
           const addonTotal = capabilities.reduce((sum, x) => sum + BigInt(x.priceMinor), 0n);
           const base = BigInt(providerService.priceMinor), fee = BigInt(providerService.fulfilmentFeeMinor ?? '0'), total = base + addonTotal + fee;
@@ -108,7 +219,7 @@ export class BookingsService {
             quotedAmount: this.fromMinor(total.toString()),
             currency: providerService.currency,
             basePackagePriceMinor: base.toString(), clinicalAddonsTotalMinor: addonTotal.toString(), fulfilmentFeeMinor: fee.toString(),
-            commercialConfigurationSnapshot: { package: { code: packageConfiguration.code, name: packageConfiguration.name }, includedContents: (packageConfiguration.contents ?? []).filter((x) => x.isActive).sort((a, b) => a.sortOrder - b.sortOrder).map((x) => ({ code: x.code, name: x.name, category: x.category })), selectedAddons: capabilities.map((x) => ({ code: x.addon.code, name: x.addon.name, priceMinor: x.priceMinor })), fulfilmentMode: { code: modeConfiguration.code, name: modeConfiguration.name }, pricing: { basePackagePriceMinor: base.toString(), clinicalAddonsTotalMinor: addonTotal.toString(), fulfilmentFeeMinor: fee.toString(), totalMinor: total.toString(), currency: providerService.currency } },
+            commercialConfigurationSnapshot: { package: { code: packageConfiguration.code, name: packageConfiguration.name }, includedContents: (packageConfiguration.contents ?? []).filter((x) => x.isActive).sort((a, b) => a.sortOrder - b.sortOrder).map((x) => ({ code: x.clinicalContent.code, name: x.clinicalContent.name, category: x.clinicalContent.category })), selectedAddons: capabilities.map((x) => ({ code: x.clinicalContent.code, name: x.clinicalContent.name, priceMinor: x.priceMinor })), fulfilmentMode: { code: modeConfiguration.code, name: modeConfiguration.name }, pricing: { basePackagePriceMinor: base.toString(), clinicalAddonsTotalMinor: addonTotal.toString(), fulfilmentFeeMinor: fee.toString(), totalMinor: total.toString(), currency: providerService.currency } },
             commercialProviderId: providerService.providerId,
             commercialProviderServiceId: providerService.id,
             preferredDate: createBookingDto.preferredDate ?? null,

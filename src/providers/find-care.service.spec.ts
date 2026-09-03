@@ -35,6 +35,8 @@ describe('FindCareService', () => {
     const sql = builder.andWhere.mock.calls.map((call: any[]) => call[0]).filter((v: unknown) => typeof v === 'string').join(' ');
     expect(sql).toContain('definition.code = :serviceCode'); expect(sql).toContain('provider.providerType = :providerType'); expect(sql).toContain('provider_care_service_delivery_options'); expect(sql).toContain('filtered_option.delivery_mode'); expect(sql).toContain('location.countryCode'); expect(sql).toContain('location.state'); expect(sql).toContain('location.city');
   });
+  it('accepts HOSPITAL as the existing provider-type filter without special discovery behavior', async () => { const builder = qb(); const service = new FindCareService({ createQueryBuilder: jest.fn().mockReturnValue(builder) } as any, {} as any); await service.providersList({ providerType: 'HOSPITAL' as any, page: 1, limit: 20 }); expect(builder.andWhere).toHaveBeenCalledWith('provider.providerType = :providerType', { providerType: 'HOSPITAL' }); });
+  it('serializes HOSPITAL through the existing safe public projection', async () => { const hospital = provider(); hospital.providerType = 'HOSPITAL'; const result = await new FindCareService({ createQueryBuilder: jest.fn().mockReturnValue(qb([hospital])) } as any, {} as any).providerDetail(hospital.providerReference); expect(result.providerType).toBe('HOSPITAL'); expect(result).not.toHaveProperty('email'); expect(result).not.toHaveProperty('phone'); });
 
   it('returns only safe public fields and integer minor-unit prices', async () => {
     const result: any = await new FindCareService({ createQueryBuilder: jest.fn().mockReturnValue(qb()) } as any, {} as any).providerDetail('SCPR-ABCDEF0123456789');

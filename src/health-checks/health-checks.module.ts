@@ -34,7 +34,7 @@ import { PatientPortalProfileService } from './patient-portal-profile.service';
 import { RewardsModule } from '../rewards/rewards.module';
 import { EarningsModule } from '../earnings/earnings.module';
 import { HealthCheckPackageContent } from './entities/health-check-package-content.entity';
-import { HealthCheckAddon } from './entities/health-check-addon.entity';
+import { HealthCheckClinicalContent } from './entities/health-check-clinical-content.entity';
 import { HealthCheckPackageAddon } from './entities/health-check-package-addon.entity';
 import { ProviderService } from '../providers/entities/provider-service.entity';
 import { ProviderServiceAddon } from '../providers/entities/provider-service-addon.entity';
@@ -64,7 +64,7 @@ import { HealthCheckConfigurationQuote } from './entities/health-check-configura
       BookingFunding,
       PaymentAttempt,
       HealthCheckPackageContent,
-      HealthCheckAddon,
+      HealthCheckClinicalContent,
       HealthCheckPackageAddon,
       ProviderService,
       ProviderServiceAddon,

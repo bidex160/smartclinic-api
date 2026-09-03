@@ -19,7 +19,7 @@ describe("Health Check reward redemption funding", () => {
   const userId = "10000000-0000-4000-8000-000000000001";
   let booking: any; let funding: any; let redemptions: any[]; let ledgerRows: any[]; let attemptsRows: any[]; let manager: any; let matching: any; let rewards: any; let subject: PaymentFlowService;
   beforeEach(() => {
-    booking = { id: "booking", bookingReference: "SC-2026-REWARD123456", bookerUserId: userId, quotedAmount: "10000.00", currency: "NGN", status: BookingStatus.AWAITING_FUNDING };
+    booking = { id: "booking", bookingReference: "SC-2026-REWARD123456", bookerUserId: userId, quotedAmount: "10000.00", currency: "NGN", status: BookingStatus.AWAITING_FUNDING, commercialProviderId: "provider", commercialProviderServiceId: "service" };
     funding = { id: "funding", bookingId: booking.id, booking, sourceType: "SELF", responsibleUserId: userId, responsibleUser: { email: "patient@example.test" }, payerContact: null, amount: "10000.00", currency: "NGN", status: BookingFundingStatus.PENDING, checkoutOption: CheckoutFundingOption.PAY_NOW };
     redemptions = []; ledgerRows = []; attemptsRows = [];
     const bookings: any = { manager: null, findOne: jest.fn(async () => booking), save: jest.fn(async (value) => value) };
@@ -32,17 +32,18 @@ describe("Health Check reward redemption funding", () => {
     manager = { getRepository: jest.fn((entity) => entity === Booking ? bookings : entity === BookingFunding ? fundings : entity === RewardBookingRedemption ? redemptionsRepo : entity === RewardConversionRate ? { findOne: jest.fn(async () => ({ points: 100, amount: "1000.00", currency: "NGN", isActive: true })) } : entity === RewardPointsLedger ? ledger : entity === PaymentAttempt ? attempts : entity === PaymentTransaction ? transactions : entity === User ? { findOne: jest.fn(async () => ({ id: userId })) } : history) };
     manager.transaction = jest.fn(async (callback) => callback(manager)); bookings.manager = manager;
     rewards = { balance: jest.fn(async () => ({ availablePoints: 2000, reservedPoints: 0, withdrawalReservedPoints: 0, healthCheckReservedPoints: 0, lifetimeEarnedPoints: 2000, lifetimeRedeemedPoints: 0 })) };
-    matching = { startMatching: jest.fn().mockResolvedValue({}) };
+    matching = { bindCommercialProviderAfterSettlement: jest.fn(async () => ({ ...booking, status: BookingStatus.AWAITING_PROVIDER_RESPONSE })), startMatching: jest.fn(), recoverCommercialProviderBinding: jest.fn() };
     subject = new PaymentFlowService(bookings, attempts, new TestPaymentProviderAdapter(), undefined, matching, rewards);
   });
 
-  it("settles a points-only booking once and starts matching after commit without Paystack", async () => {
+  it("settles a points-only booking once and binds its quoted provider without Paystack", async () => {
     const result = await subject.applyRewardPoints(booking.bookingReference, userId, 1000);
     expect(result).toMatchObject({ pointsReserved: 1000, pointsAmount: "10000.00", remainingExternalAmount: "0.00", redemptionStatus: RewardBookingRedemptionStatus.SETTLED, fundingStatus: BookingFundingStatus.SETTLED, requiresExternalPayment: false });
-    expect(booking.status).toBe(BookingStatus.PENDING_PROVIDER_MATCH);
+    expect(booking.status).toBe(BookingStatus.AWAITING_PROVIDER_RESPONSE);
     expect(ledgerRows).toHaveLength(1);
     expect(attemptsRows).toHaveLength(0);
-    expect(matching.startMatching).toHaveBeenCalledWith(booking.bookingReference, null);
+    expect(matching.bindCommercialProviderAfterSettlement).toHaveBeenCalledWith(manager, booking.id, userId, "REWARD_POINTS_FUNDING_CONFIRMED");
+    expect(matching.startMatching).not.toHaveBeenCalled();
   });
 
   it("reserves split points and initializes Paystack for only the remaining amount", async () => {
@@ -64,7 +65,7 @@ describe("Health Check reward redemption funding", () => {
     expect(redemptions[0].status).toBe(RewardBookingRedemptionStatus.SETTLED);
     expect(ledgerRows).toHaveLength(1);
     expect(ledgerRows[0]).toMatchObject({ direction: "DEBIT", points: 400, reasonCode: "HEALTH_CHECK_REDEMPTION" });
-    expect(booking.status).toBe(BookingStatus.PENDING_PROVIDER_MATCH);
+    expect(booking.status).toBe(BookingStatus.AWAITING_PROVIDER_RESPONSE);
   });
 
   it("rejects insufficient points and over-redemption without mutation", async () => {
