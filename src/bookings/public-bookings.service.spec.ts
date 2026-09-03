@@ -6,6 +6,7 @@ import { Booking } from './entities/booking.entity';
 import { CreatePublicBookingDto, PublicBookingRelationship } from './dto/create-public-booking.dto';
 import { PublicBookingsService } from './public-bookings.service';
 import { ProviderService } from '../providers/entities/provider-service.entity';
+import { BookingVisitAddress } from './entities/booking-visit-address.entity';
 
 describe('PublicBookingsService', () => {
   const createPublicBookingDto: CreatePublicBookingDto = {
@@ -60,11 +61,13 @@ describe('PublicBookingsService', () => {
       create: jest.fn((input: object) => input),
       save: jest.fn().mockResolvedValue(undefined),
     };
+    const addressRepository = { create: jest.fn((input: object) => input), save: jest.fn().mockResolvedValue(undefined) };
     const manager = {
       getRepository: jest.fn((entity: unknown) => {
         if (entity === Booking) return bookingTransactionRepository;
         if (entity === BookingContact) return contactRepository;
         if (entity === BookingStatusHistory) return historyRepository;
+        if (entity === BookingVisitAddress) return addressRepository;
         if (entity === ProviderService) return { findOne: jest.fn().mockResolvedValue({ id: 'provider-service', providerId: 'provider-1', healthCheckPackageId: createPublicBookingDto.booking.healthCheckPackageId, fulfilmentModeId: createPublicBookingDto.booking.fulfilmentModeId, priceMinor: '1250000', currency: 'NGN', isActive: true }) };
         return patientRepository;
       }),
@@ -107,6 +110,7 @@ describe('PublicBookingsService', () => {
       bookingTransactionRepository,
       contactRepository,
       historyRepository,
+      addressRepository,
       packagePricingService: providerCapabilities,
       fulfilmentModeRepository,
     };
@@ -141,8 +145,8 @@ describe('PublicBookingsService', () => {
       expect.objectContaining({ fromStatus: null, toStatus: 'DRAFT', actorUserId: null }),
     );
   });
-  it('requires a structured address for PROVIDER_LOCATION public bookings', async () => { const { service } = createService(); await expect(service.create({ ...createPublicBookingDto, booking: { ...createPublicBookingDto.booking, visitAddress: undefined } })).rejects.toBeInstanceOf(BadRequestException); });
-  it('retains HOME_VISIT structured-address requirements', async () => { const { service, fulfilmentModeRepository } = createService(); fulfilmentModeRepository.findOne.mockResolvedValue({ code: 'HOME_VISIT' }); await expect(service.create({ ...createPublicBookingDto, booking: { ...createPublicBookingDto.booking, visitAddress: undefined } })).rejects.toBeInstanceOf(BadRequestException); await expect(service.create(createPublicBookingDto)).resolves.toBeDefined(); });
+  it('creates PROVIDER_LOCATION public bookings without persisting a visit address', async () => { const { service, addressRepository } = createService(); await expect(service.create({ ...createPublicBookingDto, booking: { ...createPublicBookingDto.booking, visitAddress: undefined } })).resolves.toBeDefined(); expect(addressRepository.save).not.toHaveBeenCalled(); });
+  it('retains HOME_VISIT structured-address requirements and persistence', async () => { const { service, fulfilmentModeRepository, addressRepository } = createService(); fulfilmentModeRepository.findOne.mockResolvedValue({ code: 'HOME_VISIT' }); await expect(service.create({ ...createPublicBookingDto, booking: { ...createPublicBookingDto.booking, visitAddress: undefined } })).rejects.toBeInstanceOf(BadRequestException); await expect(service.create(createPublicBookingDto)).resolves.toBeDefined(); expect(addressRepository.save).toHaveBeenCalledWith(expect.objectContaining({ addressLine1: '12 Ring Road', city: 'Ibadan' })); });
 
   it('creates a distinct patient for a booking made for another person', async () => {
     const { service, patientRepository } = createService();

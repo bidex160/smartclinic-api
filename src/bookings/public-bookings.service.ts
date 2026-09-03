@@ -48,8 +48,9 @@ export class PublicBookingsService {
       preferredTimezone: createPublicBookingDto.booking.preferredTimezone,
     });
     await this.validateCatalogue(createPublicBookingDto);
-    await this.validateVisitAddress(createPublicBookingDto.booking.fulfilmentModeId, createPublicBookingDto.booking.visitAddress);
-    const capability = await this.selectCommercialCapability(createPublicBookingDto);
+    const fulfilmentMode = await this.fulfilmentModeRepository.findOne({ where: { id: createPublicBookingDto.booking.fulfilmentModeId } });
+    this.validateVisitAddress(fulfilmentMode?.code ?? '', createPublicBookingDto.booking.visitAddress);
+    const capability = await this.selectCommercialCapability(createPublicBookingDto, fulfilmentMode?.code ?? '');
 
     for (let attempt = 0; attempt < MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS; attempt += 1) {
       try {
@@ -96,7 +97,7 @@ export class PublicBookingsService {
               preferredLocationNote: bookingDetails.locationNote ?? null,
             }),
           );
-          if (bookingDetails.visitAddress) await addressRepository.save(addressRepository.create({ ...this.normalizedAddress(bookingDetails.visitAddress), bookingId: savedBooking.id }));
+          if (fulfilmentMode?.code === 'HOME_VISIT' && bookingDetails.visitAddress) await addressRepository.save(addressRepository.create({ ...this.normalizedAddress(bookingDetails.visitAddress), bookingId: savedBooking.id }));
 
           await contactRepository.save(
             contactRepository.create({
@@ -144,15 +145,15 @@ export class PublicBookingsService {
       throw new BadRequestException('The selected Health Check package or fulfilment mode is unavailable');
     }
   }
-  private async validateVisitAddress(modeId: string, address: CreatePublicBookingDto['booking']['visitAddress']): Promise<void> { const mode = await this.fulfilmentModeRepository.findOne({ where: { id: modeId } }); if (['HOME_VISIT', 'PROVIDER_LOCATION'].includes(mode?.code ?? '') && !address) throw new BadRequestException('visitAddress is required for this fulfilment mode'); }
+  private validateVisitAddress(modeCode: string, address: CreatePublicBookingDto['booking']['visitAddress']): void { if (modeCode === 'HOME_VISIT' && !address) throw new BadRequestException('visitAddress is required for HOME_VISIT fulfilment'); }
   private normalizedAddress(value: NonNullable<CreatePublicBookingDto['booking']['visitAddress']>) { return { ...value, addressLine1: value.addressLine1.trim(), addressLine2: value.addressLine2?.trim() || null, city: value.city.trim(), stateOrRegion: value.stateOrRegion.trim(), postalCode: value.postalCode?.trim() || null, countryCode: value.countryCode.trim().toUpperCase(), latitude: value.latitude?.toString() ?? null, longitude: value.longitude?.toString() ?? null }; }
 
-  private async selectCommercialCapability(dto: CreatePublicBookingDto) {
+  private async selectCommercialCapability(dto: CreatePublicBookingDto, modeCode: string) {
     const details = dto.booking;
     const healthPackage = await this.healthCheckPackageRepository.findOne({ where: { id: details.healthCheckPackageId, isActive: true } });
     const end = healthPackage?.estimatedDurationMinutes ? deriveAppointmentEndTime(details.preferredTimeFrom, healthPackage.estimatedDurationMinutes) : null;
     if (!end) throw new BadRequestException('Health Check package has no valid appointment duration');
-    const address = details.visitAddress ? this.normalizedAddress(details.visitAddress) : null;
+    const address = modeCode === 'HOME_VISIT' && details.visitAddress ? this.normalizedAddress(details.visitAddress) : null;
     const eligible = await this.providerCapabilities.findEligibleProviders(details.healthCheckPackageId, details.fulfilmentModeId, { requestedDate: details.preferredDate, requestedStartTime: details.preferredTimeFrom, requestedEndTime: end, requestedTimezone: details.preferredTimezone, visitAddress: address });
     const capability = eligible[0];
     if (!capability) throw new ConflictException('No eligible priced Provider is currently available for this Health Check');

@@ -87,12 +87,12 @@ export class BookingsService {
           if (!offering?.isActive || !offering.healthCheckPackage.isActive || !offering.fulfilmentMode.isActive) {
             throw new ConflictException('Quoted Health Check offering is no longer available');
           }
-          await this.validateVisitAddress(offering.fulfilmentModeId, dto.visitAddress);
+          this.validateVisitAddress(offering.fulfilmentMode.code, dto.visitAddress);
           const end = offering.healthCheckPackage.estimatedDurationMinutes
             ? deriveAppointmentEndTime(dto.preferredTimeWindowStart, offering.healthCheckPackage.estimatedDurationMinutes)
             : null;
           if (!end) throw new BadRequestException('Health Check package has no valid appointment duration');
-          const address = dto.visitAddress ? this.normalizedAddress(dto.visitAddress) : null;
+          const address = offering.fulfilmentMode.code === 'HOME_VISIT' && dto.visitAddress ? this.normalizedAddress(dto.visitAddress) : null;
           const eligible = await this.providerCapabilities.findEligibleProviders(
             offering.healthCheckPackageId,
             offering.fulfilmentModeId,
@@ -133,7 +133,7 @@ export class BookingsService {
             commercialConfigurationSnapshot: quote.configurationSnapshot,
           });
           const row = await bookingRepo.save(booking);
-          if (dto.visitAddress) {
+          if (offering.fulfilmentMode.code === 'HOME_VISIT' && dto.visitAddress) {
             const addressRepository = manager.getRepository(BookingVisitAddress);
             await addressRepository.save(addressRepository.create({
               ...this.normalizedAddress(dto.visitAddress),
@@ -178,8 +178,9 @@ export class BookingsService {
   async create(createBookingDto: CreateBookingDto): Promise<BookingResponseDto> {
     validateBookingSchedulingPreference(createBookingDto);
     await this.validateReferences(createBookingDto);
-    await this.validateVisitAddress(createBookingDto.fulfilmentModeId, createBookingDto.visitAddress);
-    const capability = await this.selectCommercialCapability(createBookingDto);
+    const fulfilmentMode = await this.fulfilmentModeRepository.findOne({ where: { id: createBookingDto.fulfilmentModeId } });
+    this.validateVisitAddress(fulfilmentMode?.code ?? '', createBookingDto.visitAddress);
+    const capability = await this.selectCommercialCapability(createBookingDto, fulfilmentMode?.code ?? '');
 
     for (let attempt = 0; attempt < MAX_BOOKING_REFERENCE_GENERATION_ATTEMPTS; attempt += 1) {
       try {
@@ -219,7 +220,7 @@ export class BookingsService {
             quotedAmount: this.fromMinor(total.toString()),
             currency: providerService.currency,
             basePackagePriceMinor: base.toString(), clinicalAddonsTotalMinor: addonTotal.toString(), fulfilmentFeeMinor: fee.toString(),
-            commercialConfigurationSnapshot: { package: { code: packageConfiguration.code, name: packageConfiguration.name }, includedContents: (packageConfiguration.contents ?? []).filter((x) => x.isActive).sort((a, b) => a.sortOrder - b.sortOrder).map((x) => ({ code: x.clinicalContent.code, name: x.clinicalContent.name, category: x.clinicalContent.category })), selectedAddons: capabilities.map((x) => ({ code: x.clinicalContent.code, name: x.clinicalContent.name, priceMinor: x.priceMinor })), fulfilmentMode: { code: modeConfiguration.code, name: modeConfiguration.name }, pricing: { basePackagePriceMinor: base.toString(), clinicalAddonsTotalMinor: addonTotal.toString(), fulfilmentFeeMinor: fee.toString(), totalMinor: total.toString(), currency: providerService.currency } },
+            commercialConfigurationSnapshot: { package: { code: packageConfiguration.code, name: packageConfiguration.name }, includedContents: (packageConfiguration.contents ?? []).filter((x) => x.isActive).sort((a, b) => a.sortOrder - b.sortOrder).map((x) => ({ code: x.clinicalContent.code, name: x.clinicalContent.name, category: x.clinicalContent.category, resultType: x.clinicalContent.resultType, unit: x.clinicalContent.unit })), selectedAddons: capabilities.map((x) => ({ code: x.clinicalContent.code, name: x.clinicalContent.name, category: x.clinicalContent.category, resultType: x.clinicalContent.resultType, unit: x.clinicalContent.unit, priceMinor: x.priceMinor })), fulfilmentMode: { code: modeConfiguration.code, name: modeConfiguration.name }, pricing: { basePackagePriceMinor: base.toString(), clinicalAddonsTotalMinor: addonTotal.toString(), fulfilmentFeeMinor: fee.toString(), totalMinor: total.toString(), currency: providerService.currency } },
             commercialProviderId: providerService.providerId,
             commercialProviderServiceId: providerService.id,
             preferredDate: createBookingDto.preferredDate ?? null,
@@ -230,7 +231,7 @@ export class BookingsService {
             status: BookingStatus.DRAFT,
           });
           const savedBooking = await bookingRepository.save(booking);
-          if (createBookingDto.visitAddress) await addressRepository.save(addressRepository.create({ ...this.normalizedAddress(createBookingDto.visitAddress), bookingId: savedBooking.id }));
+          if (fulfilmentMode?.code === 'HOME_VISIT' && createBookingDto.visitAddress) await addressRepository.save(addressRepository.create({ ...this.normalizedAddress(createBookingDto.visitAddress), bookingId: savedBooking.id }));
 
           await historyRepository.save(
             historyRepository.create({
@@ -274,7 +275,7 @@ export class BookingsService {
     return BookingResponseDto.fromEntity(booking);
   }
 
-  private async validateVisitAddress(modeId: string, address: CreateBookingDto['visitAddress']): Promise<void> { const mode = await this.fulfilmentModeRepository.findOne({ where: { id: modeId } }); if (['HOME_VISIT', 'PROVIDER_LOCATION'].includes(mode?.code ?? '') && !address) throw new BadRequestException('visitAddress is required for this fulfilment mode'); }
+  private validateVisitAddress(modeCode: string, address: CreateBookingDto['visitAddress']): void { if (modeCode === 'HOME_VISIT' && !address) throw new BadRequestException('visitAddress is required for HOME_VISIT fulfilment'); }
   private normalizedAddress(value: NonNullable<CreateBookingDto['visitAddress']>) { return { ...value, addressLine1: value.addressLine1.trim(), addressLine2: value.addressLine2?.trim() || null, city: value.city.trim(), stateOrRegion: value.stateOrRegion.trim(), postalCode: value.postalCode?.trim() || null, countryCode: value.countryCode.trim().toUpperCase(), latitude: value.latitude?.toString() ?? null, longitude: value.longitude?.toString() ?? null }; }
 
   private async validateReferences(createBookingDto: CreateBookingDto): Promise<void> {
@@ -298,11 +299,11 @@ export class BookingsService {
     }
   }
 
-  private async selectCommercialCapability(dto: CreateBookingDto) {
+  private async selectCommercialCapability(dto: CreateBookingDto, modeCode: string) {
     const healthPackage = await this.healthCheckPackageRepository.findOne({ where: { id: dto.healthCheckPackageId, isActive: true } });
     const end = healthPackage?.estimatedDurationMinutes ? deriveAppointmentEndTime(dto.preferredTimeWindowStart, healthPackage.estimatedDurationMinutes) : null;
     if (!end) throw new BadRequestException('Health Check package has no valid appointment duration');
-    const address = dto.visitAddress ? this.normalizedAddress(dto.visitAddress) : null;
+    const address = modeCode === 'HOME_VISIT' && dto.visitAddress ? this.normalizedAddress(dto.visitAddress) : null;
     const eligible = await this.providerCapabilities.findEligibleProviders(dto.healthCheckPackageId, dto.fulfilmentModeId, { requestedDate: dto.preferredDate, requestedStartTime: dto.preferredTimeWindowStart, requestedEndTime: end, requestedTimezone: dto.preferredTimezone, visitAddress: address });
     const capability = eligible[0];
     if (!capability) throw new ConflictException('No eligible priced Provider is currently available for this Health Check');

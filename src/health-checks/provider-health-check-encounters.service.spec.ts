@@ -73,6 +73,38 @@ describe('ProviderHealthCheckEncountersService', () => {
 
   it('requires all six measurements before completing', async () => { encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS }; booking.status = BookingStatus.IN_PROGRESS; measurements.push({ code: HealthCheckMeasurementCode.PULSE }); await expect(subject.complete(user, booking.bookingReference)).rejects.toBeInstanceOf(ConflictException); });
 
+  it('does not block completion for a selected NONE add-on', async () => {
+    booking.commercialConfigurationSnapshot = { includedContents: [{ code: 'PULSE', name: 'Pulse', category: 'MEASUREMENT', resultType: 'SINGLE_NUMERIC', unit: 'bpm' }], selectedAddons: [{ code: 'FOLLOW_UP', name: 'Follow-up', category: 'SERVICE', resultType: 'NONE', unit: null }] };
+    booking.status = BookingStatus.IN_PROGRESS; encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS }; measurements = [{ code: 'PULSE', valueNumeric: '72', valueSecondaryNumeric: null }];
+    await expect(subject.complete(user, booking.bookingReference)).resolves.toBe(response);
+  });
+
+  it('requires a snapshotted SINGLE_NUMERIC add-on until its result is recorded', async () => {
+    booking.commercialConfigurationSnapshot = { includedContents: [], selectedAddons: [{ code: 'CHOLESTEROL', name: 'Cholesterol', category: 'LAB', resultType: 'SINGLE_NUMERIC', unit: 'mmol/L' }] };
+    booking.status = BookingStatus.IN_PROGRESS; encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS };
+    await expect(subject.complete(user, booking.bookingReference)).rejects.toThrow('CHOLESTEROL');
+    measurements = [{ code: 'CHOLESTEROL', valueNumeric: '4.2', valueSecondaryNumeric: null }];
+    await expect(subject.complete(user, booking.bookingReference)).resolves.toBe(response);
+  });
+
+  it('requires both persisted values for a snapshotted BLOOD_PRESSURE item', async () => {
+    booking.commercialConfigurationSnapshot = { includedContents: [{ code: 'CUSTOM_BP', name: 'Custom BP', category: 'MEASUREMENT', resultType: 'BLOOD_PRESSURE', unit: 'mmHg' }], selectedAddons: [] };
+    booking.status = BookingStatus.IN_PROGRESS; encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS }; measurements = [{ code: 'CUSTOM_BP', valueNumeric: '120', valueSecondaryNumeric: null }];
+    await expect(subject.complete(user, booking.bookingReference)).rejects.toThrow('CUSTOM_BP');
+  });
+
+  it('persists additional results using the frozen result type and unit', async () => {
+    booking.commercialConfigurationSnapshot = { includedContents: [], selectedAddons: [{ code: 'CHOLESTEROL', name: 'Cholesterol', category: 'LAB', resultType: 'SINGLE_NUMERIC', unit: 'mmol/L' }] };
+    encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS };
+    await subject.saveMeasurements(user, booking.bookingReference, { ...dto, additionalResults: [{ code: 'CHOLESTEROL', value: 4.2 }] });
+    expect(measurements.find((item) => item.code === 'CHOLESTEROL')).toMatchObject({ valueNumeric: '4.2000', valueSecondaryNumeric: null, unit: 'mmol/L' });
+  });
+
+  it('uses identical snapshot requirements for HOSPITAL fulfilment', () => {
+    const mapped = (subject as any).toResponse({ status: HealthCheckEncounterStatus.IN_PROGRESS, startedAt: new Date(), completedAt: null, booking: { commercialConfigurationSnapshot: { includedContents: [{ code: 'PULSE', name: 'Pulse', category: 'MEASUREMENT', resultType: 'SINGLE_NUMERIC', unit: 'bpm' }], selectedAddons: [] }, bookingReference: booking.bookingReference, participant: { givenName: 'Ada', familyName: 'Okafor' }, healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential' }, fulfilmentMode: { code: 'HOSPITAL', name: 'Hospital' } }, measurements: [] });
+    expect(mapped.requirements).toEqual([expect.objectContaining({ code: 'PULSE', requiresRecordedResult: true })]);
+  });
+
   it('completes the encounter and booking transactionally with histories', async () => {
     encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS }; booking.status = BookingStatus.IN_PROGRESS;
     measurements = Object.values(HealthCheckMeasurementCode).map((code) => ({ code })); await subject.complete(user, booking.bookingReference);

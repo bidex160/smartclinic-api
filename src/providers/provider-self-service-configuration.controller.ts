@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiConflictResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConflictResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -17,6 +17,7 @@ import { ProviderSelfServiceConfigurationService } from './provider-self-service
 import { CreateProviderServiceAreaDto, UpdateProviderServiceAreaDto } from './dto/provider-service-area.dto';
 import { UpdateProviderServicePriceDto } from './dto/update-provider-service-price.dto';
 import { ConfigureProviderServiceAddonDto } from './dto/configure-provider-service-addon.dto';
+import { ProviderServiceAddonConfigurationResponseDto } from './dto/provider-service-addon-configuration-response.dto';
 
 @ApiTags('Provider configuration') @ApiBearerAuth() @UseGuards(JwtAuthGuard, RolesGuard) @Roles(UserRole.PROVIDER)
 @ApiUnauthorizedResponse() @ApiForbiddenResponse() @ApiNotFoundResponse() @ApiConflictResponse() @Controller('provider')
@@ -27,7 +28,7 @@ export class ProviderSelfServiceConfigurationController {
   @Patch('services/:id/activate') activateService(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.configuration.activateService(req.user, p.id); }
   @Patch('services/:id/deactivate') deactivateService(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto) { return this.configuration.deactivateService(req.user, p.id); }
   @Patch('services/:id/price') updateServicePrice(@Req() req: { user: User }, @Param() p: ResourceIdParamsDto, @Body() dto: UpdateProviderServicePriceDto) { return this.configuration.updateServicePrice(req.user, p.id, dto); }
-  @Get('services/:id/addons') listServiceAddons(@Req() req:{user:User},@Param() p:ResourceIdParamsDto){return this.configuration.listServiceAddons(req.user,p.id);}
+  @Get('services/:id/addons') @ApiOkResponse({ type: ProviderServiceAddonConfigurationResponseDto }) listServiceAddons(@Req() req:{user:User},@Param() p:ResourceIdParamsDto){return this.configuration.listServiceAddons(req.user,p.id);}
   @Post('services/:id/addons') configureServiceAddon(@Req() req:{user:User},@Param() p:ResourceIdParamsDto,@Body() dto:ConfigureProviderServiceAddonDto){return this.configuration.configureServiceAddon(req.user,p.id,dto);}
   @Delete('services/:id/addons/:addonCode') disableServiceAddon(@Req() req:{user:User},@Param('id') id:string,@Param('addonCode') code:string){return this.configuration.disableServiceAddon(req.user,id,code);}
   @Post('services/:serviceId/locations/:locationId') link(@Req() req: { user: User }, @Param() p: ProviderServiceLocationParamsDto) { return this.configuration.linkLocation(req.user, p.serviceId, p.locationId); }

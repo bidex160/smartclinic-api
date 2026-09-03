@@ -13,6 +13,6 @@ export function deriveMatchingReadiness(booking: Booking, funding: BookingFundin
   if (assignment?.status === ProviderAssignmentStatus.OFFERED) return MatchingQueueReadiness.ACTIVE_OFFER;
   if (funding?.status !== BookingFundingStatus.SETTLED) return MatchingQueueReadiness.FUNDING_INCOMPLETE;
   if (!booking.preferredDate || !booking.preferredTimeWindowStart || !booking.preferredTimezone || !booking.healthCheckPackage?.estimatedDurationMinutes || booking.healthCheckPackage.estimatedDurationMinutes <= 0) return MatchingQueueReadiness.INCOMPLETE_SCHEDULING;
-  if (['HOME_VISIT', 'PROVIDER_LOCATION'].includes(booking.fulfilmentMode?.code ?? '') && !booking.visitAddress) return MatchingQueueReadiness.INCOMPLETE_VISIT_ADDRESS;
+  if (booking.fulfilmentMode?.code === 'HOME_VISIT' && !booking.visitAddress) return MatchingQueueReadiness.INCOMPLETE_VISIT_ADDRESS;
   return MatchingQueueReadiness.READY;
 }

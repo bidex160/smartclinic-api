@@ -52,11 +52,12 @@ describe('BookingsService', () => {
       create: jest.fn((input: BookingStatusHistory) => input),
       save: jest.fn().mockResolvedValue(undefined),
     };
+    const transactionalAddressRepository = { create: jest.fn((input: object) => input), save: jest.fn().mockResolvedValue(undefined) };
     const providerService = { id: 'provider-service', providerId: 'provider-1', healthCheckPackageId: createBookingDto.healthCheckPackageId, fulfilmentModeId: createBookingDto.fulfilmentModeId, priceMinor: '1250000', currency: 'NGN', isActive: true };
     const transactionalProviderServiceRepository = { findOne: jest.fn().mockResolvedValue(providerService) };
     const manager = {
       getRepository: jest.fn((entity: unknown) =>
-        entity === Booking ? transactionalBookingRepository : entity === ProviderService ? transactionalProviderServiceRepository : transactionalHistoryRepository,
+        entity === Booking ? transactionalBookingRepository : entity === ProviderService ? transactionalProviderServiceRepository : entity === BookingVisitAddress ? transactionalAddressRepository : transactionalHistoryRepository,
       ),
     };
     const bookingRepository = {
@@ -82,6 +83,7 @@ describe('BookingsService', () => {
       manager,
       transactionalBookingRepository,
       transactionalHistoryRepository,
+      transactionalAddressRepository,
       transactionalProviderServiceRepository,
       referenceRepository,
       packagePricingService: providerCapabilities,
@@ -127,8 +129,9 @@ describe('BookingsService', () => {
       relations: { healthCheckPackage: { contents: { clinicalContent: true }, addonAvailability: { clinicalContent: true } }, fulfilmentMode: true },
     });
   });
-  it('requires a structured address for PROVIDER_LOCATION registered bookings', async () => { const { service } = createService(); await expect(service.create({ ...createBookingDto, visitAddress: undefined })).rejects.toBeInstanceOf(BadRequestException); });
-  it('accepts and normalizes a structured PROVIDER_LOCATION origin address', async () => { const { service, transactionalHistoryRepository } = createService(); await service.create({ ...createBookingDto, visitAddress: { addressLine1: ' 12 Ring Road ', city: ' Ibadan ', stateOrRegion: ' Oyo ', countryCode: 'ng' } }); expect(transactionalHistoryRepository.save).toHaveBeenCalledWith(expect.objectContaining({ addressLine1: '12 Ring Road', city: 'Ibadan', stateOrRegion: 'Oyo', countryCode: 'NG' })); });
+  it('creates PROVIDER_LOCATION bookings without a patient visit address or fabricated address row', async () => { const { service, transactionalAddressRepository } = createService(); await expect(service.create({ ...createBookingDto, visitAddress: undefined })).resolves.toBeDefined(); expect(transactionalAddressRepository.save).not.toHaveBeenCalled(); });
+  it('does not persist a supplied patient address for new PROVIDER_LOCATION bookings', async () => { const { service, transactionalAddressRepository } = createService(); await service.create(createBookingDto); expect(transactionalAddressRepository.save).not.toHaveBeenCalled(); });
+  it('still requires and persists the supplied HOME_VISIT address', async () => { const { service, referenceRepository, transactionalAddressRepository } = createService(); referenceRepository.findOne.mockImplementation(async ({ where }: any) => where.id === createBookingDto.fulfilmentModeId ? { code: 'HOME_VISIT' } : { estimatedDurationMinutes: 30 }); await expect(service.create({ ...createBookingDto, visitAddress: undefined })).rejects.toBeInstanceOf(BadRequestException); await service.create({ ...createBookingDto, visitAddress: { addressLine1: ' 12 Ring Road ', city: ' Ibadan ', stateOrRegion: ' Oyo ', countryCode: 'ng' } }); expect(transactionalAddressRepository.save).toHaveBeenCalledWith(expect.objectContaining({ addressLine1: '12 Ring Road', city: 'Ibadan', stateOrRegion: 'Oyo', countryCode: 'NG' })); });
 
   it('ignores a legacy client end time and persists no authoritative preference end', async () => {
     const { service, bookingRepository } = createService();
@@ -278,7 +281,7 @@ describe('BookingsService quote-backed PostgreSQL locking', () => {
     } as HealthCheckConfigurationQuote;
     const offering = {
       id: quote.providerServiceId, providerId: 'provider-1', healthCheckPackageId: 'package-1', fulfilmentModeId: 'mode-1',
-      isActive: true, healthCheckPackage: { isActive: true, estimatedDurationMinutes: 30 }, fulfilmentMode: { isActive: true },
+      isActive: true, healthCheckPackage: { isActive: true, estimatedDurationMinutes: 30 }, fulfilmentMode: { isActive: true, code: 'PROVIDER_LOCATION' },
     } as any;
     const savedBooking = { id: 'booking-1', bookingReference: 'SC-2026-QUOTELOCK001' } as Booking;
     const quoteRepository = { findOne: jest.fn().mockResolvedValue(quote), save: jest.fn(async (value) => value) };
@@ -305,7 +308,7 @@ describe('BookingsService quote-backed PostgreSQL locking', () => {
       fulfilmentModes as never, capabilities as never, quoteRepository as never,
     );
     jest.spyOn(service, 'findByReference').mockResolvedValue({ bookingReference: savedBooking.bookingReference } as any);
-    return { service, quote, quoteRepository, offeringRepository, bookingRepositoryInTransaction, bookingRepository, capabilities };
+    return { service, quote, offering, quoteRepository, offeringRepository, bookingRepositoryInTransaction, addressRepository, bookingRepository, capabilities };
   }
 
   it('locks only the quote base row and loads optional related configuration separately', async () => {
@@ -324,6 +327,21 @@ describe('BookingsService quote-backed PostgreSQL locking', () => {
     expect(value.quoteRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       bookingId: 'booking-1', consumedAt: expect.any(Date),
     }));
+  });
+
+  it('retains the selected provider location and creates no visit-address row for PROVIDER_LOCATION', async () => {
+    const value = harness();
+    await value.service.createSelf(user, { ...dto, visitAddress: undefined });
+    expect(value.bookingRepositoryInTransaction.create).toHaveBeenCalledWith(expect.objectContaining({ providerLocationId: 'location-1' }));
+    expect(value.addressRepository.save).not.toHaveBeenCalled();
+    expect(value.capabilities.findEligibleProviders).toHaveBeenCalledWith('package-1', 'mode-1', expect.objectContaining({ visitAddress: null }));
+  });
+
+  it('requires and persists visitAddress for a quote-backed HOME_VISIT booking', async () => {
+    const value = harness({ providerLocationId: null }); value.offering.fulfilmentMode.code = 'HOME_VISIT';
+    await expect(value.service.createSelf(user, { ...dto, visitAddress: undefined })).rejects.toBeInstanceOf(BadRequestException);
+    await value.service.createSelf(user, dto);
+    expect(value.addressRepository.save).toHaveBeenCalledWith(expect.objectContaining({ addressLine1: 'Mokola', city: 'Ibadan', countryCode: 'NG' }));
   });
 
   it('rejects expired, consumed, and wrong-owner quotes before creating a booking', async () => {

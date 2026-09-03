@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { BookingStatus } from '../bookings/enums/booking-status.enum';
@@ -20,8 +20,10 @@ import { HEALTH_CHECK_MEASUREMENT_UNITS, HealthCheckMeasurementCode } from './en
 import { ReferralsService } from '../rewards/referrals.service';
 import { PatientCareActionSource } from '../rewards/enums/patient-care-action-source.enum';
 import { ProviderEarningsService } from '../earnings/provider-earnings.service';
+import { HealthCheckClinicalResultType } from './enums/health-check-clinical-result-type.enum';
+import { projectHealthCheckEncounterRequirements } from './health-check-encounter-requirements';
 
-interface MeasurementInput { code: HealthCheckMeasurementCode; primary: number; secondary: number | null }
+interface MeasurementInput { code: string; primary: number; secondary: number | null; unit: string }
 
 @Injectable()
 export class ProviderHealthCheckEncountersService {
@@ -60,16 +62,16 @@ export class ProviderHealthCheckEncountersService {
 
   async saveMeasurements(user: User, reference: string, dto: SaveHealthCheckMeasurementsDto): Promise<ProviderHealthCheckEncounterResponseDto> {
     const provider = await this.currentProvider.resolve(user);
-    const inputs = this.measurementInputs(dto);
     await this.encounters.manager.transaction(async (manager) => {
       const encounter = await this.requireOwnedEncounter(manager, reference, provider.id);
       if (![HealthCheckEncounterStatus.DRAFT, HealthCheckEncounterStatus.IN_PROGRESS].includes(encounter.status)) throw new ConflictException('Completed or cancelled encounters cannot be edited');
+      const inputs = this.measurementInputs(dto, encounter.booking.commercialConfigurationSnapshot);
       const measurementRepository = manager.getRepository(HealthCheckMeasurement); const historyRepository = manager.getRepository(HealthCheckMeasurementHistory); const now = new Date();
       for (const input of inputs) {
         let measurement = encounter.measurements.find((value) => value.code === input.code);
         const previousValue = measurement ? this.auditValue(measurement) : null;
         if (!measurement) measurement = measurementRepository.create({ encounterId: encounter.id, code: input.code });
-        measurement.valueNumeric = this.numeric(input.primary); measurement.valueSecondaryNumeric = input.secondary === null ? null : this.numeric(input.secondary); measurement.unit = HEALTH_CHECK_MEASUREMENT_UNITS[input.code]; measurement.recordedAt = now; measurement.recordedByUserId = user.id;
+        measurement.valueNumeric = this.numeric(input.primary); measurement.valueSecondaryNumeric = input.secondary === null ? null : this.numeric(input.secondary); measurement.unit = input.unit; measurement.recordedAt = now; measurement.recordedByUserId = user.id;
         measurement = await measurementRepository.save(measurement);
         await historyRepository.save(historyRepository.create({ measurementId: measurement.id, action: previousValue ? HealthCheckMeasurementAction.UPDATED : HealthCheckMeasurementAction.CREATED, previousValue, newValue: this.auditValue(measurement), actorUserId: user.id }));
       }
@@ -83,9 +85,14 @@ export class ProviderHealthCheckEncountersService {
     await this.encounters.manager.transaction(async (manager) => {
       const encounter = await this.requireOwnedEncounter(manager, reference, provider.id);
       if (encounter.status !== HealthCheckEncounterStatus.IN_PROGRESS) throw new ConflictException('Only an in-progress encounter can be completed');
-      const codes = new Set(encounter.measurements.map((measurement) => measurement.code));
-      const missing = Object.values(HealthCheckMeasurementCode).filter((code) => !codes.has(code));
-      if (missing.length) throw new ConflictException(`All six measurements are required before completion: missing ${missing.join(', ')}`);
+      const measurements = new Map(encounter.measurements.map((measurement) => [measurement.code, measurement]));
+      const missing = projectHealthCheckEncounterRequirements(encounter.booking.commercialConfigurationSnapshot).filter((requirement) => {
+        if (!requirement.requiresRecordedResult) return false;
+        const measurement = measurements.get(requirement.code);
+        if (!measurement) return true;
+        return requirement.resultType === HealthCheckClinicalResultType.BLOOD_PRESSURE && measurement.valueSecondaryNumeric === null;
+      }).map((requirement) => requirement.code);
+      if (missing.length) throw new ConflictException(`Required health check results are missing: ${missing.join(', ')}`);
       if (encounter.booking.status !== BookingStatus.IN_PROGRESS) throw new ConflictException('Booking is not in progress');
       const now = new Date(); encounter.status = HealthCheckEncounterStatus.COMPLETED; encounter.completedAt = now; await manager.getRepository(HealthCheckEncounter).save(encounter);
       await manager.getRepository(HealthCheckEncounterHistory).save({ encounterId: encounter.id, fromStatus: HealthCheckEncounterStatus.IN_PROGRESS, toStatus: HealthCheckEncounterStatus.COMPLETED, actorUserId: user.id });
@@ -117,16 +124,32 @@ export class ProviderHealthCheckEncountersService {
     return encounter;
   }
 
-  private measurementInputs(dto: SaveHealthCheckMeasurementsDto): MeasurementInput[] { return [
-    { code: HealthCheckMeasurementCode.BLOOD_PRESSURE, primary: dto.bloodPressure.systolic, secondary: dto.bloodPressure.diastolic },
-    { code: HealthCheckMeasurementCode.BLOOD_GLUCOSE, primary: dto.bloodGlucose.value, secondary: null },
-    { code: HealthCheckMeasurementCode.BMI, primary: dto.bmi.value, secondary: null },
-    { code: HealthCheckMeasurementCode.TEMPERATURE, primary: dto.temperature.value, secondary: null },
-    { code: HealthCheckMeasurementCode.OXYGEN_SATURATION, primary: dto.oxygenSaturation.value, secondary: null },
-    { code: HealthCheckMeasurementCode.PULSE, primary: dto.pulse.value, secondary: null },
-  ]; }
+  private measurementInputs(dto: SaveHealthCheckMeasurementsDto, snapshot: Record<string, unknown> | null): MeasurementInput[] {
+    const builtins: MeasurementInput[] = [
+      { code: HealthCheckMeasurementCode.BLOOD_PRESSURE, primary: dto.bloodPressure.systolic, secondary: dto.bloodPressure.diastolic, unit: HEALTH_CHECK_MEASUREMENT_UNITS.BLOOD_PRESSURE },
+      { code: HealthCheckMeasurementCode.BLOOD_GLUCOSE, primary: dto.bloodGlucose.value, secondary: null, unit: HEALTH_CHECK_MEASUREMENT_UNITS.BLOOD_GLUCOSE },
+      { code: HealthCheckMeasurementCode.BMI, primary: dto.bmi.value, secondary: null, unit: HEALTH_CHECK_MEASUREMENT_UNITS.BMI },
+      { code: HealthCheckMeasurementCode.TEMPERATURE, primary: dto.temperature.value, secondary: null, unit: HEALTH_CHECK_MEASUREMENT_UNITS.TEMPERATURE },
+      { code: HealthCheckMeasurementCode.OXYGEN_SATURATION, primary: dto.oxygenSaturation.value, secondary: null, unit: HEALTH_CHECK_MEASUREMENT_UNITS.OXYGEN_SATURATION },
+      { code: HealthCheckMeasurementCode.PULSE, primary: dto.pulse.value, secondary: null, unit: HEALTH_CHECK_MEASUREMENT_UNITS.PULSE },
+    ];
+    const requirements = new Map(projectHealthCheckEncounterRequirements(snapshot).map((item) => [item.code, item]));
+    const seen = new Set(builtins.map((item) => item.code));
+    const additional = (dto.additionalResults ?? []).map((result): MeasurementInput => {
+      if (seen.has(result.code)) throw new BadRequestException(`Duplicate health check result: ${result.code}`);
+      seen.add(result.code);
+      const requirement = requirements.get(result.code);
+      if (!requirement || !requirement.requiresRecordedResult) throw new BadRequestException(`Result is not required by the booking snapshot: ${result.code}`);
+      if (!requirement.unit) throw new BadRequestException(`Booking snapshot has no unit for result-bearing content: ${result.code}`);
+      const hasSecondary = result.secondaryValue !== undefined;
+      if (requirement.resultType === HealthCheckClinicalResultType.BLOOD_PRESSURE && !hasSecondary) throw new BadRequestException(`Blood pressure result requires both values: ${result.code}`);
+      if (requirement.resultType === HealthCheckClinicalResultType.SINGLE_NUMERIC && hasSecondary) throw new BadRequestException(`Single numeric result accepts one value: ${result.code}`);
+      return { code: result.code, primary: result.value, secondary: result.secondaryValue ?? null, unit: requirement.unit };
+    });
+    return [...builtins, ...additional];
+  }
   private numeric(value: number): string { return value.toFixed(4); }
   private auditValue(measurement: HealthCheckMeasurement): MeasurementAuditValue { return { primary: measurement.valueNumeric, secondary: measurement.valueSecondaryNumeric, unit: measurement.unit }; }
-  private toResponse(encounter: HealthCheckEncounter): ProviderHealthCheckEncounterResponseDto { const booking = encounter.booking; return { bookingReference: booking.bookingReference, status: encounter.status, startedAt: encounter.startedAt, completedAt: encounter.completedAt, participant: { givenName: booking.participant.givenName, familyName: booking.participant.familyName }, healthCheckPackage: { code: booking.healthCheckPackage.code, name: booking.healthCheckPackage.name }, fulfilmentMode: { code: booking.fulfilmentMode.code, name: booking.fulfilmentMode.name }, confirmedSchedule: booking.scheduledDate ? { date: booking.scheduledDate, timeFrom: booking.scheduledTimeFrom!, timeTo: booking.scheduledTimeTo!, timezone: booking.scheduledTimezone!, providerLocationName: booking.providerLocation?.name ?? null } : null, visitAddress: booking.fulfilmentMode.code === 'HOME_VISIT' && booking.visitAddress ? { addressLine1: booking.visitAddress.addressLine1, addressLine2: booking.visitAddress.addressLine2, city: booking.visitAddress.city, stateOrRegion: booking.visitAddress.stateOrRegion, postalCode: booking.visitAddress.postalCode, countryCode: booking.visitAddress.countryCode, locationNote: booking.preferredLocationNote } : null, measurements: (encounter.measurements ?? []).map((measurement) => ({ code: measurement.code, value: Number(measurement.valueNumeric), secondaryValue: measurement.valueSecondaryNumeric === null ? null : Number(measurement.valueSecondaryNumeric), unit: measurement.unit, recordedAt: measurement.recordedAt })) }; }
+  private toResponse(encounter: HealthCheckEncounter): ProviderHealthCheckEncounterResponseDto { const booking = encounter.booking; return { bookingReference: booking.bookingReference, status: encounter.status, startedAt: encounter.startedAt, completedAt: encounter.completedAt, participant: { givenName: booking.participant.givenName, familyName: booking.participant.familyName }, healthCheckPackage: { code: booking.healthCheckPackage.code, name: booking.healthCheckPackage.name }, fulfilmentMode: { code: booking.fulfilmentMode.code, name: booking.fulfilmentMode.name }, confirmedSchedule: booking.scheduledDate ? { date: booking.scheduledDate, timeFrom: booking.scheduledTimeFrom!, timeTo: booking.scheduledTimeTo!, timezone: booking.scheduledTimezone!, providerLocationName: booking.providerLocation?.name ?? null } : null, visitAddress: booking.fulfilmentMode.code === 'HOME_VISIT' && booking.visitAddress ? { addressLine1: booking.visitAddress.addressLine1, addressLine2: booking.visitAddress.addressLine2, city: booking.visitAddress.city, stateOrRegion: booking.visitAddress.stateOrRegion, postalCode: booking.visitAddress.postalCode, countryCode: booking.visitAddress.countryCode, locationNote: booking.preferredLocationNote } : null, requirements: projectHealthCheckEncounterRequirements(booking.commercialConfigurationSnapshot), measurements: (encounter.measurements ?? []).map((measurement) => ({ code: measurement.code, value: Number(measurement.valueNumeric), secondaryValue: measurement.valueSecondaryNumeric === null ? null : Number(measurement.valueSecondaryNumeric), unit: measurement.unit, recordedAt: measurement.recordedAt })) }; }
   private notFound(): never { throw new NotFoundException('Health check encounter was not found for the authenticated provider'); }
 }

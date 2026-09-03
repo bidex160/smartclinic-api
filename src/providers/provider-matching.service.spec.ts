@@ -69,6 +69,36 @@ describe('ProviderMatchingService', () => {
     expect(bookingHistory.save).toHaveBeenCalledWith(expect.objectContaining({ fromStatus: BookingStatus.AWAITING_FUNDING, toStatus: BookingStatus.AWAITING_PROVIDER_RESPONSE, reasonCode: 'SELF_PAYMENT_CONFIRMED' }));
     expect(result.scheduledDate).toBeUndefined();
   });
+  it('binds a paid PROVIDER_LOCATION booking without visitAddress using its authoritative selected location', async () => {
+    const locationId = '70000000-0000-4000-8000-000000000001';
+    const bound = booking({ status: BookingStatus.AWAITING_FUNDING, commercialProviderId: ids.provider1, commercialProviderServiceId: `service-${ids.provider1}`, providerLocationId: locationId, fulfilmentMode: { code: 'PROVIDER_LOCATION', isActive: true } as any, visitAddress: null });
+    bookings.findOne.mockResolvedValue(bound); assignments.findOne.mockResolvedValue(null); reservations.findOne.mockResolvedValue(null);
+    capabilities.findEligibleProviders.mockResolvedValue([{ ...eligible(ids.provider1), providerLocationIds: [locationId] }]);
+    await expect(subject.bindCommercialProviderAfterSettlement(assignments.manager, bound.id, ids.actor, 'SELF_PAYMENT_CONFIRMED', now)).resolves.toMatchObject({ status: BookingStatus.AWAITING_PROVIDER_RESPONSE });
+    expect(reservations.save).toHaveBeenCalledWith(expect.objectContaining({ providerLocationId: locationId, status: ProviderBookingReservationStatus.HELD }));
+    expect(capabilities.findEligibleProviders).toHaveBeenCalledWith(bound.healthCheckPackageId, bound.fulfilmentModeId, expect.objectContaining({ visitAddress: null }), undefined);
+  });
+  it('does not require or fabricate an address for historical or new PROVIDER_LOCATION bookings', async () => {
+    const locationId = '70000000-0000-4000-8000-000000000001';
+    for (const visitAddress of [null, { addressLine1: 'Historical patient address', city: 'Ibadan', stateOrRegion: 'Oyo', countryCode: 'NG', postalCode: null }]) {
+      const bound = booking({ status: BookingStatus.AWAITING_FUNDING, commercialProviderId: ids.provider1, commercialProviderServiceId: `service-${ids.provider1}`, providerLocationId: locationId, fulfilmentMode: { code: 'PROVIDER_LOCATION', isActive: true } as any, visitAddress: visitAddress as any });
+      bookings.findOne.mockResolvedValue(bound); assignments.findOne.mockResolvedValue(null); reservations.findOne.mockResolvedValue(null); capabilities.findEligibleProviders.mockResolvedValue([{ ...eligible(ids.provider1), providerLocationIds: [locationId] }]);
+      await expect(subject.bindCommercialProviderAfterSettlement(assignments.manager, bound.id, ids.actor, 'SELF_PAYMENT_CONFIRMED', now)).resolves.toBeDefined();
+    }
+    expect(bookings.save.mock.calls.flat().some((value: any) => value?.visitAddress?.addressLine1 === 'Discovery context')).toBe(false);
+  });
+  it('still rejects PROVIDER_LOCATION settlement binding without an eligible authoritative provider location', async () => {
+    const bound = booking({ status: BookingStatus.AWAITING_FUNDING, commercialProviderId: ids.provider1, commercialProviderServiceId: `service-${ids.provider1}`, providerLocationId: null, fulfilmentMode: { code: 'PROVIDER_LOCATION', isActive: true } as any, visitAddress: null });
+    bookings.findOne.mockResolvedValue(bound); assignments.findOne.mockResolvedValue(null); capabilities.findEligibleProviders.mockResolvedValue([{ ...eligible(ids.provider1), providerLocationIds: ['location'] }]);
+    await expect(subject.bindCommercialProviderAfterSettlement(assignments.manager, bound.id, ids.actor, 'SELF_PAYMENT_CONFIRMED', now)).rejects.toThrow('Quoted provider location is no longer eligible');
+  });
+  it('keeps HOME_VISIT settlement binding dependent on a structured visit address', async () => {
+    const base = { status: BookingStatus.AWAITING_FUNDING, commercialProviderId: ids.provider1, commercialProviderServiceId: `service-${ids.provider1}`, providerLocationId: null, fulfilmentMode: { code: 'HOME_VISIT', isActive: true } as any };
+    const missing = booking({ ...base, visitAddress: null }); bookings.findOne.mockResolvedValue(missing);
+    await expect(subject.bindCommercialProviderAfterSettlement(assignments.manager, missing.id, ids.actor, 'SELF_PAYMENT_CONFIRMED', now)).rejects.toMatchObject({ response: expect.objectContaining({ reason: 'INCOMPLETE_VISIT_ADDRESS' }) });
+    const valid = booking({ ...base, visitAddress: { addressLine1: '12 Ring Road', city: 'Ibadan', stateOrRegion: 'Oyo', countryCode: 'NG', postalCode: null } as any }); bookings.findOne.mockResolvedValue(valid); assignments.findOne.mockResolvedValue(null); reservations.findOne.mockResolvedValue(null); capabilities.findEligibleProviders.mockResolvedValue([eligible(ids.provider1)]);
+    await expect(subject.bindCommercialProviderAfterSettlement(assignments.manager, valid.id, ids.actor, 'SELF_PAYMENT_CONFIRMED', now)).resolves.toBeDefined();
+  });
   it('does not destructively change an existing confirmed provider-assigned booking', async () => {
     const bound = booking({ status: BookingStatus.PROVIDER_ASSIGNED, commercialProviderId: ids.provider1, commercialProviderServiceId: `service-${ids.provider1}` });
     const confirmed = offer({ status: ProviderAssignmentStatus.CONFIRMED, expiresAt: null, confirmedAt: now });

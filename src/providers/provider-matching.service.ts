@@ -1002,7 +1002,7 @@ private addMinutesToTime(
       throw new BadRequestException({ message: context.reason === "INVALID_PACKAGE_DURATION" ? "Health Check package duration is missing or invalid" : "Booking scheduling context is incomplete", reason: context.reason, missingFields: context.missingFields });
     if (!booking.healthCheckPackage?.isActive || !booking.fulfilmentMode?.isActive)
       throw new BadRequestException("Booking package or fulfilment mode is inactive");
-    if (['HOME_VISIT', 'PROVIDER_LOCATION'].includes(booking.fulfilmentMode.code) && !booking.visitAddress) throw new BadRequestException({ message: 'Booking requires a structured visit address for this fulfilment mode', reason: 'INCOMPLETE_VISIT_ADDRESS' });
+    if (booking.fulfilmentMode.code === 'HOME_VISIT' && !booking.visitAddress) throw new BadRequestException({ message: 'HOME_VISIT booking requires a structured visit address', reason: 'INCOMPLETE_VISIT_ADDRESS' });
     return context.window;
   }
 

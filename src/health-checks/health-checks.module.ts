@@ -40,6 +40,9 @@ import { ProviderService } from '../providers/entities/provider-service.entity';
 import { ProviderServiceAddon } from '../providers/entities/provider-service-addon.entity';
 import { HealthCheckConfigurationService } from './health-check-configuration.service';
 import { HealthCheckConfigurationQuote } from './entities/health-check-configuration-quote.entity';import { ProviderLocation } from '../providers/entities/provider-location.entity';
+import { HealthCheckCatalogueHistory } from './entities/health-check-catalogue-history.entity';
+import { AdminHealthCheckCatalogueController } from './admin-health-check-catalogue.controller';
+import { AdminHealthCheckCatalogueService } from './admin-health-check-catalogue.service';
 
 @Module({
   imports: [
@@ -70,6 +73,7 @@ import { HealthCheckConfigurationQuote } from './entities/health-check-configura
       ProviderServiceAddon,
       HealthCheckConfigurationQuote,
       ProviderLocation,
+      HealthCheckCatalogueHistory,
     ]),
   ],
   controllers: [
@@ -80,6 +84,7 @@ import { HealthCheckConfigurationQuote } from './entities/health-check-configura
     AdminHealthResultAccessController,
     PublicHealthResultsController,
     MePatientProfileController,
+    AdminHealthCheckCatalogueController,
   ],
   providers: [
     HealthCheckPackagesService,
@@ -89,6 +94,7 @@ import { HealthCheckConfigurationQuote } from './entities/health-check-configura
     PatientHealthCheckHistoryService,
     PatientPortalProfileService,
     HealthCheckConfigurationService,
+    AdminHealthCheckCatalogueService,
   ],
   exports: [HealthResultAccessService],
 })

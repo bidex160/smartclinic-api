@@ -25,6 +25,9 @@ import { ProviderServiceAddon } from './entities/provider-service-addon.entity';
 import { HealthCheckClinicalContent } from '../health-checks/entities/health-check-clinical-content.entity';
 import { HealthCheckPackageAddon } from '../health-checks/entities/health-check-package-addon.entity';
 import { BadRequestException, ConflictException } from '@nestjs/common';
+import { ProviderStatus } from './enums/provider-status.enum';
+import { ProviderServiceAddonConfigurationUnavailableReason } from './enums/provider-service-addon-configuration-unavailable-reason.enum';
+import { ProviderServiceAddonConfigurationResponseDto } from './dto/provider-service-addon-configuration-response.dto';
 
 @Injectable()
 export class ProviderSelfServiceConfigurationService {
@@ -48,7 +51,40 @@ export class ProviderSelfServiceConfigurationService {
   async activateService(user: User, id: string) { await this.ownService(user, id, true); return this.capabilities.activateService(id); }
   async deactivateService(user: User, id: string) { await this.ownService(user, id, true); return this.capabilities.deactivateService(id); }
   async updateServicePrice(user: User, id: string, dto: UpdateProviderServicePriceDto) { await this.ownService(user, id, true); return this.capabilities.updateServicePrice(id, dto); }
-  async listServiceAddons(user: User, id: string) { await this.ownService(user, id); return (await this.serviceAddons.find({ where: { providerServiceId: id, isActive: true }, relations: { clinicalContent: true } })).map((x) => ({ code: x.clinicalContent.code, name: x.clinicalContent.name, category: x.clinicalContent.category, priceMinor: Number(x.priceMinor), currency: x.currency, isActive: x.isActive })); }
+  async listServiceAddons(user: User, id: string): Promise<ProviderServiceAddonConfigurationResponseDto> {
+    const provider = await this.context.resolve(user);
+    const service = await this.services.findOne({ where: { id, providerId: provider.id } });
+    if (!service) throw new NotFoundException('Provider service not found');
+    const [eligibility, offerings] = await Promise.all([
+      this.packageAddons.find({ where: { healthCheckPackageId: service.healthCheckPackageId }, relations: { clinicalContent: true } }),
+      this.serviceAddons.find({ where: { providerServiceId: id }, relations: { clinicalContent: true } }),
+    ]);
+    const providerCanMutate = [ProviderStatus.PENDING, ProviderStatus.ACTIVE].includes(provider.status);
+    const byContent = new Map<string, { content: HealthCheckClinicalContent; eligibility: HealthCheckPackageAddon | null; offering: ProviderServiceAddon | null }>();
+    for (const link of eligibility) byContent.set(link.clinicalContentId, { content: link.clinicalContent, eligibility: link, offering: null });
+    for (const offering of offerings) {
+      const existing = byContent.get(offering.clinicalContentId);
+      if (existing) existing.offering = offering;
+      else byContent.set(offering.clinicalContentId, { content: offering.clinicalContent, eligibility: null, offering });
+    }
+    const items = [...byContent.values()].sort((a, b) => a.content.displayOrder - b.content.displayOrder || a.content.code.localeCompare(b.content.code)).map(({ content, eligibility: link, offering }) => {
+      const eligibilityActive = link?.isActive === true;
+      const reason = !providerCanMutate
+        ? ProviderServiceAddonConfigurationUnavailableReason.PROVIDER_CONFIGURATION_DISABLED
+        : !content.isActive
+          ? ProviderServiceAddonConfigurationUnavailableReason.CANONICAL_CONTENT_INACTIVE
+          : !eligibilityActive
+            ? ProviderServiceAddonConfigurationUnavailableReason.PACKAGE_ELIGIBILITY_INACTIVE
+            : null;
+      return {
+        code: content.code, name: content.name, description: content.description, category: content.category,
+        resultType: content.resultType, unit: content.unit, canonicalActive: content.isActive, eligibilityActive,
+        canConfigure: reason === null, configurationUnavailableReason: reason,
+        offering: offering ? { priceMinor: Number(offering.priceMinor), currency: offering.currency, isActive: offering.isActive } : null,
+      };
+    });
+    return { providerServiceId: service.id, currency: service.currency, items };
+  }
   async configureServiceAddon(user: User, id: string, dto: ConfigureProviderServiceAddonDto) { const service = await this.ownService(user, id, true); const content = await this.clinicalContents.findOne({ where: { code: dto.addonCode, isActive: true } }); if (!content) throw new BadRequestException('Clinical add-on is unavailable'); if (!await this.packageAddons.exists({ where: { healthCheckPackageId: service.healthCheckPackageId, clinicalContentId: content.id, isActive: true } })) throw new BadRequestException('Clinical add-on is incompatible with this package'); if (dto.currency !== service.currency) throw new ConflictException('Clinical add-on currency must match the Provider package currency'); let row = await this.serviceAddons.findOne({ where: { providerServiceId: id, clinicalContentId: content.id } }); if (!row) row = this.serviceAddons.create({ providerServiceId: id, clinicalContentId: content.id }); row.priceMinor=String(dto.priceMinor); row.currency=dto.currency; row.isActive=true; await this.serviceAddons.save(row); return { code:content.code,name:content.name,category:content.category,priceMinor:dto.priceMinor,currency:dto.currency,isActive:true }; }
   async disableServiceAddon(user: User, id: string, addonCode: string) { await this.ownService(user,id,true); const row=await this.serviceAddons.createQueryBuilder('capability').innerJoinAndSelect('capability.clinicalContent','content').where('capability.providerServiceId=:id',{id}).andWhere('content.code=:code',{code:addonCode.toUpperCase()}).getOne(); if(!row)throw new NotFoundException('Provider clinical add-on not found'); row.isActive=false;await this.serviceAddons.save(row);return{code:row.clinicalContent.code,isActive:false}; }
 
