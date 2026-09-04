@@ -16,9 +16,16 @@ async function bootstrap(): Promise<void> {
         : ['log', 'warn', 'error', 'debug', 'verbose'],
   });
 
+  const allowedOrigins = [
+  'https://cohort.smartclinic.com', 
+  'http://localhost:4200',
+  'http://localhost:5173',
+  configuration.frontendUrl // keep your env one
+]
+
   app.setGlobalPrefix('api/v1');
   app.enableCors({
-    origin: configuration.frontendUrl,
+    origin: allowedOrigins,
     credentials: true,
   });
   app.useGlobalPipes(

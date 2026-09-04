@@ -35,6 +35,7 @@ export interface AppConfiguration {
     fromName?: string;
     resendApiKey?: string;
     sendTimeoutMs: number;
+    contactToAddress: string;
   };
   publicBookingSession: {
     ttlSeconds: number;
@@ -143,6 +144,7 @@ export function createAppConfiguration(
           | undefined) ?? (environmentName === "test" ? "test" : "none"),
       fromAddress:
         environment.EMAIL_FROM_ADDRESS ?? "no-reply@smartclinic.invalid",
+      contactToAddress: environment.CONTACT_TO_ADDRESS ?? "contact@smartclinic.invalid",
       fromName: environment.EMAIL_FROM_NAME,
       resendApiKey: environment.RESEND_API_KEY,
       sendTimeoutMs: getNumber(environment.EMAIL_SEND_TIMEOUT_MS, 10_000),
