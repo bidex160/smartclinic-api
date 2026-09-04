@@ -17,7 +17,7 @@ async function bootstrap(): Promise<void> {
   });
 
   const allowedOrigins = [
-  'https://cohort.smartclinic.com', 
+  'https://cohort.smartclinicnetwork.com', 
   'http://localhost:4200',
   'http://localhost:5173',
   configuration.frontendUrl // keep your env one
