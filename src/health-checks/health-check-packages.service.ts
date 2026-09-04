@@ -18,7 +18,7 @@ export class HealthCheckPackagesService {
 
   async findActive(): Promise<HealthCheckPackageResponseDto[]> {
     const healthCheckPackages = await this.healthCheckPackageRepository.find({
-      where: { isActive: true, code: In(['ESSENTIAL', 'COMPLETE']) },
+      where: { isActive: true },
       relations: { contents: { clinicalContent: true }, addonAvailability: { clinicalContent: true } },
       order: { code: 'ASC' },
     });

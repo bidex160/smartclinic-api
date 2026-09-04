@@ -30,4 +30,11 @@ describe('AdminHealthCheckCatalogueController authorization', () => {
     };
     expect(guard.canActivate(context)).toBe(true);
   });
+
+  it('delegates package creation with the authenticated Admin actor', async () => {
+    const catalogue = { createPackage: jest.fn().mockResolvedValue({ code: 'EXECUTIVE', isActive: false }) };
+    const controller = new AdminHealthCheckCatalogueController(catalogue as never);
+    await expect(controller.createPackage({ code: 'EXECUTIVE', name: 'Executive', benefits: [] }, { user: { id: 'admin-id' } } as any)).resolves.toMatchObject({ code: 'EXECUTIVE', isActive: false });
+    expect(catalogue.createPackage).toHaveBeenCalledWith(expect.objectContaining({ code: 'EXECUTIVE' }), 'admin-id');
+  });
 });

@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, ILike, Repository } from 'typeorm';
 import { ProviderServiceAddon } from '../providers/entities/provider-service-addon.entity';
-import { AddPackageAddonDto, AddPackageContentDto, AdminClinicalContentQueryDto, CreateAdminClinicalContentDto, ReorderPackageContentsDto, UpdateAdminClinicalContentDto, UpdateAdminHealthCheckPackageDto } from './dto/admin-health-check-catalogue.dto';
+import { AddPackageAddonDto, AddPackageContentDto, AdminClinicalContentQueryDto, CreateAdminClinicalContentDto, CreateAdminHealthCheckPackageDto, ReorderPackageContentsDto, UpdateAdminClinicalContentDto, UpdateAdminHealthCheckPackageDto } from './dto/admin-health-check-catalogue.dto';
 import { HealthCheckCatalogueHistory } from './entities/health-check-catalogue-history.entity';
 import { HealthCheckClinicalContent } from './entities/health-check-clinical-content.entity';
 import { HealthCheckPackageAddon } from './entities/health-check-package-addon.entity';
@@ -24,6 +24,18 @@ export class AdminHealthCheckCatalogueService {
   async listPackages() {
     const rows = await this.packages.find({ relations: { contents: true, addonAvailability: true }, order: { code: 'ASC' } });
     return rows.map((row) => ({ ...this.packageMetadata(row), includedContentCount: row.contents?.length ?? 0, optionalAddonCount: row.addonAvailability?.length ?? 0 }));
+  }
+
+  async createPackage(dto: CreateAdminHealthCheckPackageDto, actorUserId: string) {
+    return this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(HealthCheckPackage);
+      const normalizedCode = this.packageCode(dto.code);
+      if (await repo.exists({ where: { code: normalizedCode } })) throw new ConflictException('Health Check package code already exists');
+      const row = repo.create({ code: normalizedCode, name: dto.name.trim(), description: dto.description?.trim() || null, benefits: (dto.benefits ?? []).map((value) => value.trim()).filter(Boolean), estimatedDurationMinutes: dto.estimatedDurationMinutes ?? null, isActive: false });
+      try { await repo.save(row); } catch (error) { this.rethrowPackageUnique(error); }
+      await this.audit(manager, actorUserId, 'PACKAGE_CREATED', row.id, null, null, this.packageMetadata(row));
+      return this.packageDetailFromManager(manager, row.id);
+    });
   }
 
   async packageDetail(code: string) {
@@ -204,4 +216,5 @@ export class AdminHealthCheckCatalogueService {
   private async packageDetailFromManager(manager: EntityManager, id: string) { const row = await manager.getRepository(HealthCheckPackage).findOne({ where: { id }, relations: { contents: { clinicalContent: true }, addonAvailability: { clinicalContent: true } } }); if (!row) throw new NotFoundException('Health Check package not found'); return this.mapPackageDetail(row); }
   private async audit(manager: EntityManager, actorUserId: string, operation: string, healthCheckPackageId: string | null, clinicalContentId: string | null, previousState: Record<string, unknown> | null, resultingState: Record<string, unknown>) { const repo = manager.getRepository(HealthCheckCatalogueHistory); await repo.save(repo.create({ actorUserId, operation, healthCheckPackageId, clinicalContentId, previousState, resultingState })); }
   private rethrowUnique(error: unknown): never { if (typeof error === 'object' && error && 'code' in error && (error as { code: string }).code === '23505') throw new ConflictException('Health Check clinical content code already exists'); throw error; }
+  private rethrowPackageUnique(error: unknown): never { if (typeof error === 'object' && error && 'code' in error && (error as { code: string }).code === '23505') throw new ConflictException('Health Check package code already exists'); throw error; }
 }

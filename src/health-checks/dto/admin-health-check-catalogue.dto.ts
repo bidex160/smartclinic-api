@@ -5,6 +5,14 @@ import { HealthCheckClinicalResultType } from '../enums/health-check-clinical-re
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
 const code = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim().toUpperCase() : value;
 
+export class CreateAdminHealthCheckPackageDto {
+  @Transform(code) @IsString() @Matches(/^[A-Z][A-Z0-9_]{1,79}$/) code!: string;
+  @Transform(trim) @IsString() @IsNotEmpty() @MaxLength(160) name!: string;
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(4000) description?: string | null;
+  @IsOptional() @IsArray() @IsString({ each: true }) @MaxLength(240, { each: true }) benefits: string[] = [];
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1440) estimatedDurationMinutes?: number | null;
+}
+
 export class UpdateAdminHealthCheckPackageDto {
   @IsOptional() @Transform(trim) @IsString() @IsNotEmpty() @MaxLength(160) name?: string;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(4000) description?: string | null;

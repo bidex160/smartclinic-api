@@ -27,7 +27,7 @@ describe('Find Care API authorization (e2e)', () => {
 
   it('allows anonymous discovery with validated filters', async () => {
     await request(app.getHttpServer()).get('/api/v1/public/find-care/services').expect(200);
-    await request(app.getHttpServer()).get('/api/v1/public/find-care/providers?serviceCode=GENERAL_CONSULTATION&deliveryMode=VIRTUAL&countryCode=NG&city=Ikeja').expect(200);
+    await request(app.getHttpServer()).get('/api/v1/public/find-care/providers?serviceCode=GENERAL_CONSULTATION&deliveryMode=VIRTUAL&limit=50').expect(200);
     expect(findCare.providersList).toHaveBeenCalledWith(expect.objectContaining({ deliveryMode: CareDeliveryMode.VIRTUAL }));
     await request(app.getHttpServer()).get('/api/v1/public/find-care/providers/SCPR-ABCDEF0123456789').expect(200);
     await request(app.getHttpServer()).get('/api/v1/public/find-care/providers?countryCode=NIGERIA').expect(400);

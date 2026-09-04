@@ -73,10 +73,18 @@ describe('HealthCheckPackagesService', () => {
       },
     ]);
     expect(healthCheckPackageRepository.find).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ isActive: true }),
+      where: { isActive: true },
       order: { code: 'ASC' },
       relations: { contents: { clinicalContent: true }, addonAvailability: { clinicalContent: true } },
     }));
+  });
+
+  it('returns an active provider-offered package without restricting its canonical code', async () => {
+    const executive = { id: 'executive', code: 'EXECUTIVE', name: 'Executive', description: null, benefits: [], estimatedDurationMinutes: 45, isActive: true, contents: [], addonAvailability: [] } as any;
+    const packages = { find: jest.fn().mockResolvedValue([executive]) };
+    const offerings = { find: jest.fn().mockResolvedValue([{ healthCheckPackageId: executive.id, priceMinor: '2500000', currency: 'NGN', fulfilmentMode: { code: 'PROVIDER_LOCATION', name: 'Provider location' } }]) };
+    await expect(new HealthCheckPackagesService(packages as never, offerings as never).findActive()).resolves.toEqual([expect.objectContaining({ code: 'EXECUTIVE', fromPriceMinor: 2500000 })]);
+    expect(packages.find).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
   });
 
   it('preserves normalized ESSENTIAL and COMPLETE composition ordering', async () => {

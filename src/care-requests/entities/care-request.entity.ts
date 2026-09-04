@@ -20,6 +20,7 @@ import { CareRequestFunding } from './care-request-funding.entity';
 @Index('IDX_care_requests_service_status', ['careServiceDefinitionId', 'status'])
 @Unique('UQ_care_requests_appointment_link', ['id', 'patientId', 'assignedProviderId', 'assignedProviderCareServiceId'])
 @Check('CHK_care_requests_country_code', `"country_code" ~ '^[A-Z]{2}$'`)
+@Check('CHK_care_requests_delivery_geography', `"delivery_mode" = 'VIRTUAL' OR ("country_code" IS NOT NULL AND "state_or_region" IS NOT NULL AND "city" IS NOT NULL)`)
 @Check('CHK_care_requests_assigned_pair', '("assigned_provider_id" IS NULL AND "assigned_provider_care_service_id" IS NULL) OR ("assigned_provider_id" IS NOT NULL AND "assigned_provider_care_service_id" IS NOT NULL)')
 @Check('CHK_care_requests_preferred_pair', '("preferred_provider_id" IS NULL AND "preferred_provider_care_service_id" IS NULL) OR ("preferred_provider_id" IS NOT NULL AND "preferred_provider_care_service_id" IS NOT NULL)')
 @Check('CHK_care_requests_service_price_pair', '("service_price_minor" IS NULL AND "service_currency" IS NULL) OR ("service_price_minor" IS NOT NULL AND "service_currency" IS NOT NULL)')
@@ -42,9 +43,9 @@ export class CareRequest {
   @ManyToOne(() => Provider, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'assigned_provider_id' }) assignedProvider!: Provider | null;
   @Column({ name: 'assigned_provider_care_service_id', type: 'uuid', nullable: true }) assignedProviderCareServiceId!: string | null;
   @ManyToOne(() => ProviderCareService, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'assigned_provider_care_service_id' }) assignedProviderCareService!: ProviderCareService | null;
-  @Column({ name: 'country_code', type: 'char', length: 2 }) countryCode!: string;
-  @Column({ name: 'state_or_region', type: 'varchar', length: 120 }) stateOrRegion!: string;
-  @Column({ type: 'varchar', length: 120 }) city!: string;
+  @Column({ name: 'country_code', type: 'char', length: 2, nullable: true }) countryCode!: string | null;
+  @Column({ name: 'state_or_region', type: 'varchar', length: 120, nullable: true }) stateOrRegion!: string | null;
+  @Column({ type: 'varchar', length: 120, nullable: true }) city!: string | null;
   @Column({ name: 'delivery_mode', type: 'enum', enum: CareDeliveryMode, enumName: 'general_care_delivery_mode_enum', default: CareDeliveryMode.IN_PERSON }) deliveryMode!: CareDeliveryMode;
   @Column({ name: 'service_price_minor', type: 'bigint', nullable: true }) servicePriceMinor!: string | null;
   @Column({ name: 'service_currency', type: 'char', length: 3, nullable: true }) serviceCurrency!: string | null;

@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { CareRequestsService } from './care-requests.service';
 import { CareRequest } from './entities/care-request.entity';
 import { CareRequestStatusHistory } from './entities/care-request-status-history.entity';
@@ -44,6 +44,22 @@ describe('CareRequestsService', () => {
   it.each([CareDeliveryMode.IN_PERSON, CareDeliveryMode.VIRTUAL, CareDeliveryMode.HOME_VISIT])('persists requested %s mode without a preferred provider', async (deliveryMode) => {
     await subject.create(user, { ...dto, deliveryMode });
     expect(rows[0].deliveryMode).toBe(deliveryMode);
+  });
+
+  it('creates a VIRTUAL request without geography and serializes geography as null', async () => {
+    const result: any = await subject.create(user, { serviceCode: definition.code, deliveryMode: CareDeliveryMode.VIRTUAL, contactMethod: CareRequestContactMethod.WHATSAPP });
+    expect(rows[0]).toMatchObject({ deliveryMode: CareDeliveryMode.VIRTUAL, countryCode: null, stateOrRegion: null, city: null }); expect(result.geography).toBeNull();
+  });
+
+  it.each([CareDeliveryMode.IN_PERSON, CareDeliveryMode.HOME_VISIT])('rejects %s request creation without complete geography', async (deliveryMode) => {
+    await expect(subject.create(user, { serviceCode: definition.code, deliveryMode, contactMethod: CareRequestContactMethod.WHATSAPP })).rejects.toBeInstanceOf(BadRequestException); expect(rows).toHaveLength(0);
+  });
+
+  it('authorizes a geography-free preferred provider specifically for VIRTUAL delivery', async () => {
+    eligibility.requireEligible.mockResolvedValue({ id: 'virtual-offering', providerId: provider.id, provider, selectedDeliveryOption: { deliveryMode: CareDeliveryMode.VIRTUAL, priceMinor: '1000000', currency: 'NGN' } });
+    await subject.create(user, { serviceCode: definition.code, deliveryMode: CareDeliveryMode.VIRTUAL, preferredProviderReference: provider.providerReference, contactMethod: CareRequestContactMethod.WHATSAPP });
+    expect(eligibility.requireEligible).toHaveBeenCalledWith(expect.objectContaining({ providerReference: provider.providerReference, deliveryMode: CareDeliveryMode.VIRTUAL, countryCode: null, stateOrRegion: null, city: null }), manager);
+    expect(rows[0]).toMatchObject({ preferredProviderCareServiceId: 'virtual-offering', servicePriceMinor: '1000000' });
   });
 
   it('routes an eligible preferred provider and exact offering for response', async () => {

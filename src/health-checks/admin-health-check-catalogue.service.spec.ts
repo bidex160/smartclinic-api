@@ -18,7 +18,7 @@ describe('AdminHealthCheckCatalogueService', () => {
   let packages: any, contents: any, compositions: any, addons: any, providerAddons: any, history: any, manager: any, subject: AdminHealthCheckCatalogueService;
   const lockBuilder = (row: any) => { const builder: any = { where: jest.fn().mockReturnThis(), setLock: jest.fn().mockReturnThis(), getOne: jest.fn().mockResolvedValue(row), innerJoinAndSelect: jest.fn().mockReturnThis(), getMany: jest.fn() }; return builder; };
   beforeEach(() => {
-    Object.assign(pkg, { name: 'Essential', description: null, benefits: [], estimatedDurationMinutes: 30, isActive: true, contents: [], addonAvailability: [] });
+    Object.assign(pkg, { code: 'ESSENTIAL', name: 'Essential', description: null, benefits: [], estimatedDurationMinutes: 30, isActive: true, contents: [], addonAvailability: [] });
     packages = repository(); contents = repository(); compositions = repository(); addons = repository(); providerAddons = repository(); history = repository();
     packages.createQueryBuilder.mockImplementation(() => lockBuilder(pkg)); contents.createQueryBuilder.mockImplementation(() => lockBuilder(content()));
     packages.findOne.mockImplementation(async () => pkg); contents.findOne.mockImplementation(async () => content()); providerAddons.count.mockResolvedValue(0);
@@ -31,6 +31,27 @@ describe('AdminHealthCheckCatalogueService', () => {
     packages.find.mockResolvedValue([{ ...pkg, isActive: false, contents: [{}, {}], addonAvailability: [{}] }]);
     await expect(subject.listPackages()).resolves.toMatchObject([{ code: 'ESSENTIAL', isActive: false, includedContentCount: 2, optionalAddonCount: 1 }]);
     expect(packages.find).toHaveBeenCalledWith(expect.not.objectContaining({ where: expect.anything() }));
+  });
+
+  it('creates a normalized inactive package, persists metadata, and writes catalogue history', async () => {
+    const created = { ...pkg, id: 'executive-id', code: 'EXECUTIVE', name: 'Executive Health', description: 'Expanded screening', benefits: ['Priority review'], estimatedDurationMinutes: 45, isActive: false, contents: [], addonAvailability: [] };
+    packages.findOne.mockResolvedValue(created);
+    await expect(subject.createPackage({ code: ' executive ', name: ' Executive Health ', description: ' Expanded screening ', benefits: [' Priority review ', '  '], estimatedDurationMinutes: 45 }, actor)).resolves.toMatchObject({ code: 'EXECUTIVE', name: 'Executive Health', isActive: false, includedContents: [], optionalAddons: [] });
+    expect(packages.save).toHaveBeenCalledWith(expect.objectContaining({ code: 'EXECUTIVE', name: 'Executive Health', description: 'Expanded screening', benefits: ['Priority review'], estimatedDurationMinutes: 45, isActive: false }));
+    expect(history.save).toHaveBeenCalledWith(expect.objectContaining({ operation: 'PACKAGE_CREATED', actorUserId: actor, healthCheckPackageId: expect.any(String), previousState: null, resultingState: expect.objectContaining({ code: 'EXECUTIVE', isActive: false }) }));
+  });
+
+  it('rejects duplicate package codes before persistence', async () => {
+    packages.exists.mockResolvedValue(true);
+    await expect(subject.createPackage({ code: 'EXECUTIVE', name: 'Executive', benefits: [] }, actor)).rejects.toBeInstanceOf(ConflictException);
+    expect(packages.save).not.toHaveBeenCalled();
+  });
+
+  it('lists, activates, and composes a newly-created package through existing operations', async () => {
+    Object.assign(pkg, { code: 'EXECUTIVE', isActive: false }); packages.find.mockResolvedValue([pkg]);
+    await expect(subject.listPackages()).resolves.toEqual([expect.objectContaining({ code: 'EXECUTIVE', isActive: false })]);
+    await subject.setPackageActive('executive', true, actor); expect(packages.save).toHaveBeenCalledWith(expect.objectContaining({ code: 'EXECUTIVE', isActive: true }));
+    await subject.addIncludedContent('executive', { clinicalContentReference: content().reference }, actor); expect(compositions.save).toHaveBeenCalledWith(expect.objectContaining({ healthCheckPackageId: pkg.id, isActive: true }));
   });
 
   it('returns deterministic package composition and canonical/add-on states', async () => {

@@ -31,7 +31,7 @@ describe('Care Request API authorization (e2e)', () => {
   });
 
   it('accepts authoritative care delivery modes and rejects unknown modes', async () => {
-    await request(app.getHttpServer()).post('/api/v1/me/care-requests').set('Authorization', 'Bearer user').send({ ...requestBody, deliveryMode: CareDeliveryMode.VIRTUAL }).expect(201);
+    await request(app.getHttpServer()).post('/api/v1/me/care-requests').set('Authorization', 'Bearer user').send({ serviceCode: requestBody.serviceCode, contactMethod: requestBody.contactMethod, deliveryMode: CareDeliveryMode.VIRTUAL }).expect(201);
     expect(service.create).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-user' }), expect.objectContaining({ deliveryMode: CareDeliveryMode.VIRTUAL }));
     await request(app.getHttpServer()).post('/api/v1/me/care-requests').set('Authorization', 'Bearer user').send({ ...requestBody, deliveryMode: 'REMOTE' }).expect(400);
   });

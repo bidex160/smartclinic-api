@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import { CareServiceDefinition } from './entities/care-service-definition.entity';
@@ -6,6 +6,7 @@ import { Provider } from './entities/provider.entity';
 import { FindCareQueryDto } from './dto/care-service.dto';
 import { ProviderStatus } from './enums/provider-status.enum';
 import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
+import { CareDeliveryMode } from './enums/care-delivery-mode.enum';
 
 @Injectable()
 export class FindCareService {
@@ -28,12 +29,13 @@ export class FindCareService {
   }
 
   async providersList(query: FindCareQueryDto) {
+    if ([CareDeliveryMode.IN_PERSON, CareDeliveryMode.HOME_VISIT].includes(query.deliveryMode!) && (!query.countryCode || !query.stateOrRegion || !query.city)) throw new BadRequestException('countryCode, stateOrRegion, and city are required for physical care discovery');
     const builder = this.publicBuilder();
     if (query.q) builder.andWhere(new Brackets((where) => where.where('provider.displayName ILIKE :search', { search: `%${query.q}%` }).orWhere('definition.name ILIKE :search', { search: `%${query.q}%` })));
     if (query.serviceCode) builder.andWhere('definition.code = :serviceCode', { serviceCode: query.serviceCode });
     if (query.providerType) builder.andWhere('provider.providerType = :providerType', { providerType: query.providerType });
     if (query.deliveryMode) builder.andWhere('EXISTS (SELECT 1 FROM provider_care_service_delivery_options filtered_option WHERE filtered_option.provider_care_service_id = careService.id AND filtered_option.delivery_mode = :deliveryMode)', { deliveryMode: query.deliveryMode });
-    this.applyPlace(builder, query);
+    if (query.deliveryMode !== CareDeliveryMode.VIRTUAL) this.applyPlace(builder, query);
     builder.orderBy('provider.displayName', 'ASC').addOrderBy('provider.providerReference', 'ASC').skip((query.page - 1) * query.limit).take(query.limit);
     const [providers, total] = await builder.getManyAndCount();
     return { items: providers.map((provider) => this.mapProvider(provider)), page: query.page, limit: query.limit, total, totalPages: total ? Math.ceil(total / query.limit) : 0 };

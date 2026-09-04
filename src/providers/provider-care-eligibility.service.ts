@@ -14,9 +14,9 @@ export type EligibleProviderCareService = ProviderCareService & { selectedDelive
 
 export type ProviderCareEligibilityInput = {
   careServiceDefinitionId: string;
-  countryCode: string;
-  stateOrRegion: string;
-  city: string;
+  countryCode: string | null;
+  stateOrRegion: string | null;
+  city: string | null;
   providerReference?: string;
   providerId?: string;
   deliveryMode: CareDeliveryMode;
@@ -45,6 +45,8 @@ export class ProviderCareEligibilityService {
       manager.getRepository(CareServiceDefinition).findOne({ where: { id: service.careServiceDefinitionId }, lock: { mode: 'pessimistic_read' } }),
     ]);
     if (!provider || provider.deletedAt || provider.status !== ProviderStatus.ACTIVE || provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED || !definition?.isActive) return this.ineligible();
+    if (input.deliveryMode === CareDeliveryMode.VIRTUAL) { service.provider = provider; service.definition = definition; return Object.assign(service, { selectedDeliveryOption }); }
+    if (!input.countryCode || !input.stateOrRegion || !input.city) return this.ineligible();
     const profileMatches = provider.countryCode === input.countryCode && provider.stateOrRegion?.toLocaleLowerCase() === input.stateOrRegion.toLocaleLowerCase() && provider.city?.toLocaleLowerCase() === input.city.toLocaleLowerCase();
     const locationMatches = profileMatches ? true : await manager.getRepository(ProviderLocation).createQueryBuilder('location').where('location.providerId = :providerId', { providerId: provider.id }).andWhere('location.isActive = true').andWhere('location.countryCode = :country', { country: input.countryCode }).andWhere('LOWER(location.state) = LOWER(:state)', { state: input.stateOrRegion }).andWhere('LOWER(location.city) = LOWER(:city)', { city: input.city }).getExists();
     if (!locationMatches) return this.ineligible();

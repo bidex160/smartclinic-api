@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { FindCareService } from './find-care.service';
 import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 import { ProviderStatus } from './enums/provider-status.enum';
@@ -29,12 +29,15 @@ describe('FindCareService', () => {
     expect(result.items).toHaveLength(1);
   });
 
-  it('applies service, provider type, and authoritative location filters', async () => {
+  it('applies service, provider type, and authoritative location filters for physical care', async () => {
     const builder = qb(); const service = new FindCareService({ createQueryBuilder: jest.fn().mockReturnValue(builder) } as any, {} as any);
-    await service.providersList({ serviceCode: 'GENERAL_CONSULTATION', providerType: 'CLINIC' as any, deliveryMode: CareDeliveryMode.VIRTUAL, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', page: 1, limit: 20 });
+    await service.providersList({ serviceCode: 'GENERAL_CONSULTATION', providerType: 'CLINIC' as any, deliveryMode: CareDeliveryMode.IN_PERSON, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', page: 1, limit: 20 });
     const sql = builder.andWhere.mock.calls.map((call: any[]) => call[0]).filter((v: unknown) => typeof v === 'string').join(' ');
     expect(sql).toContain('definition.code = :serviceCode'); expect(sql).toContain('provider.providerType = :providerType'); expect(sql).toContain('provider_care_service_delivery_options'); expect(sql).toContain('filtered_option.delivery_mode'); expect(sql).toContain('location.countryCode'); expect(sql).toContain('location.state'); expect(sql).toContain('location.city');
   });
+  it('discovers VIRTUAL offerings without geography predicates', async () => { const builder = qb(); const service = new FindCareService({ createQueryBuilder: jest.fn().mockReturnValue(builder) } as any, {} as any); await service.providersList({ serviceCode: 'GENERAL_CONSULTATION', deliveryMode: CareDeliveryMode.VIRTUAL, page: 1, limit: 50 }); const sql = builder.andWhere.mock.calls.map((call: any[]) => call[0]).filter((value: unknown) => typeof value === 'string').join(' '); expect(sql).toContain('provider_care_service_delivery_options'); expect(sql).toContain('definition.code = :serviceCode'); expect(sql).not.toMatch(/location\.countryCode|location\.state|location\.city|provider\.countryCode|provider\.stateOrRegion|provider\.city/); });
+  it.each([CareDeliveryMode.IN_PERSON, CareDeliveryMode.HOME_VISIT])('rejects %s discovery without complete geography', async (deliveryMode) => { const service = new FindCareService({ createQueryBuilder: jest.fn() } as any, {} as any); await expect(service.providersList({ serviceCode: 'GENERAL_CONSULTATION', deliveryMode, page: 1, limit: 20 })).rejects.toBeInstanceOf(BadRequestException); });
+  it('preserves mode-omitted browse behavior and applies only geography explicitly supplied', async () => { const builder = qb(); const service = new FindCareService({ createQueryBuilder: jest.fn().mockReturnValue(builder) } as any, {} as any); await service.providersList({ serviceCode: 'GENERAL_CONSULTATION', page: 1, limit: 20 }); expect(builder.andWhere).not.toHaveBeenCalledWith(expect.stringContaining('filtered_option'), expect.anything()); });
   it('accepts HOSPITAL as the existing provider-type filter without special discovery behavior', async () => { const builder = qb(); const service = new FindCareService({ createQueryBuilder: jest.fn().mockReturnValue(builder) } as any, {} as any); await service.providersList({ providerType: 'HOSPITAL' as any, page: 1, limit: 20 }); expect(builder.andWhere).toHaveBeenCalledWith('provider.providerType = :providerType', { providerType: 'HOSPITAL' }); });
   it('serializes HOSPITAL through the existing safe public projection', async () => { const hospital = provider(); hospital.providerType = 'HOSPITAL'; const result = await new FindCareService({ createQueryBuilder: jest.fn().mockReturnValue(qb([hospital])) } as any, {} as any).providerDetail(hospital.providerReference); expect(result.providerType).toBe('HOSPITAL'); expect(result).not.toHaveProperty('email'); expect(result).not.toHaveProperty('phone'); });
 
