@@ -5,7 +5,7 @@ import { ClinicalRecordAccessScope } from '../enums/clinical-record-access-scope
 @Index('UQ_clinical_record_access_grants_reference', ['reference'], { unique: true })
 @Index('IDX_clinical_record_access_grants_patient', ['patientId', 'createdAt'])
 @Index('IDX_clinical_record_access_grants_provider_active', ['granteeProviderId', 'revokedAt', 'expiresAt'])
-@Check('CHK_clinical_record_access_grants_scope', `("scope" = 'ALL_RECORDS' AND "record_type" IS NULL AND "clinical_record_id" IS NULL) OR ("scope" = 'RECORD_TYPE' AND "record_type" IS NOT NULL AND "clinical_record_id" IS NULL) OR ("scope" = 'SINGLE_RECORD' AND "record_type" IS NULL AND "clinical_record_id" IS NOT NULL)`)
+@Check('CHK_clinical_record_access_grants_scope', `("scope" IN ('HEALTH_PASSPORT','ALL_RECORDS') AND "record_type" IS NULL AND "clinical_record_id" IS NULL) OR ("scope" = 'RECORD_TYPE' AND "record_type" IS NOT NULL AND "clinical_record_id" IS NULL) OR ("scope" = 'SINGLE_RECORD' AND "record_type" IS NULL AND "clinical_record_id" IS NOT NULL)`)
 @Check('CHK_clinical_record_access_grants_expiry', '"expires_at" IS NULL OR "expires_at" > "granted_at"')
 export class ClinicalRecordAccessGrant {
  @PrimaryGeneratedColumn('uuid') id!: string; @Column({ type: 'varchar', length: 32 }) reference!: string;

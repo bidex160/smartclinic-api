@@ -40,5 +40,6 @@ import { User } from 'src/users/entities/user.entity';
   ],
   controllers: [HealthPassportController],
   providers: [HealthPassportService],
+  exports: [HealthPassportService],
 })
 export class HealthPassportModule {}

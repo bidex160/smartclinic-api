@@ -8,7 +8,7 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
-import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
@@ -24,6 +24,7 @@ import {
 import { ClinicalRecordAccessRequestParamsDto, CreateClinicalRecordAccessRequestDto } from "./dto/clinical-record-access-request.dto";
 import { ClinicalRecordAttachmentParamsDto } from "./dto/clinical-record-attachment.dto";
 import { ClinicalRecordReferenceParamsDto } from "./dto/clinical-record.dto";
+import { SharedHealthPassportParamsDto, ShareableHealthPassportResponseDto } from "../health-passport/dto/shareable-health-passport.dto";
 @ApiTags("My Clinical Record Access")
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -129,5 +130,19 @@ export class ProviderClinicalRecordAccessRequestsController {
   }
   @Get() list(@Req() req: { user: User }, @Query() query: ClinicalAccessListQueryDto) {
     return this.access.listProviderRequests(req.user, query);
+  }
+}
+
+@ApiTags("Provider Shared Health Passports")
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.PROVIDER)
+@Controller("provider/shared-health-passports")
+export class ProviderSharedHealthPassportsController {
+  constructor(private readonly access: ClinicalRecordAccessService) {}
+  @Get(":patientReference")
+  @ApiOkResponse({ type: ShareableHealthPassportResponseDto })
+  get(@Req() req: { user: User }, @Param() params: SharedHealthPassportParamsDto) {
+    return this.access.getSharedHealthPassport(req.user, params.patientReference);
   }
 }

@@ -75,4 +75,27 @@ describe('HealthPassportService', () => {
     expect(JSON.stringify(event)).not.toContain('GREEN');
     expect(JSON.stringify(event)).not.toContain('warning sign');
   });
+
+  it('builds a restricted shareable projection from completed patient-visible Passport sources', async () => {
+    patients.findOne.mockResolvedValue({ id: 'patient-id', patientReference: 'SCP-AB12-CD34', givenName: 'Ada', familyName: 'Okafor', dateOfBirth: '1990-01-01', status: 'ACTIVE', deletedAt: null, email: 'private@example.test' });
+    (service as any).selfChecks.countBy.mockResolvedValue(1);
+    jest.spyOn(service as never, 'selfCheckEvents' as never).mockResolvedValue([{ sourceDomain: 'GUIDED_SELF_CHECK', sourceReference: 'SC-GSC-1', provenance: HealthPassportProvenance.REPORTED_BY_YOU }] as never);
+    jest.spyOn(service as never, 'shareableHealthChecks' as never).mockResolvedValue([] as never);
+    jest.spyOn(service as never, 'reportedHistory' as never).mockResolvedValue([{ key: 'allergy_details', provenance: HealthPassportProvenance.REPORTED_BY_YOU }] as never);
+    jest.spyOn(service as never, 'reportedMeasurements' as never).mockResolvedValue([{ type: 'BLOOD_PRESSURE', provenance: HealthPassportProvenance.REPORTED_BY_YOU }] as never);
+    jest.spyOn(service as never, 'shareableClinicalRecords' as never).mockResolvedValue([{ reference: 'SC-CLR-1' }] as never);
+    const result = await service.shareableForProvider('patient-id', false);
+    expect(result).toMatchObject({ authorization: { includesHealthPassport: true, includesFinalizedClinicalRecords: false }, guidedSelfChecks: [expect.objectContaining({ provenance: 'REPORTED_BY_YOU' })] });
+    expect(result.clinicalRecords).toEqual([]);
+    expect(JSON.stringify(result)).not.toContain('internal-patient'); expect(JSON.stringify(result)).not.toContain('private@example.test'); expect(JSON.stringify(result)).not.toContain('prompt'); expect(JSON.stringify(result)).not.toContain('modelResponse');
+  });
+
+  it('projects dynamic completed Health Check snapshot work and structured result shapes without package hardcoding', async () => {
+    const query: any = {}; for (const method of ['innerJoinAndSelect','leftJoinAndSelect','where','andWhere','orderBy','addOrderBy']) query[method]=jest.fn().mockReturnValue(query);
+    query.getMany=jest.fn().mockResolvedValue([{completedAt:new Date('2026-09-05'),provider:{providerReference:'SCPR-PUBLIC',displayName:'Lab Two'},measurements:[{code:'CUSTOM_BP',valueNumeric:'118',valueSecondaryNumeric:'78',unit:'mmHg',recordedAt:new Date('2026-09-05')},{code:'CHOLESTEROL',valueNumeric:'4.2',valueSecondaryNumeric:null,unit:'mmol/L',recordedAt:new Date('2026-09-05')}],booking:{bookingReference:'SC-2026-EXEC',commercialConfigurationSnapshot:{package:{code:'EXECUTIVE',name:'Executive Health Check'},fulfilmentMode:{code:'PROVIDER_LOCATION',name:'Provider location'},includedContents:[{code:'CUSTOM_BP',name:'Custom blood pressure',category:'VITALS',resultType:'BLOOD_PRESSURE',unit:'mmHg'},{code:'COUNSELLING',name:'Counselling',category:'SERVICE',resultType:'NONE',unit:null}],selectedAddons:[{code:'CHOLESTEROL',name:'Cholesterol',category:'LAB',resultType:'SINGLE_NUMERIC',unit:'mmol/L'}]},healthCheckPackage:{code:'CHANGED_LIVE',name:'Changed live'},fulfilmentMode:{code:'HOME_VISIT',name:'Changed live'}}}]);
+    (service as any).encounters.createQueryBuilder.mockReturnValue(query);
+    const [check] = await (service as any).shareableHealthChecks('patient-id');
+    expect(check.package).toEqual({code:'EXECUTIVE',name:'Executive Health Check'});expect(check.results).toEqual(expect.arrayContaining([expect.objectContaining({code:'CUSTOM_BP',value:{systolic:'118',diastolic:'78'},provenance:'CHECKED_BY_PROVIDER'}),expect.objectContaining({code:'CHOLESTEROL',value:{value:'4.2'}})]));expect(check.results).not.toEqual(expect.arrayContaining([expect.objectContaining({code:'COUNSELLING'})]));expect(check.clinicalWork).toEqual(expect.arrayContaining([expect.objectContaining({code:'COUNSELLING',requiresRecordedResult:false})]));
+    expect(query.andWhere).toHaveBeenCalledWith('encounter.status=:completed',expect.any(Object));
+  });
 });

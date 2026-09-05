@@ -11,7 +11,7 @@ import { ClinicalRecordAccessGrant } from './clinical-record-access-grant.entity
 @Index('IDX_clinical_record_access_requests_patient_created', ['patientId', 'createdAt'])
 @Index('IDX_clinical_record_access_requests_provider_created', ['providerId', 'createdAt'])
 @Index('IDX_clinical_record_access_requests_pending', ['patientId', 'providerId', 'status', 'expiresAt'])
-@Check('CHK_clinical_record_access_requests_scope', `("scope" = 'ALL_RECORDS' AND "record_type" IS NULL AND "clinical_record_reference" IS NULL) OR ("scope" = 'RECORD_TYPE' AND "record_type" IS NOT NULL AND "clinical_record_reference" IS NULL) OR ("scope" = 'SINGLE_RECORD' AND "record_type" IS NULL AND "clinical_record_reference" IS NOT NULL)`)
+@Check('CHK_clinical_record_access_requests_scope', `("scope" IN ('HEALTH_PASSPORT','ALL_RECORDS') AND "record_type" IS NULL AND "clinical_record_reference" IS NULL) OR ("scope" = 'RECORD_TYPE' AND "record_type" IS NOT NULL AND "clinical_record_reference" IS NULL) OR ("scope" = 'SINGLE_RECORD' AND "record_type" IS NULL AND "clinical_record_reference" IS NOT NULL)`)
 export class ClinicalRecordAccessRequest {
   @PrimaryGeneratedColumn('uuid') id!: string;
   @Column({ type: 'varchar', length: 32 }) reference!: string;

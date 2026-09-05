@@ -21,6 +21,8 @@ import { GuidedSelfCheckNextActionsService } from '../guided-self-checks/guided-
 import { HealthCheckEncounter } from '../health-checks/entities/health-check-encounter.entity';
 import { HealthCheckMeasurement } from '../health-checks/entities/health-check-measurement.entity';
 import { HealthCheckEncounterStatus } from '../health-checks/enums/health-check-encounter-status.enum';
+import { HealthCheckClinicalResultType } from '../health-checks/enums/health-check-clinical-result-type.enum';
+import { projectHealthCheckEncounterRequirements } from '../health-checks/health-check-encounter-requirements';
 import { Patient } from '../patients/entities/patient.entity';
 import { PatientStatus } from '../patients/enums/patient-status.enum';
 import { HealthPassportTimelineQueryDto } from './dto/health-passport-query.dto';
@@ -119,6 +121,28 @@ export class HealthPassportService {
 
   async timeline(userId: string, query: HealthPassportTimelineQueryDto) {
     return this.timelineForPatient((await this.patient(userId)).id, query);
+  }
+
+  async shareableForProvider(patientId: string, includeClinicalRecords: boolean) {
+    const patient = await this.patients.findOne({ where: { id: patientId, status: PatientStatus.ACTIVE } });
+    if (!patient || patient.deletedAt) throw new NotFoundException('Patient profile not found');
+    const completedSelfCheckCount = await this.selfChecks.countBy({ patientId, workflowStatus: GuidedSelfCheckWorkflowStatus.COMPLETED });
+    const [guidedSelfChecks, healthChecks, reportedHealthHistory, reportedMeasurements, clinicalRecords] = await Promise.all([
+      this.selfCheckEvents(patientId, completedSelfCheckCount || 1),
+      this.shareableHealthChecks(patientId),
+      this.reportedHistory(patientId),
+      this.reportedMeasurements(patientId),
+      includeClinicalRecords ? this.shareableClinicalRecords(patientId) : Promise.resolve([]),
+    ]);
+    return {
+      patient: { patientReference: patient.patientReference, displayName: `${patient.givenName} ${patient.familyName}`.trim(), dateOfBirth: patient.dateOfBirth },
+      authorization: { includesHealthPassport: true, includesFinalizedClinicalRecords: includeClinicalRecords },
+      guidedSelfChecks,
+      reportedHealthHistory,
+      reportedMeasurements,
+      healthChecks,
+      clinicalRecords,
+    };
   }
 
   private async summary(patientId: string) {
@@ -225,6 +249,63 @@ export class HealthPassportService {
   private async recentPrescriptions(patientId: string, take: number) {
     const rows = await this.orders.find({ where: { patientId, status: ClinicalOrderStatus.ISSUED }, relations: { orderingProvider: true, prescription: { items: true } }, order: { issuedAt: 'DESC' }, take });
     return rows.map((x) => ({ orderReference: x.reference, issuedAt: x.issuedAt, context: 'PRESCRIBED', provider: { providerReference: x.orderingProvider.providerReference, displayName: x.orderingProvider.displayName }, medicines: (x.prescription?.items ?? []).sort((a, b) => a.sortOrder - b.sortOrder).map((i) => ({ name: i.medicationName, strength: i.strength, dosage: i.dosage, frequency: i.frequency, duration: i.duration })) }));
+  }
+
+  private async shareableHealthChecks(patientId: string) {
+    const rows = await this.encounters.createQueryBuilder('encounter')
+      .innerJoinAndSelect('encounter.booking', 'booking')
+      .innerJoinAndSelect('booking.healthCheckPackage', 'package')
+      .innerJoinAndSelect('booking.fulfilmentMode', 'mode')
+      .innerJoinAndSelect('encounter.provider', 'provider')
+      .leftJoinAndSelect('encounter.measurements', 'measurement')
+      .where('booking.participantPatientId=:patientId', { patientId })
+      .andWhere('encounter.status=:completed', { completed: HealthCheckEncounterStatus.COMPLETED })
+      .orderBy('encounter.completedAt', 'DESC').addOrderBy('booking.bookingReference', 'DESC').getMany();
+    return rows.map((encounter) => {
+      const snapshot = encounter.booking.commercialConfigurationSnapshot;
+      const snapshotPackage = snapshot?.package as { code?: unknown; name?: unknown } | undefined;
+      const snapshotMode = snapshot?.fulfilmentMode as { code?: unknown; name?: unknown } | undefined;
+      const requirements = projectHealthCheckEncounterRequirements(snapshot);
+      const byCode = new Map((encounter.measurements ?? []).map((measurement) => [measurement.code, measurement]));
+      return {
+        reference: encounter.booking.bookingReference,
+        package: {
+          code: typeof snapshotPackage?.code === 'string' ? snapshotPackage.code : encounter.booking.healthCheckPackage.code,
+          name: typeof snapshotPackage?.name === 'string' ? snapshotPackage.name : encounter.booking.healthCheckPackage.name,
+        },
+        completedAt: encounter.completedAt,
+        provider: { providerReference: encounter.provider.providerReference, displayName: encounter.provider.displayName },
+        fulfilmentMode: {
+          code: typeof snapshotMode?.code === 'string' ? snapshotMode.code : encounter.booking.fulfilmentMode.code,
+          name: typeof snapshotMode?.name === 'string' ? snapshotMode.name : encounter.booking.fulfilmentMode.name,
+        },
+        clinicalWork: requirements,
+        results: requirements.flatMap((requirement) => {
+          if (requirement.resultType === HealthCheckClinicalResultType.NONE) return [];
+          const measurement = byCode.get(requirement.code);
+          if (!measurement) return [];
+          return [{
+            code: requirement.code, name: requirement.name, category: requirement.category, resultType: requirement.resultType,
+            value: requirement.resultType === HealthCheckClinicalResultType.BLOOD_PRESSURE
+              ? { systolic: measurement.valueNumeric, diastolic: measurement.valueSecondaryNumeric }
+              : { value: measurement.valueNumeric },
+            unit: measurement.unit, recordedAt: measurement.recordedAt,
+            provenance: HealthPassportProvenance.CHECKED_BY_PROVIDER,
+            sourceDomain: 'HEALTH_CHECK', sourceReference: encounter.booking.bookingReference,
+          }];
+        }),
+      };
+    });
+  }
+
+  private async shareableClinicalRecords(patientId: string) {
+    const rows = await this.records.find({ where: { patientId, status: ClinicalRecordStatus.FINALIZED }, relations: { provider: true }, order: { occurredAt: 'DESC', reference: 'DESC' } });
+    return rows.map((record) => ({
+      reference: record.reference, recordType: record.recordType, title: record.title, summary: record.summary,
+      occurredAt: record.occurredAt, finalizedAt: record.finalizedAt,
+      provider: { providerReference: record.provider.providerReference, displayName: record.provider.displayName },
+      provenance: HealthPassportProvenance.CHECKED_BY_PROVIDER, sourceDomain: 'CLINICAL_RECORD', sourceReference: record.reference,
+    }));
   }
 
   private async timelineForPatient(patientId: string, query: HealthPassportTimelineQueryDto) {
