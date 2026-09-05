@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   HttpCode,
@@ -15,6 +16,7 @@ import { RolesGuard } from "../auth/roles.guard";
 import { User } from "../users/entities/user.entity";
 import { UserRole } from "../users/enums/user-role.enum";
 import { PaymentFlowService } from "./payment-flow.service";
+import { PaymentContactDto } from './dto/initiate-payment.dto';
 @ApiTags("My Guided Self-Check funding")
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -28,8 +30,9 @@ export class MeGuidedSelfCheckFundingController {
   @Post("initialize") @HttpCode(HttpStatus.OK) initialize(
     @Param("reference") ref: string,
     @Req() r: { user: User },
+    @Body() dto: PaymentContactDto,
   ) {
-    return this.s.initializeGuidedSelfCheckFunding(ref, r.user.id);
+    return this.s.initializeGuidedSelfCheckFunding(ref, r.user.id, dto?.paymentEmail);
   }
   @Post("verify-latest") @HttpCode(HttpStatus.OK) verify(
     @Param("reference") ref: string,

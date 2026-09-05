@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { PaymentFlowService } from '../payments/payment-flow.service';
+import { PaymentContactDto } from '../payments/dto/initiate-payment.dto';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../users/enums/user-role.enum';
 import { CareRequestReferenceParamsDto } from '../care-requests/dto/care-request.dto';
@@ -18,7 +19,7 @@ export class MeFastTrackController {
   @Get('fasttrack-requests') list(@Req() req: { user: User }, @Query() query: FastTrackListQueryDto) { return this.fasttrack.listMine(req.user, query); }
   @Get('fasttrack-requests/:reference') get(@Req() req: { user: User }, @Param() p: FastTrackReferenceParamsDto) { return this.fasttrack.getMine(req.user, p.reference); }
   @Post('fasttrack-requests/:reference/cancel') cancel(@Req() req: { user: User }, @Param() p: FastTrackReferenceParamsDto) { return this.fasttrack.cancelMine(req.user, p.reference); }
-  @Post('fasttrack-requests/:reference/funding/initialize') initialize(@Req() req: { user: User }, @Param() p: FastTrackReferenceParamsDto) { return this.payments.initializeFastTrackPayment(p.reference, req.user.id); }
+  @Post('fasttrack-requests/:reference/funding/initialize') initialize(@Req() req: { user: User }, @Param() p: FastTrackReferenceParamsDto, @Body() dto: PaymentContactDto) { return this.payments.initializeFastTrackPayment(p.reference, req.user.id, dto?.paymentEmail); }
   @Get('fasttrack-requests/:reference/funding') funding(@Req() req: { user: User }, @Param() p: FastTrackReferenceParamsDto) { return this.payments.getFastTrackPaymentStatus(p.reference, req.user.id); }
   @Post('fasttrack-requests/:reference/funding/verify') verify(@Req() req: { user: User }, @Param() p: FastTrackReferenceParamsDto) { return this.payments.verifyFastTrackPayment(p.reference, req.user.id); }
 }

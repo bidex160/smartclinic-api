@@ -29,6 +29,9 @@ export class PatientPortalProfileService {
       if (dto.familyName !== undefined) patient.familyName = dto.familyName;
       const normalizedPhone = dto.phone ? normalizePhoneNumber(dto.phone) : null;
       if (dto.phone && !normalizedPhone) throw new BadRequestException('phone must be a valid phone number');
+      if (dto.phone !== undefined && !normalizedPhone && !user.emailNormalized && !user.email) {
+        throw new BadRequestException('At least one login email or phone number must remain on the account');
+      }
       if (normalizedPhone) {
         const owner = await manager.getRepository(User).findOne({ where: { phoneNormalized: normalizedPhone } });
         if (owner && owner.id !== user.id) throw new BadRequestException('phone number is already associated with another account');
@@ -46,6 +49,6 @@ export class PatientPortalProfileService {
   }
 
   private project(user: User, patient: Patient): PatientPortalProfileDto {
-    return { user: { displayName: user.displayName!, email: user.email! }, patient: { patientReference: patient.patientReference, givenName: patient.givenName, familyName: patient.familyName, phone: patient.phone, dateOfBirth: patient.dateOfBirth } };
+    return { user: { displayName: user.displayName!, email: user.email }, patient: { patientReference: patient.patientReference, givenName: patient.givenName, familyName: patient.familyName, phone: patient.phone, dateOfBirth: patient.dateOfBirth } };
   }
 }

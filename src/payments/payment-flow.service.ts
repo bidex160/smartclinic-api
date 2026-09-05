@@ -460,6 +460,7 @@ export class PaymentFlowService {
     reference: string,
     idempotencyKey: string,
     callbackUrl?: string,
+    paymentEmail?: string,
   ): Promise<PaymentOperationResponseDto> {
     const existing = await this.attempts.findOne({
       where: { idempotencyKey },
@@ -483,12 +484,10 @@ export class PaymentFlowService {
     const funding = await this.requireFunding(reference);
     if (this.toMinor(funding.amount!) === 0n)
       throw new ConflictException("Booking has no external amount remaining");
-    const customerEmail =
-      funding.responsibleUser?.email ?? funding.payerContact?.email;
-    if (!customerEmail || !isEmail(customerEmail))
-      throw new BadRequestException(
-        "A valid payer email is required to initialize payment",
-      );
+    const customerEmail = this.resolvePaymentEmail(
+      funding.responsibleUser?.email ?? funding.payerContact?.email,
+      paymentEmail,
+    );
     const paymentReference = `SC-PAY-${randomBytes(12).toString("hex")}`;
     const initialized = await this.provider.initializePayment({
       amount: funding.amount!,
@@ -512,6 +511,7 @@ export class PaymentFlowService {
           currency: funding.currency,
           status: initialized.status,
           idempotencyKey,
+          customerEmail,
           providerCode: initialized.providerCode,
           providerReference: initialized.providerReference,
           checkoutUrl: initialized.checkoutUrl,
@@ -524,6 +524,7 @@ export class PaymentFlowService {
   async initiatePublicPayment(
     reference: string,
     option: CheckoutFundingOption = CheckoutFundingOption.PAY_NOW,
+    paymentEmail?: string,
   ): Promise<PaymentOperationResponseDto> {
     if (option === CheckoutFundingOption.PAY_LATER)
       throw new BadRequestException(
@@ -548,12 +549,14 @@ export class PaymentFlowService {
       reference,
       `PUBLIC-${randomBytes(16).toString("hex")}`,
       this.callbackUrl(reference, false),
+      paymentEmail,
     );
   }
 
   async initiatePatientPayment(
     reference: string,
     option: CheckoutFundingOption = CheckoutFundingOption.PAY_NOW,
+    paymentEmail?: string,
   ): Promise<PaymentOperationResponseDto> {
     if (option === CheckoutFundingOption.PAY_LATER)
       throw new BadRequestException(
@@ -578,6 +581,7 @@ export class PaymentFlowService {
       reference,
       `PATIENT-${randomBytes(16).toString("hex")}`,
       this.callbackUrl(reference, true),
+      paymentEmail,
     );
   }
 
@@ -654,13 +658,13 @@ export class PaymentFlowService {
   }
 
   async getGuidedSelfCheckFunding(reference:string,userId:string){const s=await this.bookings.manager.getRepository(GuidedSelfCheck).findOne({where:{reference,userId}});if(!s)throw new NotFoundException('Guided Self-Check was not found');const a=await this.attempts.findOne({where:{guidedSelfCheckId:s.id},order:{createdAt:'DESC'}});return this.guidedSelfCheckFundingResponse(s,a);}
-  async initializeGuidedSelfCheckFunding(reference:string,userId:string){const s=await this.bookings.manager.getRepository(GuidedSelfCheck).findOne({where:{reference,userId},relations:{user:true}});if(!s)throw new NotFoundException('Guided Self-Check was not found');if([GuidedSelfCheckFundingStatus.PAID,GuidedSelfCheckFundingStatus.SATISFIED_FREE].includes(s.fundingStatus))return this.guidedSelfCheckFundingResponse(s,null);if(!s.user?.email||!isEmail(s.user.email))throw new BadRequestException('A valid account email is required to initialize payment');const active=await this.attempts.findOne({where:{guidedSelfCheckId:s.id,status:In([PaymentAttemptStatus.CREATED,PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION,PaymentAttemptStatus.PENDING_CONFIRMATION])},order:{createdAt:'DESC'}});if(active)return this.guidedSelfCheckFundingResponse(s,active);const idempotencyKey=`GSC-${randomBytes(16).toString('hex')}`,paymentReference=`SC-PAY-${randomBytes(12).toString('hex')}`;const initialized=await this.provider.initializePayment({amount:this.fromMinor(BigInt(s.effectivePriceMinor)),currency:s.currency,idempotencyKey,bookingReference:s.reference,customerEmail:s.user.email,paymentReference,callbackUrl:this.callbackUrl(s.reference,true)});return this.bookings.manager.transaction(async m=>{const locked=await m.getRepository(GuidedSelfCheck).findOne({where:{id:s.id},lock:{mode:'pessimistic_write'}});if(!locked||![GuidedSelfCheckFundingStatus.UNPAID,GuidedSelfCheckFundingStatus.PAYMENT_PENDING].includes(locked.fundingStatus))throw new ConflictException('Guided Self-Check is no longer payable');const repo=m.getRepository(PaymentAttempt);const raced=await repo.findOne({where:{guidedSelfCheckId:locked.id,status:In([PaymentAttemptStatus.CREATED,PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION,PaymentAttemptStatus.PENDING_CONFIRMATION])}});if(raced)return this.guidedSelfCheckFundingResponse(locked,raced);const attempt=await repo.save(repo.create({bookingFundingId:null,fastTrackRequestId:null,careRequestFundingId:null,patientProviderConnectionFundingId:null,pharmacyFulfillmentFundingId:null,guidedSelfCheckId:locked.id,amount:this.fromMinor(BigInt(locked.effectivePriceMinor)),currency:locked.currency,status:initialized.status,idempotencyKey,providerCode:initialized.providerCode,providerReference:initialized.providerReference,checkoutUrl:initialized.checkoutUrl,accessCode:initialized.accessCode}));locked.fundingStatus=GuidedSelfCheckFundingStatus.PAYMENT_PENDING;await m.save(locked);await m.getRepository(GuidedSelfCheckHistory).save({guidedSelfCheckId:locked.id,event:'PAYMENT_INITIALIZED',actorUserId:userId,metadata:{}});return this.guidedSelfCheckFundingResponse(locked,attempt);});}
+  async initializeGuidedSelfCheckFunding(reference:string,userId:string,paymentEmail?:string){const s=await this.bookings.manager.getRepository(GuidedSelfCheck).findOne({where:{reference,userId},relations:{user:true}});if(!s)throw new NotFoundException('Guided Self-Check was not found');if([GuidedSelfCheckFundingStatus.PAID,GuidedSelfCheckFundingStatus.SATISFIED_FREE].includes(s.fundingStatus))return this.guidedSelfCheckFundingResponse(s,null);const active=await this.attempts.findOne({where:{guidedSelfCheckId:s.id,status:In([PaymentAttemptStatus.CREATED,PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION,PaymentAttemptStatus.PENDING_CONFIRMATION])},order:{createdAt:'DESC'}});if(active)return this.guidedSelfCheckFundingResponse(s,active);const customerEmail=this.resolvePaymentEmail(s.user?.email,paymentEmail);const idempotencyKey=`GSC-${randomBytes(16).toString('hex')}`,paymentReference=`SC-PAY-${randomBytes(12).toString('hex')}`;const initialized=await this.provider.initializePayment({amount:this.fromMinor(BigInt(s.effectivePriceMinor)),currency:s.currency,idempotencyKey,bookingReference:s.reference,customerEmail,paymentReference,callbackUrl:this.callbackUrl(s.reference,true)});return this.bookings.manager.transaction(async m=>{const locked=await m.getRepository(GuidedSelfCheck).findOne({where:{id:s.id},lock:{mode:'pessimistic_write'}});if(!locked||![GuidedSelfCheckFundingStatus.UNPAID,GuidedSelfCheckFundingStatus.PAYMENT_PENDING].includes(locked.fundingStatus))throw new ConflictException('Guided Self-Check is no longer payable');const repo=m.getRepository(PaymentAttempt);const raced=await repo.findOne({where:{guidedSelfCheckId:locked.id,status:In([PaymentAttemptStatus.CREATED,PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION,PaymentAttemptStatus.PENDING_CONFIRMATION])}});if(raced)return this.guidedSelfCheckFundingResponse(locked,raced);const attempt=await repo.save(repo.create({bookingFundingId:null,fastTrackRequestId:null,careRequestFundingId:null,patientProviderConnectionFundingId:null,pharmacyFulfillmentFundingId:null,guidedSelfCheckId:locked.id,amount:this.fromMinor(BigInt(locked.effectivePriceMinor)),currency:locked.currency,status:initialized.status,idempotencyKey,customerEmail,providerCode:initialized.providerCode,providerReference:initialized.providerReference,checkoutUrl:initialized.checkoutUrl,accessCode:initialized.accessCode}));locked.fundingStatus=GuidedSelfCheckFundingStatus.PAYMENT_PENDING;await m.save(locked);await m.getRepository(GuidedSelfCheckHistory).save({guidedSelfCheckId:locked.id,event:'PAYMENT_INITIALIZED',actorUserId:userId,metadata:{}});return this.guidedSelfCheckFundingResponse(locked,attempt);});}
   async verifyLatestGuidedSelfCheckFunding(reference:string,userId:string){const s=await this.bookings.manager.getRepository(GuidedSelfCheck).findOne({where:{reference,userId}});if(!s)throw new NotFoundException('Guided Self-Check was not found');if([GuidedSelfCheckFundingStatus.PAID,GuidedSelfCheckFundingStatus.SATISFIED_FREE].includes(s.fundingStatus))return this.guidedSelfCheckFundingResponse(s,null);const a=await this.attempts.findOne({where:{guidedSelfCheckId:s.id},order:{createdAt:'DESC'}});if(!a?.providerReference)throw new ConflictException('No Guided Self-Check payment attempt is available to verify');if(a.status!==PaymentAttemptStatus.SUCCEEDED){await this.claimVerification(a.id);await this.applyGuidedSelfCheckVerification(a.id,userId,await this.provider.verifyPayment(a.providerReference));}return this.getGuidedSelfCheckFunding(reference,userId);}
   private async applyGuidedSelfCheckVerification(attemptId:string,actor:string|null,verified:VerifyPaymentResult){return this.bookings.manager.transaction(async m=>{const a=await m.getRepository(PaymentAttempt).findOne({where:{id:attemptId},lock:{mode:'pessimistic_write'}});if(!a?.guidedSelfCheckId)throw new NotFoundException('Guided Self-Check payment attempt was not found');const s=await m.getRepository(GuidedSelfCheck).findOne({where:{id:a.guidedSelfCheckId},lock:{mode:'pessimistic_write'}});if(!s)throw new NotFoundException('Guided Self-Check was not found');if(a.status===PaymentAttemptStatus.SUCCEEDED&&s.fundingStatus===GuidedSelfCheckFundingStatus.PAID)return this.guidedSelfCheckFundingResponse(s,a);const expected=this.fromMinor(BigInt(s.effectivePriceMinor));if(!verified.succeeded||verified.providerReference!==a.providerReference||verified.amount!==a.amount||verified.currency!==a.currency||a.amount!==expected||a.currency!==s.currency){a.status=verified.succeeded?PaymentAttemptStatus.FAILED:verified.status;a.lastVerifiedAt=new Date();await m.save(a);return this.guidedSelfCheckFundingResponse(s,a);}a.status=PaymentAttemptStatus.SUCCEEDED;a.lastVerifiedAt=new Date();await m.save(a);let tx=await m.getRepository(PaymentTransaction).findOne({where:{paymentAttemptId:a.id,status:PaymentTransactionStatus.SUCCEEDED}});if(!tx)tx=await m.getRepository(PaymentTransaction).save({paymentAttemptId:a.id,parentTransactionId:null,transactionType:PaymentTransactionType.COLLECTION,status:PaymentTransactionStatus.SUCCEEDED,amount:a.amount,currency:a.currency,providerReference:a.providerReference,occurredAt:verified.occurredAt});s.fundingStatus=GuidedSelfCheckFundingStatus.PAID;s.paidAt=verified.occurredAt;await m.save(s);if(!await m.getRepository(GuidedSelfCheckHistory).exists({where:{guidedSelfCheckId:s.id,event:'PAYMENT_SUCCEEDED'}}))await m.getRepository(GuidedSelfCheckHistory).save({guidedSelfCheckId:s.id,event:'PAYMENT_SUCCEEDED',actorUserId:actor,metadata:{transactionId:tx.id}});return this.guidedSelfCheckFundingResponse(s,a);});}
   private guidedSelfCheckFundingResponse(s:GuidedSelfCheck,a:PaymentAttempt|null){return{reference:s.reference,amountMinor:Number(s.effectivePriceMinor),currency:s.currency,fundingStatus:s.fundingStatus,paid:[GuidedSelfCheckFundingStatus.PAID,GuidedSelfCheckFundingStatus.SATISFIED_FREE].includes(s.fundingStatus),attemptStatus:a?.status??null,checkoutUrl:a?.checkoutUrl??null,accessCode:a?.accessCode??null};}
 
   async getPharmacyFunding(quoteReference:string,userId:string){const q=await this.bookings.manager.getRepository(PharmacyQuote).createQueryBuilder('q').innerJoin('q.fulfillment','f').innerJoin('f.patient','patient').where('q.reference=:quoteReference',{quoteReference}).andWhere('patient.userId=:userId',{userId}).getOne();if(!q)throw new NotFoundException('Pharmacy quote was not found');const funding=await this.bookings.manager.getRepository(PharmacyFulfillmentFunding).findOne({where:{quoteId:q.id}});if(!funding)throw new ConflictException('Pharmacy quote has not been accepted');const attempt=await this.attempts.findOne({where:{pharmacyFulfillmentFundingId:funding.id},order:{createdAt:'DESC'}});return this.pharmacyFundingResponse(q,funding,attempt);}
-  async initializePharmacyFunding(quoteReference:string,userId:string){if(!this.commissions)throw new ConflictException('Provider commission is not available');const prepared=await this.bookings.manager.transaction(async m=>{const q=await m.getRepository(PharmacyQuote).findOne({where:{reference:quoteReference},lock:{mode:'pessimistic_read'}});if(!q)throw new NotFoundException('Pharmacy quote was not found');const funding=await m.getRepository(PharmacyFulfillmentFunding).findOne({where:{quoteId:q.id},lock:{mode:'pessimistic_write'}});if(!funding)throw new ConflictException('Pharmacy quote has not been accepted');const f=await m.getRepository(ClinicalOrderFulfillment).findOneByOrFail({id:funding.fulfillmentId});const patient=await m.getRepository(Patient).findOne({where:{id:f.patientId,userId},relations:{user:true}});if(!patient)throw new NotFoundException('Pharmacy quote was not found');if(funding.status===PharmacyFundingStatus.SATISFIED_FREE||funding.status===PharmacyFundingStatus.PAID)return{q,funding,email:null};if(funding.status!==PharmacyFundingStatus.PENDING)throw new ConflictException('Pharmacy funding is not payable');await this.commissions!.requireForProvider(funding.providerId,m);if(!patient.user?.email||!isEmail(patient.user.email))throw new BadRequestException('A valid account email is required to initialize payment');return{q,funding,email:patient.user.email};});if(!prepared.email)return this.pharmacyFundingResponse(prepared.q,prepared.funding,null);const active=await this.attempts.findOne({where:{pharmacyFulfillmentFundingId:prepared.funding.id,status:In([PaymentAttemptStatus.CREATED,PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION,PaymentAttemptStatus.PENDING_CONFIRMATION])},order:{createdAt:'DESC'}});if(active)return this.pharmacyFundingResponse(prepared.q,prepared.funding,active);const idempotencyKey=`PHARMACY-${randomBytes(16).toString('hex')}`,paymentReference=`SC-PAY-${randomBytes(12).toString('hex')}`;const initialized=await this.provider.initializePayment({amount:this.fromMinor(BigInt(prepared.funding.grossAmountMinor)),currency:prepared.funding.currency,idempotencyKey,bookingReference:quoteReference,customerEmail:prepared.email,paymentReference,callbackUrl:this.callbackUrl(quoteReference,true)});return this.bookings.manager.transaction(async m=>{const funding=await m.getRepository(PharmacyFulfillmentFunding).findOne({where:{id:prepared.funding.id},lock:{mode:'pessimistic_write'}});if(!funding||funding.status!==PharmacyFundingStatus.PENDING)throw new ConflictException('Pharmacy funding is no longer payable');const repo=m.getRepository(PaymentAttempt);const raced=await repo.findOne({where:{pharmacyFulfillmentFundingId:funding.id,status:In([PaymentAttemptStatus.CREATED,PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION,PaymentAttemptStatus.PENDING_CONFIRMATION])}});if(raced)return this.pharmacyFundingResponse(prepared.q,funding,raced);const attempt=await repo.save(repo.create({bookingFundingId:null,fastTrackRequestId:null,careRequestFundingId:null,patientProviderConnectionFundingId:null,pharmacyFulfillmentFundingId:funding.id,amount:this.fromMinor(BigInt(funding.grossAmountMinor)),currency:funding.currency,status:initialized.status,idempotencyKey,providerCode:initialized.providerCode,providerReference:initialized.providerReference,checkoutUrl:initialized.checkoutUrl,accessCode:initialized.accessCode}));return this.pharmacyFundingResponse(prepared.q,funding,attempt);});}
+  async initializePharmacyFunding(quoteReference:string,userId:string,paymentEmail?:string){if(!this.commissions)throw new ConflictException('Provider commission is not available');const prepared=await this.bookings.manager.transaction(async m=>{const q=await m.getRepository(PharmacyQuote).findOne({where:{reference:quoteReference},lock:{mode:'pessimistic_read'}});if(!q)throw new NotFoundException('Pharmacy quote was not found');const funding=await m.getRepository(PharmacyFulfillmentFunding).findOne({where:{quoteId:q.id},lock:{mode:'pessimistic_write'}});if(!funding)throw new ConflictException('Pharmacy quote has not been accepted');const f=await m.getRepository(ClinicalOrderFulfillment).findOneByOrFail({id:funding.fulfillmentId});const patient=await m.getRepository(Patient).findOne({where:{id:f.patientId,userId},relations:{user:true}});if(!patient)throw new NotFoundException('Pharmacy quote was not found');if(funding.status===PharmacyFundingStatus.SATISFIED_FREE||funding.status===PharmacyFundingStatus.PAID)return{q,funding,email:null,skipPayment:true};if(funding.status!==PharmacyFundingStatus.PENDING)throw new ConflictException('Pharmacy funding is not payable');await this.commissions!.requireForProvider(funding.providerId,m);return{q,funding,email:patient.user?.email??null,skipPayment:false};});if(prepared.skipPayment)return this.pharmacyFundingResponse(prepared.q,prepared.funding,null);const active=await this.attempts.findOne({where:{pharmacyFulfillmentFundingId:prepared.funding.id,status:In([PaymentAttemptStatus.CREATED,PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION,PaymentAttemptStatus.PENDING_CONFIRMATION])},order:{createdAt:'DESC'}});if(active)return this.pharmacyFundingResponse(prepared.q,prepared.funding,active);const customerEmail=this.resolvePaymentEmail(prepared.email,paymentEmail);const idempotencyKey=`PHARMACY-${randomBytes(16).toString('hex')}`,paymentReference=`SC-PAY-${randomBytes(12).toString('hex')}`;const initialized=await this.provider.initializePayment({amount:this.fromMinor(BigInt(prepared.funding.grossAmountMinor)),currency:prepared.funding.currency,idempotencyKey,bookingReference:quoteReference,customerEmail,paymentReference,callbackUrl:this.callbackUrl(quoteReference,true)});return this.bookings.manager.transaction(async m=>{const funding=await m.getRepository(PharmacyFulfillmentFunding).findOne({where:{id:prepared.funding.id},lock:{mode:'pessimistic_write'}});if(!funding||funding.status!==PharmacyFundingStatus.PENDING)throw new ConflictException('Pharmacy funding is no longer payable');const repo=m.getRepository(PaymentAttempt);const raced=await repo.findOne({where:{pharmacyFulfillmentFundingId:funding.id,status:In([PaymentAttemptStatus.CREATED,PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION,PaymentAttemptStatus.PENDING_CONFIRMATION])}});if(raced)return this.pharmacyFundingResponse(prepared.q,funding,raced);const attempt=await repo.save(repo.create({bookingFundingId:null,fastTrackRequestId:null,careRequestFundingId:null,patientProviderConnectionFundingId:null,pharmacyFulfillmentFundingId:funding.id,amount:this.fromMinor(BigInt(funding.grossAmountMinor)),currency:funding.currency,status:initialized.status,idempotencyKey,customerEmail,providerCode:initialized.providerCode,providerReference:initialized.providerReference,checkoutUrl:initialized.checkoutUrl,accessCode:initialized.accessCode}));return this.pharmacyFundingResponse(prepared.q,funding,attempt);});}
   async verifyLatestPharmacyFunding(ref:string,userId:string){const status=await this.getPharmacyFunding(ref,userId);if(status.fundingStatus!==PharmacyFundingStatus.PENDING)return status;const q=await this.bookings.manager.getRepository(PharmacyQuote).findOneByOrFail({reference:ref});const f=await this.bookings.manager.getRepository(PharmacyFulfillmentFunding).findOneByOrFail({quoteId:q.id});const attempt=await this.attempts.findOne({where:{pharmacyFulfillmentFundingId:f.id},order:{createdAt:'DESC'}});if(!attempt?.providerReference)throw new ConflictException('No pharmacy payment attempt is available to verify');if(attempt.status!==PaymentAttemptStatus.SUCCEEDED){await this.claimVerification(attempt.id);await this.applyPharmacyVerification(attempt.id,userId,await this.provider.verifyPayment(attempt.providerReference));}return this.getPharmacyFunding(ref,userId);}
   private async applyPharmacyVerification(attemptId:string,actor:string|null,verified:VerifyPaymentResult){if(!this.earnings)throw new ConflictException('Provider earnings accounting is not available');return this.bookings.manager.transaction(async m=>{const attempt=await m.getRepository(PaymentAttempt).findOne({where:{id:attemptId},lock:{mode:'pessimistic_write'}});if(!attempt?.pharmacyFulfillmentFundingId)throw new NotFoundException('Pharmacy payment attempt was not found');const funding=await m.getRepository(PharmacyFulfillmentFunding).findOne({where:{id:attempt.pharmacyFulfillmentFundingId},lock:{mode:'pessimistic_write'}});if(!funding)throw new NotFoundException('Pharmacy funding was not found');const q=await m.getRepository(PharmacyQuote).findOneByOrFail({id:funding.quoteId});const f=await m.getRepository(ClinicalOrderFulfillment).findOneByOrFail({id:funding.fulfillmentId});if(attempt.status===PaymentAttemptStatus.SUCCEEDED&&funding.status===PharmacyFundingStatus.PAID)return this.pharmacyFundingResponse(q,funding,attempt);const expected=this.fromMinor(BigInt(funding.grossAmountMinor));if(!verified.succeeded||verified.providerReference!==attempt.providerReference||verified.amount!==attempt.amount||verified.currency!==attempt.currency||attempt.amount!==expected||attempt.currency!==funding.currency){attempt.status=verified.succeeded?PaymentAttemptStatus.FAILED:verified.status;attempt.lastVerifiedAt=new Date();await m.save(attempt);return this.pharmacyFundingResponse(q,funding,attempt);}attempt.status=PaymentAttemptStatus.SUCCEEDED;attempt.lastVerifiedAt=new Date();await m.save(attempt);let tx=await m.getRepository(PaymentTransaction).findOne({where:{paymentAttemptId:attempt.id,status:PaymentTransactionStatus.SUCCEEDED}});if(!tx)tx=await m.getRepository(PaymentTransaction).save({paymentAttemptId:attempt.id,parentTransactionId:null,transactionType:PaymentTransactionType.COLLECTION,status:PaymentTransactionStatus.SUCCEEDED,amount:attempt.amount,currency:attempt.currency,providerReference:attempt.providerReference,occurredAt:verified.occurredAt});funding.status=PharmacyFundingStatus.PAID;funding.paidAt=verified.occurredAt;await m.save(funding);await this.earnings!.createHeldPharmacyFulfillmentEarning(m,{providerId:funding.providerId,fulfillmentReference:f.reference,grossAmountMinor:funding.grossAmountMinor,currency:funding.currency,commissionBps:funding.commissionBps,commissionSource:funding.commissionSource,commissionAmountMinor:funding.commissionAmountMinor,providerShareMinor:funding.providerShareMinor,paymentTransaction:tx});if(!await m.getRepository(PharmacyDispensing).exists({where:{fulfillmentId:f.id}}))await m.getRepository(PharmacyDispensing).save({fulfillmentId:f.id,quoteId:q.id,fundingId:funding.id,status:PharmacyDispensingStatus.READY_TO_DISPENSE,fulfillmentMethod:PharmacyFulfillmentMethod.PICKUP,startedAt:null,readyAt:null,completedAt:null});return this.pharmacyFundingResponse(q,funding,attempt);});}
   private pharmacyFundingResponse(q:PharmacyQuote,f:PharmacyFulfillmentFunding,a:PaymentAttempt|null){return{quoteReference:q.reference,fundingRequired:BigInt(f.grossAmountMinor)>0n,amountMinor:Number(f.grossAmountMinor),currency:f.currency,fundingStatus:f.status,paid:[PharmacyFundingStatus.PAID,PharmacyFundingStatus.SATISFIED_FREE].includes(f.status),attemptStatus:a?.status??null,checkoutUrl:a?.checkoutUrl??null,accessCode:a?.accessCode??null};}
@@ -697,6 +701,7 @@ export class PaymentFlowService {
 async initializePatientProviderConnectionFunding(
   reference: string,
   userId: string,
+  paymentEmail?: string,
 ) {
   if (!this.commissions) {
     throw new ConflictException('Provider commission is not available');
@@ -767,13 +772,7 @@ async initializePatientProviderConnectionFunding(
       },
     });
 
-    const email = connectionWithUser?.initiatedBy?.email;
-
-    if (!email || !isEmail(email)) {
-      throw new BadRequestException(
-        'A valid account email is required to initialize payment',
-      );
-    }
+    const email = connectionWithUser?.initiatedBy?.email ?? null;
 
     return {
       connection,
@@ -804,6 +803,8 @@ async initializePatientProviderConnectionFunding(
     );
   }
 
+  const customerEmail = this.resolvePaymentEmail(prepared.email, paymentEmail);
+
   const idempotencyKey =
     `PATIENT-CONNECTION-${randomBytes(16).toString('hex')}`;
 
@@ -815,7 +816,7 @@ async initializePatientProviderConnectionFunding(
     currency: prepared.funding.currency,
     idempotencyKey,
     bookingReference: reference,
-    customerEmail: prepared.email,
+    customerEmail,
     paymentReference,
     callbackUrl: this.callbackUrl(reference, true),
   });
@@ -875,6 +876,7 @@ async initializePatientProviderConnectionFunding(
 
         status: initialized.status,
         idempotencyKey,
+        customerEmail,
 
         providerCode: initialized.providerCode,
         providerReference: initialized.providerReference,
@@ -1140,7 +1142,7 @@ async initializePatientProviderConnectionFunding(
     return this.careFundingResponse(care, funding, attempt);
   }
 
-  async initializeCareRequestFunding(reference: string, userId: string) {
+  async initializeCareRequestFunding(reference: string, userId: string, paymentEmail?: string) {
     if (!this.commissions)
       throw new ConflictException("Provider commission is not available");
     const prepared = await this.bookings.manager.transaction(
@@ -1224,10 +1226,7 @@ async initializePatientProviderConnectionFunding(
     });
     if (active)
       return this.careFundingResponse(prepared.care, prepared.funding, active);
-    if (!prepared.care.user?.email || !isEmail(prepared.care.user.email))
-      throw new BadRequestException(
-        "A valid account email is required to initialize payment",
-      );
+    const customerEmail = this.resolvePaymentEmail(prepared.care.user?.email, paymentEmail);
     const idempotencyKey = `GENERAL-CARE-${randomBytes(16).toString("hex")}`;
     const paymentReference = `SC-PAY-${randomBytes(12).toString("hex")}`;
     const initialized = await this.provider.initializePayment({
@@ -1235,7 +1234,7 @@ async initializePatientProviderConnectionFunding(
       currency: prepared.funding.currency,
       idempotencyKey,
       bookingReference: reference,
-      customerEmail: prepared.care.user.email,
+      customerEmail,
       paymentReference,
       callbackUrl: this.callbackUrl(reference, true),
     });
@@ -1271,6 +1270,7 @@ async initializePatientProviderConnectionFunding(
           currency: funding.currency,
           status: initialized.status,
           idempotencyKey,
+          customerEmail,
           providerCode: initialized.providerCode,
           providerReference: initialized.providerReference,
           checkoutUrl: initialized.checkoutUrl,
@@ -1439,7 +1439,7 @@ async initializePatientProviderConnectionFunding(
     };
   }
 
-  async initializeFastTrackPayment(reference: string, userId: string) {
+  async initializeFastTrackPayment(reference: string, userId: string, paymentEmail?: string) {
     const existingRequest = await this.bookings.manager
       .getRepository(FastTrackRequest)
       .findOne({ where: { reference, userId }, relations: { user: true } });
@@ -1464,10 +1464,7 @@ async initializePatientProviderConnectionFunding(
       order: { createdAt: "DESC" },
     });
     if (active) return this.fastTrackPaymentResponse(existingRequest, active);
-    if (!existingRequest.user?.email || !isEmail(existingRequest.user.email))
-      throw new BadRequestException(
-        "A valid account email is required to initialize payment",
-      );
+    const customerEmail = this.resolvePaymentEmail(existingRequest.user?.email, paymentEmail);
     const idempotencyKey = `FASTTRACK-${randomBytes(16).toString("hex")}`;
     const paymentReference = `SC-PAY-${randomBytes(12).toString("hex")}`;
     const initialized = await this.provider.initializePayment({
@@ -1475,7 +1472,7 @@ async initializePatientProviderConnectionFunding(
       currency: existingRequest.currency,
       idempotencyKey,
       bookingReference: reference,
-      customerEmail: existingRequest.user.email,
+      customerEmail,
       paymentReference,
       callbackUrl: this.callbackUrl(reference, true),
     });
@@ -1510,6 +1507,7 @@ async initializePatientProviderConnectionFunding(
           currency: request.currency,
           status: initialized.status,
           idempotencyKey,
+          customerEmail,
           providerCode: initialized.providerCode,
           providerReference: initialized.providerReference,
           checkoutUrl: initialized.checkoutUrl,
@@ -2079,6 +2077,19 @@ async initializePatientProviderConnectionFunding(
         this.config?.payments.paystack.callbackUrl)
       : this.config?.payments.paystack.callbackUrl;
     return base ? `${base}${encodeURIComponent(reference)}` : undefined;
+  }
+
+  private resolvePaymentEmail(accountEmail?: string | null, paymentEmail?: string): string {
+    const account = this.normalizePaymentEmail(accountEmail);
+    if (account) return account;
+    const supplied = this.normalizePaymentEmail(paymentEmail);
+    if (supplied) return supplied;
+    throw new BadRequestException('A valid payment email is required to continue');
+  }
+
+  private normalizePaymentEmail(value?: string | null): string | null {
+    const normalized = value?.trim().toLowerCase() ?? '';
+    return normalized.length <= 254 && isEmail(normalized) ? normalized : null;
   }
 
   private async settleRedemption(

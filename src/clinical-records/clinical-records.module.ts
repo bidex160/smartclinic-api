@@ -16,14 +16,16 @@ import { ClinicalRecordAttachment } from './entities/clinical-record-attachment.
 import { PrivateAttachmentStorageModule } from '../common/storage/private-attachment-storage.module';
 import { ClinicalRecordAccessGrant } from './entities/clinical-record-access-grant.entity';
 import { ClinicalRecordAccessAudit } from './entities/clinical-record-access-audit.entity';
+import { ClinicalRecordAccessRequest } from './entities/clinical-record-access-request.entity';
+import { PatientProviderConnection } from '../patient-provider-connections/entities/patient-provider-connection.entity';
 import { ClinicalRecordAccessService } from './clinical-record-access.service';
-import { MeClinicalRecordAccessController, ProviderSharedClinicalRecordsController } from './clinical-record-access.controller';
+import { MeClinicalRecordAccessController, ProviderClinicalRecordAccessRequestsController, ProviderSharedClinicalRecordsController } from './clinical-record-access.controller';
 import { ClinicalRecordAttachmentsService } from './clinical-record-attachments.service';
 import { MeClinicalRecordAttachmentsController, ProviderClinicalRecordAttachmentsController } from './clinical-record-attachments.controller';
 
 @Module({
-  imports: [AuthModule, ProvidersModule, PrivateAttachmentStorageModule, TypeOrmModule.forFeature([ClinicalRecord, ClinicalRecordAttachment, ClinicalRecordAccessGrant, ClinicalRecordAccessAudit, ClinicalConsultationDetail, CareAppointment, CareRequest, Patient, Provider, CareServiceDefinition, User])],
-  controllers: [ProviderClinicalRecordsController, MeClinicalRecordsController, ProviderClinicalRecordAttachmentsController, MeClinicalRecordAttachmentsController, MeClinicalRecordAccessController, ProviderSharedClinicalRecordsController],
+  imports: [AuthModule, ProvidersModule, PrivateAttachmentStorageModule, TypeOrmModule.forFeature([ClinicalRecord, ClinicalRecordAttachment, ClinicalRecordAccessGrant, ClinicalRecordAccessAudit, ClinicalRecordAccessRequest, PatientProviderConnection, ClinicalConsultationDetail, CareAppointment, CareRequest, Patient, Provider, CareServiceDefinition, User])],
+  controllers: [ProviderClinicalRecordsController, MeClinicalRecordsController, ProviderClinicalRecordAttachmentsController, MeClinicalRecordAttachmentsController, MeClinicalRecordAccessController, ProviderSharedClinicalRecordsController, ProviderClinicalRecordAccessRequestsController],
   providers: [ClinicalRecordsService, ClinicalRecordAttachmentsService, ClinicalRecordAccessService],
   exports: [ClinicalRecordsService],
 })

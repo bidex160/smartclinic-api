@@ -17,6 +17,7 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { PaymentFlowService } from "../payments/payment-flow.service";
+import { PaymentContactDto } from '../payments/dto/initiate-payment.dto';
 import { User } from "../users/entities/user.entity";
 import { UserRole } from "../users/enums/user-role.enum";
 import {
@@ -106,10 +107,12 @@ export class MePatientProviderConnectionsController {
   initialize(
     @Req() r: { user: User },
     @Param() p: ConnectionReferenceParamsDto,
+    @Body() dto: PaymentContactDto,
   ) {
     return this.payments.initializePatientProviderConnectionFunding(
       p.reference,
       r.user.id,
+      dto?.paymentEmail,
     );
   }
   @Post("patient-provider-connections/:reference/funding/verify-latest")

@@ -81,6 +81,9 @@ export class PaymentAttempt {
   @Column({ name: "idempotency_key", type: "varchar" })
   idempotencyKey!: string;
 
+  @Column({ name: "customer_email", type: "varchar", length: 254, nullable: true })
+  customerEmail!: string | null;
+
   @Column({ name: "provider_code", type: "varchar", nullable: true })
   providerCode!: string | null;
 

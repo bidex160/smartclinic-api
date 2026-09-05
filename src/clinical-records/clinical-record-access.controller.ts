@@ -21,6 +21,7 @@ import {
   ClinicalRecordAccessGrantParamsDto,
   CreateClinicalRecordAccessGrantDto,
 } from "./dto/clinical-record-access.dto";
+import { ClinicalRecordAccessRequestParamsDto, CreateClinicalRecordAccessRequestDto } from "./dto/clinical-record-access-request.dto";
 import { ClinicalRecordAttachmentParamsDto } from "./dto/clinical-record-attachment.dto";
 import { ClinicalRecordReferenceParamsDto } from "./dto/clinical-record.dto";
 @ApiTags("My Clinical Record Access")
@@ -75,6 +76,15 @@ export class MeClinicalRecordAccessController {
   ) {
     return this.access.listAudit(req.user, query);
   }
+  @Get("clinical-record-access-requests") requests(
+    @Req() req: { user: User }, @Query() query: ClinicalAccessListQueryDto,
+  ) { return this.access.listPatientRequests(req.user, query); }
+  @Post("clinical-record-access-requests/:reference/approve") approve(
+    @Req() req: { user: User }, @Param() params: ClinicalRecordAccessRequestParamsDto,
+  ) { return this.access.approveAccessRequest(req.user, params.reference); }
+  @Post("clinical-record-access-requests/:reference/decline") decline(
+    @Req() req: { user: User }, @Param() params: ClinicalRecordAccessRequestParamsDto,
+  ) { return this.access.declineAccessRequest(req.user, params.reference); }
 }
 @ApiTags("Provider Shared Clinical Records")
 @ApiBearerAuth()
@@ -104,5 +114,20 @@ export class ProviderSharedClinicalRecordsController {
       params.recordReference,
       params.attachmentReference,
     );
+  }
+}
+
+@ApiTags("Provider Clinical Record Access Requests")
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.PROVIDER)
+@Controller("provider/clinical-record-access-requests")
+export class ProviderClinicalRecordAccessRequestsController {
+  constructor(private readonly access: ClinicalRecordAccessService) {}
+  @Post() create(@Req() req: { user: User }, @Body() dto: CreateClinicalRecordAccessRequestDto) {
+    return this.access.createAccessRequest(req.user, dto);
+  }
+  @Get() list(@Req() req: { user: User }, @Query() query: ClinicalAccessListQueryDto) {
+    return this.access.listProviderRequests(req.user, query);
   }
 }

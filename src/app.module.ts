@@ -28,6 +28,7 @@ import { ProviderServiceUnitsModule } from './provider-service-units/provider-se
 import { GuidedSelfChecksModule } from './guided-self-checks/guided-self-checks.module';
 import { HealthPassportModule } from './health-passport/health-passport.module';
 import { CohortContactModule } from './cohort/cohort-contact.module';
+import { ProviderRecruitmentInvitationsModule } from './provider-recruitment-invitations/provider-recruitment-invitations.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -54,6 +55,7 @@ const persistenceDomainModules = configuration.database.enabled
       GuidedSelfChecksModule,
       HealthPassportModule,
       CohortContactModule,
+      ProviderRecruitmentInvitationsModule,
     ]
   : [];
 

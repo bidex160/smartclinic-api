@@ -9,6 +9,10 @@ describe('PatientPortalProfileService', () => {
     await expect(new PatientPortalProfileService(patients).get(user)).resolves.toEqual({ user: { displayName: 'Ada Okafor', email: 'ada@example.test' }, patient: { patientReference: 'SCP-8K4M-27QD', givenName: 'Ada', familyName: 'Okafor', phone: '+2348000000000', dateOfBirth: '1990-01-01' } });
     expect(patients.findOne).toHaveBeenCalledWith({ where: { userId: user.id }, withDeleted: true });
   });
+  it('returns a null account email without asserting or fabricating a value', async () => {
+    const patients: any = { findOne: jest.fn().mockResolvedValue({ patientReference: 'SCP-8K4M-27QD', userId: user.id, givenName: 'Ada', familyName: 'Okafor', phone: '+2348000000000', dateOfBirth: null, status: PatientStatus.ACTIVE, deletedAt: null }) };
+    await expect(new PatientPortalProfileService(patients).get({ ...user, email: null, emailNormalized: null })).resolves.toMatchObject({ user: { email: null }, patient: { phone: '+2348000000000' } });
+  });
   it('does not infer a Patient from contact data', async () => { const patients: any = { findOne: jest.fn().mockResolvedValue(null) }; await expect(new PatientPortalProfileService(patients).get(user)).rejects.toBeInstanceOf(NotFoundException); });
 
   it('updates only the authenticated Patient and preserves omitted fields', async () => {
@@ -37,6 +41,17 @@ describe('PatientPortalProfileService', () => {
     const result = await new PatientPortalProfileService({ manager } as any).update(user, { phone: null, dateOfBirth: null });
 
     expect(result.patient).toMatchObject({ phone: null, dateOfBirth: null });
+  });
+
+  it('does not allow phone removal to leave an account with no usable login identity', async () => {
+    const phoneOnlyUser: any = { ...user, email: null, emailNormalized: null, phoneNormalized: '+2348012345678' };
+    const row: any = { patientReference: 'SCP-8K4M-27QD', userId: user.id, givenName: 'Ada', familyName: 'Okafor', phone: '+2348012345678', dateOfBirth: null, status: PatientStatus.ACTIVE, deletedAt: null };
+    const patientRepository: any = { findOne: jest.fn().mockResolvedValue(row), save: jest.fn() };
+    const userRepository: any = { findOne: jest.fn(), update: jest.fn() };
+    const manager: any = { getRepository: jest.fn((entity) => entity.name === 'Patient' ? patientRepository : userRepository), transaction: jest.fn(async (callback) => callback(manager)) };
+    await expect(new PatientPortalProfileService({ manager } as any).update(phoneOnlyUser, { phone: null })).rejects.toThrow('At least one login email or phone number must remain');
+    expect(patientRepository.save).not.toHaveBeenCalled();
+    expect(userRepository.update).not.toHaveBeenCalled();
   });
 
   it('rejects a future date of birth before persistence', async () => {
