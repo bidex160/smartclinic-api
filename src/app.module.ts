@@ -29,6 +29,7 @@ import { GuidedSelfChecksModule } from './guided-self-checks/guided-self-checks.
 import { HealthPassportModule } from './health-passport/health-passport.module';
 import { CohortContactModule } from './cohort/cohort-contact.module';
 import { ProviderRecruitmentInvitationsModule } from './provider-recruitment-invitations/provider-recruitment-invitations.module';
+import { WhatsAppModule } from './whatsapp/whatsapp.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -56,6 +57,7 @@ const persistenceDomainModules = configuration.database.enabled
       HealthPassportModule,
       CohortContactModule,
       ProviderRecruitmentInvitationsModule,
+      WhatsAppModule,
     ]
   : [];
 

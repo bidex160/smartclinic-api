@@ -37,6 +37,16 @@ export interface AppConfiguration {
     sendTimeoutMs: number;
     contactToAddress: string;
   };
+  whatsapp: {
+    enabled: boolean;
+    accessToken?: string;
+    phoneNumberId?: string;
+    webhookVerifyToken?: string;
+    appSecret?: string;
+    graphApiBaseUrl: string;
+    graphApiVersion: string;
+    sendTimeoutMs: number;
+  };
   publicBookingSession: {
     ttlSeconds: number;
     cookieSecure: boolean;
@@ -148,6 +158,16 @@ export function createAppConfiguration(
       fromName: environment.EMAIL_FROM_NAME,
       resendApiKey: environment.RESEND_API_KEY,
       sendTimeoutMs: getNumber(environment.EMAIL_SEND_TIMEOUT_MS, 10_000),
+    },
+    whatsapp: {
+      enabled: environment.WHATSAPP_ENABLED === "true",
+      accessToken: environment.WHATSAPP_META_ACCESS_TOKEN,
+      phoneNumberId: environment.WHATSAPP_META_PHONE_NUMBER_ID,
+      webhookVerifyToken: environment.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+      appSecret: environment.WHATSAPP_META_APP_SECRET,
+      graphApiBaseUrl: environment.WHATSAPP_META_GRAPH_API_BASE_URL ?? "https://graph.facebook.com",
+      graphApiVersion: environment.WHATSAPP_META_GRAPH_API_VERSION ?? "v23.0",
+      sendTimeoutMs: getNumber(environment.WHATSAPP_SEND_TIMEOUT_MS, 10_000),
     },
     publicBookingSession: {
       ttlSeconds: getNumber(

@@ -677,13 +677,24 @@ export class ReferralsService {
     };
   }
 
-  private providerTarget(type: ProviderType): ReferralTargetType | null {
-    if (type === ProviderType.CLINIC) return ReferralTargetType.CLINIC;
-    if (type === ProviderType.DIAGNOSTIC_CENTRE)
+private providerTarget(
+  providerType: ProviderType,
+): ReferralTargetType | null {
+  switch (providerType) {
+    case ProviderType.CLINIC:
+    case ProviderType.HOSPITAL:
+      return ReferralTargetType.CLINIC;
+
+    case ProviderType.DIAGNOSTIC_CENTRE:
       return ReferralTargetType.LABORATORY;
-    if (type === ProviderType.PHARMACY) return ReferralTargetType.PHARMACY;
-    return null;
+
+    case ProviderType.PHARMACY:
+      return ReferralTargetType.PHARMACY;
+
+    default:
+      return null;
   }
+}
 
   logQualificationFailure(kind: string, id: string): void {
     this.logger.error(`Referral qualification failed after ${kind} ${id}`);

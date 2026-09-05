@@ -74,6 +74,15 @@ class EnvironmentVariables {
   @IsOptional() @IsString() RESEND_API_KEY?: string;
   @Type(() => Number) @IsInt() @Min(1000) EMAIL_SEND_TIMEOUT_MS = 10000;
 
+  @IsOptional() @IsIn(['true', 'false']) WHATSAPP_ENABLED?: string;
+  @IsOptional() @IsString() WHATSAPP_META_ACCESS_TOKEN?: string;
+  @IsOptional() @IsString() WHATSAPP_META_PHONE_NUMBER_ID?: string;
+  @IsOptional() @IsString() WHATSAPP_WEBHOOK_VERIFY_TOKEN?: string;
+  @IsOptional() @IsString() WHATSAPP_META_APP_SECRET?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) WHATSAPP_META_GRAPH_API_BASE_URL?: string;
+  @IsOptional() @IsString() WHATSAPP_META_GRAPH_API_VERSION?: string;
+  @Type(() => Number) @IsInt() @Min(1000) WHATSAPP_SEND_TIMEOUT_MS = 10000;
+
   @Type(() => Number) @IsInt() @Min(60)
   PUBLIC_BOOKING_SESSION_TTL = 604800;
 
@@ -111,6 +120,7 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
   if (validatedConfig.NODE_ENV === 'production' && validatedConfig.EMAIL_PROVIDER === 'test') throw new Error('Invalid environment configuration: EMAIL_PROVIDER=test is not allowed in production');
   if (validatedConfig.EMAIL_PROVIDER !== 'none' && !validatedConfig.EMAIL_FROM_ADDRESS) throw new Error('Invalid environment configuration: EMAIL_FROM_ADDRESS is required when email delivery is configured');
   if (validatedConfig.EMAIL_PROVIDER === 'resend' && !validatedConfig.RESEND_API_KEY) throw new Error('Invalid environment configuration: RESEND_API_KEY is required when EMAIL_PROVIDER=resend');
+  if (validatedConfig.WHATSAPP_ENABLED === 'true' && (!validatedConfig.WHATSAPP_META_ACCESS_TOKEN || !validatedConfig.WHATSAPP_META_PHONE_NUMBER_ID || !validatedConfig.WHATSAPP_WEBHOOK_VERIFY_TOKEN)) throw new Error('Invalid environment configuration: Meta WhatsApp access token, phone number ID, and webhook verify token are required when WhatsApp is enabled');
   if (validatedConfig.CLINICAL_ATTACHMENT_STORAGE_PROVIDER === 'cloudinary' && (!validatedConfig.CLOUDINARY_CLOUD_NAME || !validatedConfig.CLOUDINARY_API_KEY || !validatedConfig.CLOUDINARY_API_SECRET)) throw new Error('Invalid environment configuration: Cloudinary clinical attachment credentials are required when CLINICAL_ATTACHMENT_STORAGE_PROVIDER=cloudinary');
   if (validatedConfig.PAYOUT_ACCOUNT_ENCRYPTION_KEY && Buffer.from(validatedConfig.PAYOUT_ACCOUNT_ENCRYPTION_KEY, 'base64').length !== 32) throw new Error('Invalid environment configuration: PAYOUT_ACCOUNT_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
 
