@@ -1,9 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { PublicReferralLeaderboardDto, ReferralImpactDto } from './dto/referral.dto';
 import { ReferralsService } from './referrals.service';
+import { ReferralTargetType } from './enums/referral-target-type.enum';
+import { ConfigType } from '@nestjs/config';
+import { appConfig } from 'src/config/app.config';
 
 const PUBLIC_LEADERBOARD_LIMIT = 20;
 
@@ -26,10 +29,14 @@ export function safePublicName(displayName: string | null): string {
 
 @Injectable()
 export class ReferralImpactService {
+ 
+  
   constructor(
     private readonly dataSource: DataSource,
     @InjectRepository(User) private readonly users: Repository<User>,
     private readonly referrals: ReferralsService,
+     @Inject(appConfig.KEY)
+        private readonly config: ConfigType<typeof appConfig>,
   ) {}
 
   async leaderboard(): Promise<PublicReferralLeaderboardDto> {
@@ -72,6 +79,12 @@ export class ReferralImpactService {
     return { publicLeaderboard };
   }
 
+  private prefixWithFrontendUrl = (links: Record<string, string>, baseUrl: string) => {
+  return Object.fromEntries(
+    Object.entries(links).map(([k, v]) => [k, new URL(v, baseUrl).toString()])
+  )
+}
+
   async impact(userId: string): Promise<ReferralImpactDto> {
     const [summary, user] = await Promise.all([
       this.referrals.summary(userId),
@@ -79,6 +92,8 @@ export class ReferralImpactService {
     ]);
     if (!user) throw new NotFoundException('User was not found');
     const position = user.publicLeaderboard ? await this.position(userId) : null;
+ 
+     const inviteLinks = this.prefixWithFrontendUrl(summary.links, this.config.frontendUrl)    
     return {
       referralCode: summary.referralCode,
       balances: {
@@ -94,7 +109,7 @@ export class ReferralImpactService {
         qualifiedReferrals: summary.qualifiedDirectReferrals,
         pendingReferrals: summary.pendingDirectReferrals,
       },
-      inviteLinks: summary.links,
+      inviteLinks: inviteLinks as Record<ReferralTargetType, string>,
       leaderboard: { optedIn: user.publicLeaderboard, position },
     };
   }
