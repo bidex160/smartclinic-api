@@ -42,6 +42,30 @@ export class Patient {
   @Column({ type: 'enum', enum: PatientStatus, enumName: 'patient_status_enum', default: PatientStatus.ACTIVE })
   status!: PatientStatus;
 
+  @Column({
+  name: 'country_code',
+  type: 'char',
+  length: 2,
+  nullable: true,
+})
+countryCode!: string | null;
+
+@Column({
+  name: 'state_or_region',
+  type: 'varchar',
+  length: 120,
+  nullable: true,
+})
+stateOrRegion!: string | null;
+
+@Column({
+  name: 'city',
+  type: 'varchar',
+  length: 120,
+  nullable: true,
+})
+city!: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

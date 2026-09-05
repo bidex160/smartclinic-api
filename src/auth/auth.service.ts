@@ -47,8 +47,16 @@ export class AuthService {
       throw new ConflictException("A valid phone number is required");
     if (await this.users.exists({ where: { emailNormalized: email } }))
       throw new ConflictException("An account already exists for this email");
-    if (phone && await this.users.exists({ where: { phoneNormalized: phone }, withDeleted: true }))
-      throw new ConflictException("An account already exists for this phone number");
+    if (
+      phone &&
+      (await this.users.exists({
+        where: { phoneNormalized: phone },
+        withDeleted: true,
+      }))
+    )
+      throw new ConflictException(
+        "An account already exists for this phone number",
+      );
     const passwordHash = await bcrypt.hash(dto.password, 12);
     for (
       let attempt = 0;
@@ -57,20 +65,16 @@ export class AuthService {
     ) {
       try {
         const user = await this.users.manager.transaction(async (manager) => {
-          const saved = await manager
-            .getRepository(User)
-            .save(
-              manager
-                .getRepository(User)
-                .create({
-                  email,
-                  emailNormalized: email,
-                  phoneNormalized: phone,
-                  displayName: `${dto.givenName.trim()} ${dto.familyName.trim()}`,
-                  status: UserStatus.ACTIVE,
-                  roles: [UserRole.USER],
-                }),
-            );
+          const saved = await manager.getRepository(User).save(
+            manager.getRepository(User).create({
+              email,
+              emailNormalized: email,
+              phoneNormalized: phone,
+              displayName: `${dto.givenName.trim()} ${dto.familyName.trim()}`,
+              status: UserStatus.ACTIVE,
+              roles: [UserRole.USER],
+            }),
+          );
           await manager
             .getRepository(UserCredential)
             .save(
@@ -78,22 +82,23 @@ export class AuthService {
                 .getRepository(UserCredential)
                 .create({ userId: saved.id, passwordHash }),
             );
-          const patient = await manager
-            .getRepository(Patient)
-            .save(
-              manager
-                .getRepository(Patient)
-                .create({
-                  patientReference: generatePatientReference(),
-                  userId: saved.id,
-                  givenName: dto.givenName.trim(),
-                  familyName: dto.familyName.trim(),
-                  dateOfBirth: null,
-                  phone,
-                  email,
-                  status: PatientStatus.ACTIVE,
-                }),
-            );
+          const patient = await manager.getRepository(Patient).save(
+            manager.getRepository(Patient).create({
+              patientReference: generatePatientReference(),
+              userId: saved.id,
+              givenName: dto.givenName.trim(),
+              familyName: dto.familyName.trim(),
+              dateOfBirth: null,
+              phone,
+              email,
+
+              countryCode: dto.countryCode,
+              stateOrRegion: dto.stateOrRegion.trim(),
+              city: dto.city.trim(),
+
+              status: PatientStatus.ACTIVE,
+            }),
+          );
           await this.referrals.ensureReferralCode(saved.id, manager);
           if (dto.referralCode)
             await this.referrals.capturePatient(
@@ -127,13 +132,19 @@ export class AuthService {
     );
   }
   async login(dto: LoginDto): Promise<LoginResponseDto> {
-    if (dto.identifier && dto.email && dto.identifier.trim().toLowerCase() !== dto.email.trim().toLowerCase())
+    if (
+      dto.identifier &&
+      dto.email &&
+      dto.identifier.trim().toLowerCase() !== dto.email.trim().toLowerCase()
+    )
       throw new UnauthorizedException("Invalid email or password");
-    const identifier = (dto.identifier ?? dto.email ?? '').trim();
+    const identifier = (dto.identifier ?? dto.email ?? "").trim();
     const email = isEmail(identifier) ? identifier.toLowerCase() : null;
     const phone = email ? null : normalizePhoneNumber(identifier);
     const user = await this.users.findOne({
-      where: email ? { emailNormalized: email } : { phoneNormalized: phone ?? '__invalid__' },
+      where: email
+        ? { emailNormalized: email }
+        : { phoneNormalized: phone ?? "__invalid__" },
       relations: { credential: true },
     });
     if (

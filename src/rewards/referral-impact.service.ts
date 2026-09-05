@@ -108,32 +108,64 @@ export class ReferralImpactService {
     return rows[0] ? Number(rows[0].position) : null;
   }
 
-  private rankedMembersSql(): string {
-    return `WITH earned AS (
-      SELECT user_id, COALESCE(SUM(points), 0)::bigint AS points
-      FROM reward_points_ledger WHERE direction = 'CREDIT' GROUP BY user_id
-    ), qualified AS (
-      SELECT referrer_user_id AS user_id, COUNT(*)::bigint AS referrals
-      FROM referrals WHERE status = 'QUALIFIED' GROUP BY referrer_user_id
-    ), ranked AS (
-      SELECT u.id AS "userId", u.display_name AS "displayName",
-        COALESCE(e.points, 0)::bigint AS points,
-        COALESCE(q.referrals, 0)::bigint AS referrals,
-        NULLIF(TRIM(p.city), '') AS city,
-        NULLIF(UPPER(TRIM(p.country_code)), '') AS country,
-        achieved.name AS level
-      FROM users u
-      LEFT JOIN earned e ON e.user_id = u.id
-      LEFT JOIN qualified q ON q.user_id = u.id
-      LEFT JOIN providers p ON p.user_id = u.id AND p.deleted_at IS NULL
-      LEFT JOIN LATERAL (
-        SELECT definition.name
-        FROM reward_level_achievements achievement
-        INNER JOIN reward_level_definitions definition ON definition.id = achievement.level_id AND definition.is_active = true
-        WHERE achievement.user_id = u.id
-        ORDER BY definition.ordinal DESC LIMIT 1
-      ) achieved ON true
-      WHERE u.public_leaderboard = true AND u.deleted_at IS NULL AND u.status = 'ACTIVE'
-    )`;
-  }
+private rankedMembersSql(): string {
+  return `WITH earned AS (
+    SELECT user_id, COALESCE(SUM(points), 0)::bigint AS points
+    FROM reward_points_ledger
+    WHERE direction = 'CREDIT'
+    GROUP BY user_id
+  ), qualified AS (
+    SELECT referrer_user_id AS user_id, COUNT(*)::bigint AS referrals
+    FROM referrals
+    WHERE status = 'QUALIFIED'
+    GROUP BY referrer_user_id
+  ), ranked AS (
+    SELECT
+      u.id AS "userId",
+      u.display_name AS "displayName",
+      COALESCE(e.points, 0)::bigint AS points,
+      COALESCE(q.referrals, 0)::bigint AS referrals,
+
+      COALESCE(
+        NULLIF(TRIM(patient.city), ''),
+        NULLIF(TRIM(provider.city), '')
+      ) AS city,
+
+      COALESCE(
+        NULLIF(UPPER(TRIM(patient.country_code)), ''),
+        NULLIF(UPPER(TRIM(provider.country_code)), '')
+      ) AS country,
+
+      achieved.name AS level
+    FROM users u
+    LEFT JOIN earned e
+      ON e.user_id = u.id
+    LEFT JOIN qualified q
+      ON q.user_id = u.id
+
+    LEFT JOIN patients patient
+      ON patient.user_id = u.id
+      AND patient.deleted_at IS NULL
+
+    LEFT JOIN providers provider
+      ON provider.user_id = u.id
+      AND provider.deleted_at IS NULL
+
+    LEFT JOIN LATERAL (
+      SELECT definition.name
+      FROM reward_level_achievements achievement
+      INNER JOIN reward_level_definitions definition
+        ON definition.id = achievement.level_id
+        AND definition.is_active = true
+      WHERE achievement.user_id = u.id
+      ORDER BY definition.ordinal DESC
+      LIMIT 1
+    ) achieved ON true
+
+    WHERE
+      u.public_leaderboard = true
+      AND u.deleted_at IS NULL
+      AND u.status = 'ACTIVE'
+  )`;
+}
 }
