@@ -12,17 +12,22 @@ import { RolesGuard } from './roles.guard';
 import { AuthSession } from './entities/auth-session.entity';
 import { Patient } from '../patients/entities/patient.entity';
 import { RewardsModule } from '../rewards/rewards.module';
+import { EmailModule } from '../notifications/email/email.module';
+import { PasswordResetToken } from './entities/password-reset-token.entity';
+import { PasswordResetService } from './password-reset.service';
 
 @Module({
   imports: [
     ConfigModule,
     forwardRef(() => RewardsModule),
+    EmailModule,
 
     TypeOrmModule.forFeature([
       User,
       UserCredential,
       AuthSession,
       Patient,
+      PasswordResetToken,
     ]),
 
     JwtModule.registerAsync({
@@ -44,6 +49,7 @@ import { RewardsModule } from '../rewards/rewards.module';
 
   providers: [
     AuthService,
+    PasswordResetService,
     JwtAuthGuard,
     RolesGuard,
   ],

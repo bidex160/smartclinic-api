@@ -9,11 +9,17 @@ import { LoginResponseDto } from './dto/login-response.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
+import { PasswordResetService } from './password-reset.service';
 
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(private readonly auth: AuthService, private readonly passwordReset: PasswordResetService) {}
+  @Post('forgot-password') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Request password reset instructions by email' })
+  forgotPassword(@Body() dto: ForgotPasswordDto) { return this.passwordReset.forgotPassword(dto); }
+  @Post('reset-password') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Reset a password using an emailed token' })
+  resetPassword(@Body() dto: ResetPasswordDto) { return this.passwordReset.resetPassword(dto); }
   @Post('register') @ApiOperation({ summary: 'Register a standard user account' }) @ApiCreatedResponse({ type: UserResponseDto }) @ApiConflictResponse({ description: 'An account already exists for the email.' })
   register(@Body() dto: RegisterDto): Promise<UserResponseDto> { return this.auth.register(dto); }
   @Post('login') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Authenticate with email or phone number and password' }) @ApiOkResponse({ type: LoginResponseDto }) @ApiUnauthorizedResponse({ description: 'Invalid email or password.' })

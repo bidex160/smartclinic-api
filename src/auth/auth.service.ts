@@ -28,6 +28,7 @@ import {
 import { ReferralsService } from "../rewards/referrals.service";
 import { isEmail } from "class-validator";
 import { normalizePhoneNumber } from "../users/phone-normalization";
+import { hashPassword } from './password-hashing';
 
 @Injectable()
 export class AuthService {
@@ -57,7 +58,7 @@ export class AuthService {
       throw new ConflictException(
         "An account already exists for this phone number",
       );
-    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const passwordHash = await hashPassword(dto.password);
     for (
       let attempt = 0;
       attempt < MAX_PATIENT_REFERENCE_GENERATION_ATTEMPTS;

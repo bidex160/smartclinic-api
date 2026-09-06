@@ -11,6 +11,7 @@ export interface AppConfiguration {
     cookieSecure: boolean;
     cookieSameSite: "lax" | "strict" | "none";
     cookieDomain?: string;
+    passwordResetTokenTtlMinutes: number;
   };
   providerMatching: { offerTtlMinutes: number };
   providerInvitations: { ttlSeconds: number; frontendUrl: string };
@@ -111,6 +112,7 @@ export function createAppConfiguration(
           | "strict"
           | "none"
           | undefined) ?? "lax",
+      passwordResetTokenTtlMinutes: getNumber(environment.PASSWORD_RESET_TOKEN_TTL_MINUTES, 30),
       cookieDomain: environment.AUTH_COOKIE_DOMAIN,
     },
     providerMatching: {

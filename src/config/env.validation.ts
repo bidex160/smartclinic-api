@@ -44,6 +44,9 @@ class EnvironmentVariables {
   @IsString()
   JWT_EXPIRES_IN = '15m';
 
+  @Type(() => Number) @IsInt() @Min(5)
+  PASSWORD_RESET_TOKEN_TTL_MINUTES = 30;
+
   @Type(() => Number)
   @IsInt()
   @Min(1)
