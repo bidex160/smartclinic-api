@@ -36,6 +36,13 @@ describe('Care Request API authorization (e2e)', () => {
     await request(app.getHttpServer()).post('/api/v1/me/care-requests').set('Authorization', 'Bearer user').send({ ...requestBody, deliveryMode: 'REMOTE' }).expect(400);
   });
 
+  it('accepts a public dependant participant reference and rejects internal patient identity fields', async () => {
+    service.create.mockClear();
+    await request(app.getHttpServer()).post('/api/v1/me/care-requests').set('Authorization', 'Bearer user').send({ ...requestBody, participantPatientReference: 'SCP-CHLD-0001', patientId: 'spoof' }).expect(201);
+    expect(service.create).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'user-user' }), expect.objectContaining({ participantPatientReference: 'SCP-CHLD-0001' }));
+    expect(service.create.mock.calls.at(-1)?.[1]).not.toHaveProperty('patientId');
+  });
+
   it('limits provider response APIs to PROVIDER', async () => {
     await request(app.getHttpServer()).post(`/api/v1/provider/care-requests/${reference}/accept`).set('Authorization', 'Bearer user').expect(403);
     await request(app.getHttpServer()).post(`/api/v1/provider/care-requests/${reference}/accept`).set('Authorization', 'Bearer provider').expect(201);

@@ -31,6 +31,8 @@ import { RewardLedgerDirection } from "./enums/reward-ledger-direction.enum";
 import { User } from "../users/entities/user.entity";
 import { RewardWithdrawalsService } from "./reward-withdrawals.service";
 import { PatientCareActionSource } from './enums/patient-care-action-source.enum';
+import { DependantRewardProvenance } from '../patients/entities/dependant-reward-provenance.entity';
+import { DependantRewardQualificationStatus } from '../patients/enums/patient-relationship.enum';
 
 const MILESTONE_RULE = {
   PROVIDER_REGISTERED: 'PROVIDER_REGISTERED',
@@ -39,6 +41,7 @@ const MILESTONE_RULE = {
   PATIENT_REGISTERED: 'PATIENT_REGISTERED',
   PATIENT_FIRST_CARE_ACTION: 'PATIENT_FIRST_CARE_ACTION',
 } as const;
+const DEPENDANT_FIRST_CARE_ACTION_RULE = 'DEPENDANT_FIRST_CARE_ACTION';
 type ReferralMilestone = keyof typeof MILESTONE_RULE;
 
 @Injectable()
@@ -149,13 +152,30 @@ export class ReferralsService {
         where: { referredPatientId: patientId, targetType: ReferralTargetType.PATIENT },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!referral) return;
-      await this.recordPatientMilestone(manager, referral);
+      if (referral) await this.recordPatientMilestone(manager, referral);
+      await this.recordDependantCareMilestone(manager, patientId, sourceType, sourceReference);
     };
     if (externalManager) return record(externalManager);
     await this.referrals.manager.transaction(record);
-    void sourceType;
-    void sourceReference;
+  }
+
+  private async recordDependantCareMilestone(manager: EntityManager, patientId: string, sourceType: PatientCareActionSource, sourceReference: string): Promise<void> {
+    const repository = manager.getRepository(DependantRewardProvenance);
+    const provenance = await repository.findOne({ where: { dependantPatientId: patientId }, lock: { mode: 'pessimistic_write' } });
+    if (!provenance) return;
+    if (provenance.status === DependantRewardQualificationStatus.PENDING) {
+      provenance.status = DependantRewardQualificationStatus.QUALIFIED;
+      provenance.qualifyingCareSource = sourceType;
+      provenance.qualifyingCareReference = sourceReference;
+      provenance.qualifiedAt = new Date();
+      await repository.save(provenance);
+    }
+    if (provenance.rewardCreditedAt) return;
+    const rule = await manager.getRepository(RewardRule).findOne({ where: { code: DEPENDANT_FIRST_CARE_ACTION_RULE, isActive: true } });
+    if (!rule || rule.points <= 0) return;
+    await this.credit(manager, provenance.createdByUserId, null, `DEPENDANT_FIRST_CARE_ACTION:${provenance.id}`, DEPENDANT_FIRST_CARE_ACTION_RULE, rule.points);
+    provenance.rewardCreditedAt = new Date();
+    await repository.save(provenance);
   }
 
   async qualifyProvider(

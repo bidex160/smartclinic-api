@@ -11,7 +11,7 @@ describe('patient payment contact route contracts', () => {
   const dto = { paymentEmail: 'payer@example.test' };
 
   it('forwards paymentEmail through Health Check initialization', async () => {
-    const bookings = { requireSelfBooking: jest.fn() };
+    const bookings = { requireOwnedBooking: jest.fn() };
     const payments = { initializeFunding: jest.fn().mockResolvedValue({}), initiatePatientPayment: jest.fn().mockResolvedValue({}) };
     await new MeHealthCheckPaymentsController(bookings as any, payments as any).initialize({ user }, { reference: 'SC-HC' }, { ...dto, option: CheckoutFundingOption.PAY_NOW });
     expect(payments.initiatePatientPayment).toHaveBeenCalledWith('SC-HC', CheckoutFundingOption.PAY_NOW, dto.paymentEmail);

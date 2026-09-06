@@ -12,6 +12,6 @@ import { BookingsService } from './bookings.service';
 @ApiTags('My Health Checks') @ApiBearerAuth() @UseGuards(JwtAuthGuard, RolesGuard) @Roles(UserRole.USER) @Controller('me/health-checks')
 export class MeHealthCheckBookingsController {
   constructor(private readonly bookings: BookingsService) {}
-  @Post() @ApiOperation({ summary: 'Create a Health Check for the authenticated USER’s SELF Patient' }) @ApiCreatedResponse({ type: BookingResponseDto })
+  @Post() @ApiOperation({ summary: 'Create a Health Check for SELF or an authorized dependant Patient' }) @ApiCreatedResponse({ type: BookingResponseDto })
   create(@Req() request: { user: User }, @Body() dto: CreateSelfBookingDto) { return this.bookings.createSelf(request.user, dto); }
 }

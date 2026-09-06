@@ -3,6 +3,7 @@ import { ArrayUnique, IsArray, IsOptional, IsString, Matches, MaxLength } from '
 
 const CODE = /^[A-Z][A-Z0-9_]{1,79}$/;
 export class HealthCheckConfigurationQuoteDto {
+  @IsOptional() @Matches(/^SCP-[A-Z0-9]{4}-[A-Z0-9]{4}$/) participantPatientReference?: string;
   @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(CODE) packageCode!: string;
   @IsString() @MaxLength(45) providerReference!: string;
   @IsOptional() @IsString() @MaxLength(21) providerLocationReference?: string;

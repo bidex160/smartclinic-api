@@ -11,7 +11,7 @@ import { CareRequestsService } from './care-requests.service';
 @ApiTags('My Care Requests') @ApiBearerAuth() @UseGuards(JwtAuthGuard, RolesGuard) @Roles(UserRole.USER) @Controller('me/care-requests')
 export class MeCareRequestsController {
   constructor(private readonly requests: CareRequestsService) {}
-  @Post() @ApiOperation({ summary: 'Submit a Care Request for the authenticated SELF Patient' }) create(@Req() req: { user: User }, @Body() dto: CreateCareRequestDto) { return this.requests.create(req.user, dto); }
+  @Post() @ApiOperation({ summary: 'Submit a Care Request for SELF or an authorized dependant Patient' }) create(@Req() req: { user: User }, @Body() dto: CreateCareRequestDto) { return this.requests.create(req.user, dto); }
   @Get() list(@Req() req: { user: User }, @Query() query: CareRequestListQueryDto) { return this.requests.listMine(req.user, query); }
   @Get(':reference') get(@Req() req: { user: User }, @Param() p: CareRequestReferenceParamsDto) { return this.requests.getMine(req.user, p.reference); }
   @Post(':reference/cancel') cancel(@Req() req: { user: User }, @Param() p: CareRequestReferenceParamsDto) { return this.requests.cancelMine(req.user, p.reference); }

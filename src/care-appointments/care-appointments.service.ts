@@ -12,7 +12,6 @@ import { CareRequestStatusHistory } from "../care-requests/entities/care-request
 import { CareRequest } from "../care-requests/entities/care-request.entity";
 import { CareRequestStatus } from "../care-requests/enums/care-request-status.enum";
 import { Patient } from "../patients/entities/patient.entity";
-import { PatientStatus } from "../patients/enums/patient-status.enum";
 import { ProviderCareService } from "../providers/entities/provider-care-service.entity";
 import { ProviderLocation } from "../providers/entities/provider-location.entity";
 import { Provider } from "../providers/entities/provider.entity";
@@ -586,10 +585,9 @@ async schedule(
   }
 
   async listMine(user: User, query: CareAppointmentListQueryDto) {
-    const patient = await this.patient(user.id);
     const builder = this.readBuilder().where(
-      "appointment.patientId = :patientId",
-      { patientId: patient.id },
+      "careRequest.userId = :userId",
+      { userId: user.id },
     );
     if (query.status)
       builder.andWhere("appointment.status = :status", {
@@ -598,21 +596,19 @@ async schedule(
     return this.page(builder, query);
   }
   async getMine(user: User, reference: string) {
-    const patient = await this.patient(user.id);
     const row = await this.readBuilder()
       .where(
-        "appointment.reference = :reference AND appointment.patientId = :patientId",
-        { reference, patientId: patient.id },
+        "appointment.reference = :reference AND careRequest.userId = :userId",
+        { reference, userId: user.id },
       )
       .getOne();
     if (!row) this.notFound();
     return this.map(row, true);
   }
   async cancelMine(user: User, reference: string, reason: string) {
-    const patient = await this.patient(user.id);
     return this.transitionOwned(
       reference,
-      { patientId: patient.id },
+      { careRequestUserId: user.id },
       [CareAppointmentStatus.SCHEDULED, CareAppointmentStatus.CONFIRMED],
       CareAppointmentStatus.CANCELLED,
       CareRequestStatus.CANCELLED,
@@ -645,7 +641,7 @@ async schedule(
   }
   private async transitionOwned(
     reference: string,
-    owner: { providerId?: string; patientId?: string },
+    owner: { providerId?: string; patientId?: string; careRequestUserId?: string },
     allowed: CareAppointmentStatus[],
     to: CareAppointmentStatus,
     requestTo: CareRequestStatus,
@@ -654,10 +650,13 @@ async schedule(
     reason: string | null,
   ) {
     return this.appointments.manager.transaction(async (manager) => {
+      const ownerWhere = owner.careRequestUserId
+        ? { reference, careRequest: { userId: owner.careRequestUserId } }
+        : { reference, ...owner };
       const appointment = await manager
         .getRepository(CareAppointment)
         .findOne({
-          where: { reference, ...owner },
+          where: ownerWhere,
           lock: { mode: "pessimistic_write" },
         });
       if (!appointment) this.notFound();
@@ -824,19 +823,6 @@ async schedule(
   }
   private operationalProvider(user: User) {
     return this.currentProvider.resolveOperational(user);
-  }
-  private async patient(userId: string) {
-    const patient = await this.patients.findOne({
-      where: { userId },
-      withDeleted: true,
-    });
-    if (
-      !patient ||
-      patient.deletedAt ||
-      patient.status !== PatientStatus.ACTIVE
-    )
-      throw new NotFoundException("Patient profile was not found");
-    return patient;
   }
   private readBuilder(manager: EntityManager = this.appointments.manager) {
     return manager

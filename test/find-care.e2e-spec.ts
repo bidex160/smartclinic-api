@@ -29,6 +29,8 @@ describe('Find Care API authorization (e2e)', () => {
     await request(app.getHttpServer()).get('/api/v1/public/find-care/services').expect(200);
     await request(app.getHttpServer()).get('/api/v1/public/find-care/providers?serviceCode=GENERAL_CONSULTATION&deliveryMode=VIRTUAL&limit=50').expect(200);
     expect(findCare.providersList).toHaveBeenCalledWith(expect.objectContaining({ deliveryMode: CareDeliveryMode.VIRTUAL }));
+    await request(app.getHttpServer()).get('/api/v1/public/find-care/providers?q=Primed&fastTrackOnly=true').expect(200);
+    expect(findCare.providersList).toHaveBeenCalledWith(expect.objectContaining({ q: 'Primed', fastTrackOnly: true }));
     await request(app.getHttpServer()).get('/api/v1/public/find-care/providers/SCPR-ABCDEF0123456789').expect(200);
     await request(app.getHttpServer()).get('/api/v1/public/find-care/providers?countryCode=NIGERIA').expect(400);
     await request(app.getHttpServer()).get('/api/v1/public/find-care/providers?deliveryMode=REMOTE').expect(400);

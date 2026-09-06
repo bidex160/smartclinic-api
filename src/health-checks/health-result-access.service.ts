@@ -25,7 +25,9 @@ export class HealthResultAccessService {
   ) {}
 
   async getRegisteredResult(user: User, bookingReference: string): Promise<HealthResultResponseDto> {
-    const patient = await this.patients.findOne({ where: { userId: user.id }, withDeleted: true });
+    const booking = await this.encounters.manager.getRepository(Booking).findOne({ where: { bookingReference, bookerUserId: user.id } });
+    if (!booking) this.denyRegistered();
+    const patient = await this.patients.findOne({ where: { id: booking.participantPatientId, status: PatientStatus.ACTIVE }, withDeleted: true });
     if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE) this.denyRegistered();
     const encounter = await this.completedResultQuery(this.encounters.manager, patient.id).andWhere('booking.bookingReference = :bookingReference', { bookingReference }).getOne();
     if (!encounter) this.denyRegistered();

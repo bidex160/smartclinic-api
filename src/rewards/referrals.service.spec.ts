@@ -16,14 +16,15 @@ import { ReferralTargetType } from './enums/referral-target-type.enum';
 import { ReferralsService } from './referrals.service';
 import { User } from '../users/entities/user.entity';
 import { PatientCareActionSource } from './enums/patient-care-action-source.enum';
+import { DependantRewardProvenance } from '../patients/entities/dependant-reward-provenance.entity';
 
 describe('ReferralsService', () => {
-  let codes: any[]; let referrals: any[]; let ledger: any[]; let achievements: any[]; let providers: any[]; let levelDefinitions: any[]; let rewardRules: any[]; let completedPatients: Set<string>; let manager: any; let subject: ReferralsService;
+  let codes: any[]; let referrals: any[]; let ledger: any[]; let achievements: any[]; let providers: any[]; let dependantProvenance: any[]; let levelDefinitions: any[]; let rewardRules: any[]; let completedPatients: Set<string>; let manager: any; let subject: ReferralsService;
   const referrerUserId = '10000000-0000-4000-8000-000000000001';
 
   beforeEach(() => {
     codes = [{ id: 'code-1', userId: referrerUserId, codeNormalized: 'SC-AB12CD', isActive: true }];
-    referrals = []; ledger = []; achievements = []; providers = []; completedPatients = new Set();
+    referrals = []; ledger = []; achievements = []; providers = []; dependantProvenance = []; completedPatients = new Set();
     const requirements = [
       [ReferralTargetType.CLINIC, 2], [ReferralTargetType.LABORATORY, 2], [ReferralTargetType.PHARMACY, 2], [ReferralTargetType.PATIENT, 10],
     ].map(([targetType, requiredCount]) => ({ targetType, requiredCount }));
@@ -35,18 +36,20 @@ describe('ReferralsService', () => {
       { code: 'PROVIDER_ACTIVATED', points: 8, isActive: true },
       { code: 'PATIENT_REGISTERED', points: 1, isActive: true },
       { code: 'PATIENT_FIRST_CARE_ACTION', points: 1, isActive: true },
+      { code: 'DEPENDANT_FIRST_CARE_ACTION', points: 0, isActive: false },
       { code: 'LEVEL_1_COMPLETED', points: 50, isActive: true },
     ];
     const repo = (entity: any): any => {
       if (entity === ReferralCode) return { manager, findOne: jest.fn(async ({ where }: any) => codes.find((row) => (where.userId ? row.userId === where.userId : row.codeNormalized === where.codeNormalized && row.isActive === where.isActive)) ?? null), exists: jest.fn(async ({ where }: any) => codes.some((row) => row.codeNormalized === where.codeNormalized)), create: (value: any) => value, save: jest.fn(async (value) => { const row = { id: value.id ?? `code-${codes.length + 1}`, ...value }; codes.push(row); return row; }) };
       if (entity === Referral) return { manager, findOne: jest.fn(async ({ where }: any) => referrals.find((row) => Object.entries(where).every(([key, value]) => row[key] === value)) ?? null), exists: jest.fn(async ({ where }: any) => referrals.some((row) => row.referredUserId === where.referredUserId)), create: (value: any) => value, save: jest.fn(async (value) => { const row = { id: value.id ?? `referral-${referrals.length + 1}`, createdAt: value.createdAt ?? new Date(), ...value }; const index = referrals.findIndex((item) => item.id === row.id); if (index >= 0) referrals[index] = row; else referrals.push(row); return row; }), createQueryBuilder: () => qualifiedCountsBuilder() };
       if (entity === RewardRule) return { findOne: jest.fn(async ({ where }: any) => rewardRules.find((row) => row.code === where.code && row.isActive === where.isActive) ?? null) };
-      if (entity === RewardPointsLedger) return { manager, exists: jest.fn(async ({ where }: any) => ledger.some((row) => row.eventKey === where.eventKey)), findOne: jest.fn(async ({ where }: any) => ledger.find((row) => row.eventKey === where.eventKey && (!where.direction || row.direction === where.direction)) ?? null), create: (value: any) => value, save: jest.fn(async (value) => { ledger.push({ id: `entry-${ledger.length + 1}`, ...value }); return value; }), createQueryBuilder: jest.fn() };
+      if (entity === RewardPointsLedger) return { manager, exists: jest.fn(async ({ where }: any) => ledger.some((row) => row.eventKey === where.eventKey)), findOne: jest.fn(async ({ where }: any) => ledger.find((row) => row.eventKey === where.eventKey && (!where.direction || row.direction === where.direction)) ?? null), create: (value: any) => value, save: jest.fn(async (value) => { const existing = ledger.find(row => row.eventKey === value.eventKey); if (existing) return existing; ledger.push({ id: `entry-${ledger.length + 1}`, ...value }); return value; }), createQueryBuilder: jest.fn() };
       if (entity === RewardLevelDefinition) return { manager, find: jest.fn(async () => levelDefinitions), findOne: jest.fn(async ({ where }: any) => levelDefinitions.find((item) => item.code === where.code) ?? null) };
       if (entity === RewardLevelAchievement) return { find: jest.fn(async ({ where }: any) => achievements.filter((row) => row.userId === where.userId)), findOne: jest.fn(async ({ where }: any) => achievements.find((row) => row.userId === where.userId && row.levelId === where.levelId) ?? null), create: (value: any) => value, save: jest.fn(async (value) => { const row = { id: `achievement-${achievements.length + 1}`, ...value }; achievements.push(row); return row; }) };
       if (entity === Provider) return { findOne: jest.fn(async ({ where }: any) => providers.find((row) => row.id === where.id) ?? null) };
       if (entity === HealthCheckEncounter) return { createQueryBuilder: () => ({ innerJoin: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), getCount: jest.fn(async () => completedPatients.size ? 1 : 0) }) };
       if (entity === User) return { findOne: jest.fn().mockResolvedValue({ id: referrerUserId }) };
+      if (entity === DependantRewardProvenance) return { findOne: jest.fn(async ({ where }: any) => dependantProvenance.find(row => row.dependantPatientId === where.dependantPatientId) ?? null), save: jest.fn(async (value: any) => value) };
       return {};
     };
     const qualifiedCountsBuilder = () => ({ select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(), getRawMany: jest.fn(async () => Object.values(ReferralTargetType).map((targetType) => ({ targetType, count: String(referrals.filter((row) => row.referrerUserId === referrerUserId && row.targetType === targetType && row.status === ReferralStatus.QUALIFIED).length) }))) });
@@ -89,6 +92,25 @@ describe('ReferralsService', () => {
     await subject.recordPatientFirstCareAction('patient-2', PatientCareActionSource.PHARMACY_DISPENSING_COMPLETED, 'fulfillment-1');
     expect(ledger.filter((entry) => entry.eventType === 'PATIENT_FIRST_CARE_ACTION')).toHaveLength(1);
     expect(ledger.reduce((sum, entry) => sum + entry.points, 0)).toBe(2);
+  });
+
+  it('qualifies a dependant once without creating a Referral and credits only the persisted creator when configured', async () => {
+    dependantProvenance.push({ id: 'dependant-provenance-1', dependantPatientId: 'child-patient', createdByUserId: 'creator-user', status: 'PENDING', qualifyingCareSource: null, qualifyingCareReference: null, qualifiedAt: null, rewardCreditedAt: null });
+    await subject.recordPatientFirstCareAction('child-patient', PatientCareActionSource.HEALTH_CHECK_COMPLETED, 'health-check-1');
+    expect(dependantProvenance[0]).toMatchObject({ status: 'QUALIFIED', qualifyingCareSource: 'HEALTH_CHECK_COMPLETED', qualifyingCareReference: 'health-check-1', rewardCreditedAt: null });
+    expect(referrals).toHaveLength(0); expect(ledger).toHaveLength(0);
+    rewardRules.push({ code: 'DEPENDANT_FIRST_CARE_ACTION', points: 3, isActive: true });
+    await subject.recordPatientFirstCareAction('child-patient', PatientCareActionSource.GENERAL_CARE_COMPLETED, 'care-2');
+    await subject.recordPatientFirstCareAction('child-patient', PatientCareActionSource.GENERAL_CARE_COMPLETED, 'care-2');
+    expect(ledger).toEqual([expect.objectContaining({ userId: 'creator-user', referralId: null, eventType: 'DEPENDANT_FIRST_CARE_ACTION', points: 3 })]);
+    expect(dependantProvenance[0].qualifyingCareReference).toBe('health-check-1');
+  });
+
+  it('uses row locking plus the unique ledger event key to prevent concurrent dependant double-awards', async () => {
+    rewardRules.push({ code: 'DEPENDANT_FIRST_CARE_ACTION', points: 3, isActive: true });
+    dependantProvenance.push({ id: 'dependant-provenance-concurrent', dependantPatientId: 'child-concurrent', createdByUserId: 'creator-user', status: 'PENDING', qualifyingCareSource: null, qualifyingCareReference: null, qualifiedAt: null, rewardCreditedAt: null });
+    await Promise.all([subject.recordPatientFirstCareAction('child-concurrent', PatientCareActionSource.HEALTH_CHECK_COMPLETED, 'health-check-1'), subject.recordPatientFirstCareAction('child-concurrent', PatientCareActionSource.HEALTH_CHECK_COMPLETED, 'health-check-1')]);
+    expect(ledger.filter(entry => entry.eventType === 'DEPENDANT_FIRST_CARE_ACTION')).toHaveLength(1);
   });
 
   it.each([

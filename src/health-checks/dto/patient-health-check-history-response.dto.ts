@@ -8,6 +8,7 @@ import { PaymentAttemptStatus } from '../../payments/enums/payment-attempt-statu
 export enum PatientHealthCheckPortalCategory { AWAITING_PAYMENT = 'AWAITING_PAYMENT', UPCOMING_ACTIVE = 'UPCOMING_ACTIVE', COMPLETED_HISTORY = 'COMPLETED_HISTORY', NEEDS_ATTENTION = 'NEEDS_ATTENTION', CLOSED = 'CLOSED' }
 
 class PatientHealthCheckCatalogueDto { @ApiProperty() code!: string; @ApiProperty() name!: string; }
+class PatientHealthCheckParticipantDto { @ApiProperty() patientReference!: string; @ApiProperty() firstName!: string; @ApiProperty() lastName!: string; @ApiProperty() displayName!: string; }
 class PatientConfirmedScheduleDto { @ApiProperty({ format: 'date' }) date!: string; @ApiProperty() timeFrom!: string; @ApiProperty() timeTo!: string; @ApiProperty() timezone!: string; @ApiPropertyOptional({ nullable: true }) providerLocationName!: string | null; @ApiPropertyOptional({ nullable: true }) providerLocation!: { name: string; addressLine1: string; addressLine2: string | null; city: string; stateOrRegion: string; postalCode: string | null; countryCode: string } | null; }
 export class PatientHealthCheckHistoryItemDto {
   @ApiProperty() bookingReference!: string;
@@ -16,6 +17,7 @@ export class PatientHealthCheckHistoryItemDto {
   @ApiProperty() updatedAt!: Date;
   @ApiProperty({ type: PatientHealthCheckCatalogueDto }) healthCheckPackage!: PatientHealthCheckCatalogueDto;
   @ApiProperty({ type: PatientHealthCheckCatalogueDto }) fulfilmentMode!: PatientHealthCheckCatalogueDto;
+  @ApiProperty({ type: PatientHealthCheckParticipantDto }) participant!: PatientHealthCheckParticipantDto;
   @ApiPropertyOptional({ format: 'date', nullable: true }) preferredDate!: string | null;
   @ApiPropertyOptional({ nullable: true }) preferredTimeFrom!: string | null;
   @ApiPropertyOptional({ nullable: true }) preferredTimeTo!: string | null;

@@ -3,6 +3,7 @@ import { User } from '../../users/entities/user.entity';
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm';
 
 import { PatientStatus } from '../enums/patient-status.enum';
+import { PatientRelationship } from './patient-relationship.entity';
 
 @Entity('patients')
 @Index('UQ_patients_user_id', ['userId'], {
@@ -77,4 +78,7 @@ city!: string | null;
 
   @OneToMany(() => Booking, (booking) => booking.participant)
   bookings!: Booking[];
+
+  @OneToMany(() => PatientRelationship, (relationship) => relationship.patient)
+  relationships!: PatientRelationship[];
 }

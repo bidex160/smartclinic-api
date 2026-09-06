@@ -8,7 +8,7 @@ import { UserCredential } from '../users/entities/user-credential.entity';
 import { Patient } from '../patients/entities/patient.entity';
 
 describe('AuthService', () => {
-  const dto = { email: ' Ada@Example.COM ', password: 'a-secure-password', givenName: 'Ada', familyName: 'Okafor', phone: '+2348000000000' };
+  const dto = { email: ' Ada@Example.COM ', password: 'a-secure-password', givenName: 'Ada', familyName: 'Okafor', phone: '+2348000000000', countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja' };
   function setup(user: any = null) {
     const savedUser = { id: 'a1', email: 'ada@example.com', emailNormalized: 'ada@example.com', displayName: 'Ada', status: UserStatus.ACTIVE, roles: [UserRole.USER] };
     const userTransactions = { create: jest.fn((value: any) => value), save: jest.fn().mockResolvedValue(savedUser) };

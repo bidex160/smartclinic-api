@@ -10,6 +10,11 @@ import { MePatientDashboardController } from './patient-dashboard.controller';
 import { PatientDashboardService } from './patient-dashboard.service';
 import { PatientDashboardActionProjectionService } from './patient-dashboard-action-projection.service';
 import { User } from 'src/users/entities/user.entity';
+import { PatientRelationship } from './entities/patient-relationship.entity';
+import { DependantRewardProvenance } from './entities/dependant-reward-provenance.entity';
+import { PatientAccessService } from './patient-access.service';
+import { DependantsService } from './dependants.service';
+import { MeDependantsController } from './dependants.controller';
 
 @Module({
   imports: [
@@ -20,9 +25,12 @@ import { User } from 'src/users/entities/user.entity';
       CareRequest,
       Booking,
       User,
+      PatientRelationship,
+      DependantRewardProvenance,
     ]),
   ],
-  controllers: [MePatientDashboardController],
-  providers: [PatientDashboardService, PatientDashboardActionProjectionService],
+  controllers: [MePatientDashboardController, MeDependantsController],
+  providers: [PatientDashboardService, PatientDashboardActionProjectionService, PatientAccessService, DependantsService],
+  exports: [PatientAccessService],
 })
 export class PatientsModule {}

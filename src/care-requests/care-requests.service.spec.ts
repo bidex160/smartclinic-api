@@ -14,7 +14,7 @@ describe('CareRequestsService', () => {
   const definition: any = { id: 'definition-1', code: 'GENERAL_CONSULTATION', name: 'General consultation', isActive: true };
   const provider: any = { id: 'provider-1', providerReference: 'SCPR-ABCDEF0123456789', displayName: 'Ada Clinic', providerType: 'CLINIC', city: 'Ikeja', stateOrRegion: 'Lagos', countryCode: 'NG', onboardingStatus: 'APPROVED' };
   const dto: any = { serviceCode: definition.code, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', contactMethod: CareRequestContactMethod.WHATSAPP };
-  let rows: any[]; let histories: any[]; let manager: any; let requests: any; let eligibility: any; let current: any; let readQb: any; let subject: CareRequestsService;
+  let rows: any[]; let histories: any[]; let manager: any; let requests: any; let eligibility: any; let current: any; let access: any; let readQb: any; let subject: CareRequestsService;
   beforeEach(() => {
     rows = []; histories = [];
     const patientRepo = { findOne: jest.fn().mockResolvedValue(patient) };
@@ -28,7 +28,8 @@ describe('CareRequestsService', () => {
     requests = { manager };
     eligibility = { requireEligible: jest.fn().mockResolvedValue({ id: 'offering-1', providerId: provider.id, provider, selectedDeliveryOption: { deliveryMode: CareDeliveryMode.IN_PERSON, priceMinor: '1500000', currency: 'NGN' } }) };
     current = { resolveOperational: jest.fn().mockResolvedValue(provider) };
-    subject = new CareRequestsService(requests, patientRepo as any, eligibility, current);
+    access = { resolveAccessiblePatient: jest.fn().mockResolvedValue(patient) };
+    subject = new CareRequestsService(requests, patientRepo as any, eligibility, current, access);
     (subject as any).getMapped = jest.fn(async (_manager: any, id: string) => ({ reference: rows.find((row) => row.id === id)?.reference, status: rows.find((row) => row.id === id)?.status }));
   });
 
@@ -68,10 +69,24 @@ describe('CareRequestsService', () => {
     expect(rows[0]).toMatchObject({ preferredProviderId: provider.id, preferredProviderCareServiceId: 'offering-1', assignedProviderId: provider.id, assignedProviderCareServiceId: 'offering-1', servicePriceMinor: '1500000', serviceCurrency: 'NGN' });
   });
 
+  it('preserves SELF creation when participant reference is omitted', async () => {
+    await subject.create(user, dto);
+    expect(access.resolveAccessiblePatient).not.toHaveBeenCalled();
+    expect(rows[0]).toMatchObject({ userId: user.id, patientId: patient.id });
+  });
+
+  it('creates a dependant request with guardian ownership and participant identity', async () => {
+    const dependant = { id: 'dependant-1', patientReference: 'SCP-CHLD-0001', userId: null, email: null, phone: null, status: 'ACTIVE', deletedAt: null };
+    access.resolveAccessiblePatient.mockResolvedValue(dependant);
+    await subject.create(user, { ...dto, participantPatientReference: dependant.patientReference });
+    expect(access.resolveAccessiblePatient).toHaveBeenCalledWith(user.id, dependant.patientReference);
+    expect(rows[0]).toMatchObject({ userId: user.id, patientId: dependant.id });
+  });
+
   it('rejects an inactive/unknown service', async () => { manager.getRepository(CareServiceDefinition).findOne.mockResolvedValue(null); await expect(subject.create(user, dto)).rejects.toBeInstanceOf(ConflictException); expect(rows).toHaveLength(0); });
   it('propagates preferred-provider eligibility failures without creating', async () => { eligibility.requireEligible.mockRejectedValue(new ConflictException()); await expect(subject.create(user, { ...dto, preferredProviderReference: provider.providerReference })).rejects.toBeInstanceOf(ConflictException); expect(rows).toHaveLength(0); });
 
-  it('uses patient-scoped lookup for cancellation and hides another patient request', async () => { manager.getRepository(CareRequest).findOne.mockResolvedValue(null); await expect(subject.cancelMine(user, 'SC-CARE-ABCDEF123456')).rejects.toBeInstanceOf(NotFoundException); expect(manager.getRepository(CareRequest).findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { reference: 'SC-CARE-ABCDEF123456', patientId: patient.id } })); });
+  it('uses request-owner lookup for cancellation and hides another guardian request', async () => { manager.getRepository(CareRequest).findOne.mockResolvedValue(null); await expect(subject.cancelMine(user, 'SC-CARE-ABCDEF123456')).rejects.toBeInstanceOf(NotFoundException); expect(manager.getRepository(CareRequest).findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { reference: 'SC-CARE-ABCDEF123456', userId: user.id } })); });
   it('prevents cancellation after provider acceptance', async () => { manager.getRepository(CareRequest).findOne.mockResolvedValue({ id: 'request', status: CareRequestStatus.PROVIDER_ACCEPTED }); await expect(subject.cancelMine(user, 'SC-CARE-ABCDEF123456')).rejects.toBeInstanceOf(ConflictException); });
 
   it('lets only the assigned provider accept and revalidates eligibility under lock', async () => {
@@ -83,15 +98,15 @@ describe('CareRequestsService', () => {
   it('provider queues are scoped only to the currently assigned provider', async () => { await subject.listForProvider(user, { page: 1, limit: 20 }); expect(readQb.where).toHaveBeenCalledWith('request.assignedProviderId = :providerId', { providerId: provider.id }); });
 
   it('returns null appointment for an unscheduled patient/provider detail', async () => {
-    const request: any = { reference: 'SC-CARE-ABCDEF123456', status: CareRequestStatus.PROVIDER_ACCEPTED, patientId: patient.id, assignedProviderId: provider.id, careServiceDefinition: definition, preferredProvider: null, assignedProvider: provider, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', preferredDate: null, preferredTime: null, contactMethod: CareRequestContactMethod.WHATSAPP, notes: null, appointments: [], createdAt: new Date(), updatedAt: new Date() };
+    const request: any = { reference: 'SC-CARE-ABCDEF123456', status: CareRequestStatus.PROVIDER_ACCEPTED, patientId: patient.id, patient, assignedProviderId: provider.id, careServiceDefinition: definition, preferredProvider: null, assignedProvider: provider, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', preferredDate: null, preferredTime: null, contactMethod: CareRequestContactMethod.WHATSAPP, notes: null, appointments: [], createdAt: new Date(), updatedAt: new Date() };
     readQb.getOne.mockResolvedValue(request);
-    await expect(subject.getMine(user, request.reference)).resolves.toMatchObject({ appointment: null });
+    await expect(subject.getMine(user, request.reference)).resolves.toMatchObject({ appointment: null, participant: { patientReference: patient.patientReference, displayName: `${patient.givenName} ${patient.familyName}` } });
     await expect(subject.getForProvider(user, request.reference)).resolves.toMatchObject({ appointment: null });
   });
 
   it('projects the authoritative appointment and safe location without internal IDs', async () => {
     const appointment: any = { id: 'appointment-secret', reference: 'SC-APT-ABCDEF123456', status: CareAppointmentStatus.SCHEDULED, deliveryMode: CareDeliveryMode.IN_PERSON, meetingUrl: null, scheduledDate: '2026-09-10', scheduledTimeFrom: '10:30:00', scheduledTimeTo: '11:00:00', timezone: 'Africa/Lagos', createdAt: new Date('2026-08-28T10:00:00Z'), providerLocation: { id: 'location-secret', providerId: 'provider-secret', locationReference: 'SCPL-ABCDEF0123456789', name: 'Ikeja Clinic', addressLine1: '12 Clinic Road', addressLine2: null, city: 'Ikeja', state: 'Lagos', postalCode: '100271', countryCode: 'NG' } };
-    const request: any = { reference: 'SC-CARE-ABCDEF123456', status: CareRequestStatus.SCHEDULED, patientId: patient.id, assignedProviderId: provider.id, careServiceDefinition: definition, preferredProvider: null, assignedProvider: provider, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', preferredDate: null, preferredTime: null, contactMethod: CareRequestContactMethod.WHATSAPP, notes: null, appointments: [appointment], createdAt: new Date(), updatedAt: new Date() };
+    const request: any = { reference: 'SC-CARE-ABCDEF123456', status: CareRequestStatus.SCHEDULED, patientId: patient.id, patient, assignedProviderId: provider.id, careServiceDefinition: definition, preferredProvider: null, assignedProvider: provider, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', preferredDate: null, preferredTime: null, contactMethod: CareRequestContactMethod.WHATSAPP, notes: null, appointments: [appointment], createdAt: new Date(), updatedAt: new Date() };
     readQb.getOne.mockResolvedValue(request);
     const patientResult: any = await subject.getMine(user, request.reference); const providerResult: any = await subject.getForProvider(user, request.reference);
     expect(patientResult.appointment).toEqual({ reference: appointment.reference, status: CareAppointmentStatus.SCHEDULED, scheduledDate: '2026-09-10', scheduledTimeFrom: '10:30:00', scheduledTimeTo: '11:00:00', timezone: 'Africa/Lagos', deliveryMode: CareDeliveryMode.IN_PERSON, hasMeetingLink: false, location: { reference: 'SCPL-ABCDEF0123456789', name: 'Ikeja Clinic', addressLine1: '12 Clinic Road', addressLine2: null, city: 'Ikeja', stateOrRegion: 'Lagos', postalCode: '100271', countryCode: 'NG' } });
@@ -112,7 +127,7 @@ describe('CareRequestsService', () => {
     readQb.getOne.mockResolvedValue(null);
     await expect(subject.getMine(user, 'SC-CARE-ABCDEF123456')).rejects.toBeInstanceOf(NotFoundException);
     await expect(subject.getForProvider(user, 'SC-CARE-ABCDEF123456')).rejects.toBeInstanceOf(NotFoundException);
-    expect(readQb.andWhere).toHaveBeenCalledWith('request.patientId = :patientId', { patientId: patient.id });
+    expect(readQb.andWhere).toHaveBeenCalledWith('request.userId = :userId', { userId: user.id });
     expect(readQb.andWhere).toHaveBeenCalledWith('request.assignedProviderId = :providerId', { providerId: provider.id });
   });
 

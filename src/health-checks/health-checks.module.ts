@@ -43,6 +43,7 @@ import { HealthCheckConfigurationQuote } from './entities/health-check-configura
 import { HealthCheckCatalogueHistory } from './entities/health-check-catalogue-history.entity';
 import { AdminHealthCheckCatalogueController } from './admin-health-check-catalogue.controller';
 import { AdminHealthCheckCatalogueService } from './admin-health-check-catalogue.service';
+import { PatientsModule } from '../patients/patients.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { AdminHealthCheckCatalogueService } from './admin-health-check-catalogue
     ProvidersModule,
     RewardsModule,
     EarningsModule,
+    PatientsModule,
     TypeOrmModule.forFeature([
       HealthCheckPackage,
       FulfilmentMode,

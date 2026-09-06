@@ -45,6 +45,13 @@ describe('FastTrack API boundaries (e2e)', () => {
     expect(fasttrack.createExternal).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-user' }), body);
   });
 
+  it('accepts a public dependant participant reference and rejects internal ownership fields', async () => {
+    const body = { providerReference: 'SCPR-ABCDEF0123456789', serviceCode: 'GENERAL_CONSULTATION', externalAppointmentReference: 'HOSP-124', appointmentDate: '2026-09-10', participantPatientReference: 'SCP-CHLD-0001' };
+    await request(app.getHttpServer()).post('/api/v1/me/fasttrack-requests/external').set('Authorization', 'Bearer user').send({ ...body, patientId: 'spoof' }).expect(400);
+    await request(app.getHttpServer()).post('/api/v1/me/fasttrack-requests/external').set('Authorization', 'Bearer user').send(body).expect(201);
+    expect(fasttrack.createExternal).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'user-user' }), body);
+  });
+
   it('separates provider verification and admin operations roles', async () => {
     await request(app.getHttpServer()).post(`/api/v1/provider/fasttrack-requests/${reference}/verify`).set('Authorization', 'Bearer user').expect(403);
     await request(app.getHttpServer()).post(`/api/v1/provider/fasttrack-requests/${reference}/verify`).set('Authorization', 'Bearer provider').expect(201);
@@ -55,6 +62,6 @@ describe('FastTrack API boundaries (e2e)', () => {
   it('scopes payment initialization through authenticated USER context', async () => {
     await request(app.getHttpServer()).post(`/api/v1/me/fasttrack-requests/${reference}/funding/initialize`).set('Authorization', 'Bearer provider').expect(403);
     await request(app.getHttpServer()).post(`/api/v1/me/fasttrack-requests/${reference}/funding/initialize`).set('Authorization', 'Bearer user').expect(201).expect(({ body }) => expect(body).toMatchObject({ amount: '5000.00', currency: 'NGN' }));
-    expect(payments.initializeFastTrackPayment).toHaveBeenCalledWith(reference, 'user-user');
+    expect(payments.initializeFastTrackPayment).toHaveBeenCalledWith(reference, 'user-user', undefined);
   });
 });

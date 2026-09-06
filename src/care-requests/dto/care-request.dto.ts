@@ -21,6 +21,10 @@ import { CareAppointmentStatus } from "../../care-appointments/enums/care-appoin
 import { CareDeliveryMode } from "../../providers/enums/care-delivery-mode.enum";
 
 export class CreateCareRequestDto {
+  @ApiPropertyOptional({ description: "Public reference of SELF or an authorized dependant Patient. Omit for SELF." })
+  @IsOptional()
+  @Matches(/^SCP-[A-Z0-9]{4}-[A-Z0-9]{4}$/)
+  participantPatientReference?: string;
   @ApiProperty()
   @Transform(({ value }) =>
     typeof value === "string" ? value.trim().toUpperCase() : value,

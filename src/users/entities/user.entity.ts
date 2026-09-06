@@ -4,6 +4,7 @@ import { Booking } from '../../bookings/entities/booking.entity';
 import { BookingFunding } from '../../bookings/entities/booking-funding.entity';
 import { BookingStatusHistory } from '../../bookings/entities/booking-status-history.entity';
 import { Patient } from '../../patients/entities/patient.entity';
+import { PatientRelationship } from '../../patients/entities/patient-relationship.entity';
 import { Provider } from '../../providers/entities/provider.entity';
 import { ProviderAssignmentHistory } from '../../providers/entities/provider-assignment-history.entity';
 import { UserStatus } from '../enums/user-status.enum';
@@ -73,4 +74,7 @@ export class User {
 
   @OneToMany(() => ProviderAssignmentHistory, (history) => history.actor)
   providerAssignmentChanges!: ProviderAssignmentHistory[];
+
+  @OneToMany(() => PatientRelationship, (relationship) => relationship.relatedUser)
+  patientRelationships!: PatientRelationship[];
 }

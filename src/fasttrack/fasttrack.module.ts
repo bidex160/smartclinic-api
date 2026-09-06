@@ -9,6 +9,7 @@ import { FastTrackRequest } from './entities/fasttrack-request.entity';
 import { AdminFastTrackController, MeFastTrackController, ProviderFastTrackController } from './fasttrack.controller';
 import { FastTrackService } from './fasttrack.service';
 import { User } from '../users/entities/user.entity';
+import { PatientsModule } from '../patients/patients.module';
 
-@Module({ imports: [AuthModule, ProvidersModule, PaymentsModule, TypeOrmModule.forFeature([FastTrackRequest, FastTrackRequestStatusHistory, Patient, User])], controllers: [MeFastTrackController, ProviderFastTrackController, AdminFastTrackController], providers: [FastTrackService], exports: [FastTrackService] })
+@Module({ imports: [AuthModule, ProvidersModule, PaymentsModule, PatientsModule, TypeOrmModule.forFeature([FastTrackRequest, FastTrackRequestStatusHistory, Patient, User])], controllers: [MeFastTrackController, ProviderFastTrackController, AdminFastTrackController], providers: [FastTrackService], exports: [FastTrackService] })
 export class FastTrackModule {}

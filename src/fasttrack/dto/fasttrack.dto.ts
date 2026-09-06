@@ -9,6 +9,7 @@ const optionalTrim = ({ value }: { value: unknown }) => typeof value === 'string
 
 export class FastTrackReferenceParamsDto { @ApiProperty() @Matches(/^SC-FT-[A-F0-9]{16}$/) reference!: string; }
 export class CreateExternalFastTrackDto {
+  @ApiPropertyOptional({ description: 'Public reference of SELF or an authorized dependant Patient. Omit for SELF.' }) @IsOptional() @Matches(/^SCP-[A-Z0-9]{4}-[A-Z0-9]{4}$/) participantPatientReference?: string;
   @ApiProperty() @Transform(trim) @Matches(/^SCPR-[A-F0-9]{16,32}$/) providerReference!: string;
   @ApiProperty() @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z][A-Z0-9_]{1,79}$/) serviceCode!: string;
   @ApiProperty() @Transform(trim) @IsString() @MinLength(1) @MaxLength(160) externalAppointmentReference!: string;

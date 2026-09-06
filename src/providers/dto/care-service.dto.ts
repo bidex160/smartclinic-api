@@ -59,6 +59,7 @@ export class SaveProviderClinicalTemplateDto {
 
 export class FindCareQueryDto {
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @MaxLength(160) q?: string;
+  @ApiPropertyOptional({ default: false, description: 'When true, return only services with an active FastTrack configuration.' }) @IsOptional() @Transform(({ value }) => value === true || value === 'true' ? true : value === false || value === 'false' ? false : value) @IsBoolean() fastTrackOnly?: boolean;
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z][A-Z0-9_]{1,79}$/) serviceCode?: string;
   @ApiPropertyOptional({ enum: ProviderType }) @IsOptional() @IsEnum(ProviderType) providerType?: ProviderType;
   @ApiPropertyOptional({ enum: CareDeliveryMode }) @IsOptional() @IsEnum(CareDeliveryMode) deliveryMode?: CareDeliveryMode;

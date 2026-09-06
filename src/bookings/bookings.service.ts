@@ -27,6 +27,7 @@ import { deriveAppointmentEndTime } from '../providers/booking-availability-cont
 import { ProviderService } from '../providers/entities/provider-service.entity';
 import { ProviderServiceAddon } from '../providers/entities/provider-service-addon.entity';
 import { HealthCheckConfigurationQuote } from '../health-checks/entities/health-check-configuration-quote.entity';
+import { PatientAccessService } from '../patients/patient-access.service';
 
 
 @Injectable()
@@ -46,11 +47,13 @@ export class BookingsService {
     private readonly fulfilmentModeRepository: Repository<FulfilmentMode>,
     private readonly providerCapabilities: ProviderCapabilitiesService,
     @InjectRepository(HealthCheckConfigurationQuote) private readonly configurationQuotes:Repository<HealthCheckConfigurationQuote>,
+    private readonly patientAccess: PatientAccessService,
   ) {}
 
   async createSelf(user: User, dto: CreateSelfBookingDto): Promise<BookingResponseDto> {
-    const patient = await this.patientRepository.findOne({ where: { userId: user.id }, withDeleted: true });
-    if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE) throw new NotFoundException('SELF Patient identity was not found for the authenticated user');
+    const patient = dto.participantPatientReference
+      ? await this.patientAccess.resolveAccessiblePatient(user.id, dto.participantPatientReference)
+      : await this.resolveSelfPatient(user.id);
     if(dto.configurationReference)return this.createFromQuote(user,patient,dto);
     if(!dto.healthCheckPackageId||!dto.fulfilmentModeId)throw new BadRequestException('Legacy booking requires healthCheckPackageId and fulfilmentModeId, or supply configurationReference');
     return this.create({ ...dto, healthCheckPackageId:dto.healthCheckPackageId,fulfilmentModeId:dto.fulfilmentModeId,bookerUserId: user.id, participantPatientId: patient.id });
@@ -160,19 +163,17 @@ export class BookingsService {
     throw new ConflictException('Unable to generate a unique booking reference');
   }
 
-  async requireSelfBooking(user: User, bookingReference: string): Promise<Booking> {
+  async requireOwnedBooking(user: User, bookingReference: string): Promise<Booking> {
     if (user.deletedAt || user.status !== UserStatus.ACTIVE) this.selfBookingNotFound();
-    const patient = await this.patientRepository.findOne({
-      where: { userId: user.id },
-      withDeleted: true,
-    });
-    if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE)
-      this.selfBookingNotFound();
     const booking = await this.bookingRepository.findOne({
-      where: { bookingReference, participantPatientId: patient.id },
+      where: { bookingReference, bookerUserId: user.id },
     });
     if (!booking) this.selfBookingNotFound();
     return booking;
+  }
+
+  async requireSelfBooking(user: User, bookingReference: string): Promise<Booking> {
+    return this.requireOwnedBooking(user, bookingReference);
   }
 
   async create(createBookingDto: CreateBookingDto): Promise<BookingResponseDto> {
@@ -313,6 +314,12 @@ export class BookingsService {
 
   private selfBookingNotFound(): never {
     throw new NotFoundException('Health Check was not found for the authenticated patient');
+  }
+
+  private async resolveSelfPatient(userId: string): Promise<Patient> {
+    const patient = await this.patientRepository.findOne({ where: { userId }, withDeleted: true });
+    if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE) throw new NotFoundException('SELF Patient identity was not found for the authenticated user');
+    return patient;
   }
 
 }

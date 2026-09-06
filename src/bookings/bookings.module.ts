@@ -33,6 +33,7 @@ import { MeHealthCheckPaymentsController, MeHealthCheckRewardsController } from 
 import { ProvidersModule } from '../providers/providers.module';
 import { ProviderService } from '../providers/entities/provider-service.entity';
 import { HealthCheckConfigurationQuote } from '../health-checks/entities/health-check-configuration-quote.entity';
+import { PatientsModule } from '../patients/patients.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { HealthCheckConfigurationQuote } from '../health-checks/entities/health-
     AuthModule,
     PaymentsModule,
     ProvidersModule,
+    PatientsModule,
     TypeOrmModule.forFeature([
       Booking,
       BookingVisitAddress,

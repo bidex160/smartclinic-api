@@ -17,11 +17,11 @@ describe('CareChatService', () => {
   let care: any; let conversation: any; let messages: any[]; let attachments: any[]; let manager: any; let subject: CareChatService; let selectQb: any; let updateQb: any; let storage: any;
 
   beforeEach(() => {
-    care = { id: 'care-id', reference: 'SC-CARE-ABCDEF123456', patientId: patient.id, assignedProviderId: provider.id, status: CareRequestStatus.PROVIDER_ACCEPTED };
+    care = { id: 'care-id', reference: 'SC-CARE-ABCDEF123456', userId: patientUser.id, patientId: patient.id, assignedProviderId: provider.id, status: CareRequestStatus.PROVIDER_ACCEPTED };
     conversation = null; messages = []; attachments = [];
     const patientRepo = { findOne: jest.fn(async ({ where }: any) => where.userId === patientUser.id ? patient : where.id === patient.id ? patient : null) };
     const providerRepo = { findOne: jest.fn().mockResolvedValue(provider) };
-    const careRepo = { findOne: jest.fn(async ({ where }: any) => where.reference === care.reference && (where.patientId === patient.id || where.assignedProviderId === provider.id) ? care : null) };
+    const careRepo = { findOne: jest.fn(async ({ where }: any) => where.reference === care.reference && ((where.userId === care.userId) || (where.assignedProviderId === provider.id)) ? care : null) };
     const conversationRepo = { findOne: jest.fn(async () => conversation), create: jest.fn((value) => ({ id: 'conversation-id', createdAt: new Date(), updatedAt: new Date(), ...value })), save: jest.fn(async (value) => { conversation = value; return value; }) };
     selectQb = {}; for (const method of ['leftJoinAndSelect', 'where', 'orderBy', 'addOrderBy', 'skip', 'take']) selectQb[method] = jest.fn().mockReturnValue(selectQb); selectQb.getManyAndCount = jest.fn(async () => [messages, messages.length]);
     updateQb = {}; for (const method of ['update', 'set', 'where', 'andWhere']) updateQb[method] = jest.fn().mockReturnValue(updateQb); updateQb.execute = jest.fn().mockResolvedValue({ affected: 2 });
@@ -37,7 +37,7 @@ describe('CareChatService', () => {
   it('lazily creates exactly one conversation for the accepted patient/provider without requiring an appointment', async () => {
     const patientChat: any = await subject.openPatient(patientUser, care.reference);
     const providerChat: any = await subject.openProvider(providerUser, care.reference);
-    expect(patientChat).toMatchObject({ careRequestReference: care.reference, canSendMessages: true, appointment: null, participant: { providerReference: provider.providerReference } });
+    expect(patientChat).toMatchObject({ careRequestReference: care.reference, canSendMessages: true, appointment: null, participant: { providerReference: provider.providerReference }, subject: { patientReference: undefined, displayName: 'Ada Okafor' } });
     expect(providerChat).toMatchObject({ conversationReference: patientChat.conversationReference, participant: { displayName: 'Ada O.' } });
     expect(manager.getRepository(CareConversation).save).toHaveBeenCalledTimes(1);
   });
@@ -64,6 +64,18 @@ describe('CareChatService', () => {
   it('uses narrow patient/current-provider ownership and removes old provider access', async () => {
     await expect(subject.openPatient({ id: 'other-user' } as any, care.reference)).rejects.toBeInstanceOf(NotFoundException);
     await expect(subject.openProvider({ id: 'old-provider-user' } as any, care.reference)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('allows an account owner to chat about an accountless dependant without creating an identity', async () => {
+    const dependant = { id: 'dependant-id', patientReference: 'SCP-CHLD-0001', userId: null, givenName: 'Aisha', familyName: 'Okafor' };
+    care.patientId = dependant.id;
+    const patientRepo = manager.getRepository(Patient);
+    patientRepo.findOne = jest.fn().mockResolvedValue(dependant);
+    const result: any = await subject.sendPatient(patientUser, care.reference, 'She has had a fever since yesterday.');
+    expect(result.senderType).toBe(CareMessageSenderType.PATIENT);
+    expect(care.patientId).toBe(dependant.id);
+    expect(result).not.toHaveProperty('senderUserId');
+    expect(patientRepo.findOne).not.toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ userId: patientUser.id }) }));
   });
 
   it('paginates newest-first with a stable public-reference tie-break and safe message DTOs', async () => {

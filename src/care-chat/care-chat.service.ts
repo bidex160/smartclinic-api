@@ -12,7 +12,6 @@ import { CareAppointment } from "../care-appointments/entities/care-appointment.
 import { CareAppointmentStatus } from "../care-appointments/enums/care-appointment-status.enum";
 import { CareRequest } from "../care-requests/entities/care-request.entity";
 import { Patient } from "../patients/entities/patient.entity";
-import { PatientStatus } from "../patients/enums/patient-status.enum";
 import { CurrentProviderService } from "../providers/current-provider.service";
 import { Provider } from "../providers/entities/provider.entity";
 import { User } from "../users/entities/user.entity";
@@ -227,7 +226,7 @@ export class CareChatService {
     const repository = manager.getRepository(CareRequest);
     const where =
       actor.type === CareMessageSenderType.PATIENT
-        ? { reference, patientId: actor.patientId! }
+        ? { reference, userId: actor.userId }
         : { reference, assignedProviderId: actor.providerId! };
     const care = await repository.findOne({
       where,
@@ -314,6 +313,12 @@ export class CareChatService {
       canSendMessages: careChatPolicy.canSend(care.status),
       unreadCount,
       participant,
+      subject: {
+        patientReference: patient.patientReference,
+        firstName: patient.givenName,
+        lastName: patient.familyName,
+        displayName: `${patient.givenName} ${patient.familyName}`.trim(),
+      },
       appointment,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
@@ -365,20 +370,9 @@ export class CareChatService {
       : patient.givenName.trim();
   }
   private async patientActor(user: User): Promise<ChatActor> {
-    const patient = await this.patients.findOne({
-      where: { userId: user.id },
-      withDeleted: true,
-    });
-    if (
-      !patient ||
-      patient.deletedAt ||
-      patient.status !== PatientStatus.ACTIVE
-    )
-      throw new NotFoundException("Patient profile was not found");
     return {
       type: CareMessageSenderType.PATIENT,
       userId: user.id,
-      patientId: patient.id,
     };
   }
   private async providerActor(user: User): Promise<ChatActor> {

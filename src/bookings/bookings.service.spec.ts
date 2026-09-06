@@ -42,7 +42,7 @@ describe('BookingsService', () => {
       visitAddressSummary: { city: 'Ibadan', stateOrRegion: 'Oyo', postalCode: undefined, countryCode: 'NG' },
       healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential Health Check' },
       fulfilmentMode: { code: 'PROVIDER_LOCATION', name: 'Provider location' },
-      participant: { givenName: 'Ada', familyName: 'Okafor' },
+      participant: { patientReference: 'SCP-AAAA-BBBB', givenName: 'Ada', familyName: 'Okafor' },
     } as unknown as Booking;
     const transactionalBookingRepository = {
       create: jest.fn((input: Booking) => input),
@@ -74,6 +74,7 @@ describe('BookingsService', () => {
       referenceRepository as never,
       referenceRepository as never,
       providerCapabilities as never,
+      {} as never,
       {} as never,
     );
 
@@ -173,7 +174,7 @@ describe('BookingsService', () => {
       status: BookingStatus.DRAFT,
       healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential Health Check' },
       fulfilmentMode: { code: 'PROVIDER_LOCATION', name: 'Provider location' },
-      participant: { givenName: 'Ada', familyName: 'Okafor' },
+      participant: { patientReference: 'SCP-AAAA-BBBB', givenName: 'Ada', familyName: 'Okafor', displayName: 'Ada Okafor' },
       quotedAmount: '12500.00',
       quotedCurrency: 'NGN',
       preferredDate: '2026-08-20',
@@ -199,18 +200,16 @@ describe('BookingsService', () => {
     await expect(service.findByReference('SC-2026-FFFFFFFFFFFF')).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('resolves payment ownership only through active User to active SELF Patient to participant booking', async () => {
-    const { service, bookingRepository, referenceRepository } = createService();
+  it('resolves patient-side lifecycle ownership through the authenticated booker', async () => {
+    const { service, bookingRepository } = createService();
     const user = { id: createBookingDto.bookerUserId, status: UserStatus.ACTIVE, deletedAt: null } as any;
-    referenceRepository.findOne.mockResolvedValueOnce({ id: createBookingDto.participantPatientId, userId: user.id, status: PatientStatus.ACTIVE, deletedAt: null });
-    await expect(service.requireSelfBooking(user, 'SC-2026-ABCDEFGHIJKL')).resolves.toBeDefined();
-    expect(bookingRepository.findOne).toHaveBeenCalledWith({ where: { bookingReference: 'SC-2026-ABCDEFGHIJKL', participantPatientId: createBookingDto.participantPatientId } });
+    await expect(service.requireOwnedBooking(user, 'SC-2026-ABCDEFGHIJKL')).resolves.toBeDefined();
+    expect(bookingRepository.findOne).toHaveBeenCalledWith({ where: { bookingReference: 'SC-2026-ABCDEFGHIJKL', bookerUserId: user.id } });
   });
 
   it('returns the same narrow not-found response for another Patient booking', async () => {
-    const { service, bookingRepository, referenceRepository } = createService();
+    const { service, bookingRepository } = createService();
     const user = { id: createBookingDto.bookerUserId, status: UserStatus.ACTIVE, deletedAt: null } as any;
-    referenceRepository.findOne.mockResolvedValueOnce({ id: createBookingDto.participantPatientId, userId: user.id, status: PatientStatus.ACTIVE, deletedAt: null });
     bookingRepository.findOne.mockResolvedValueOnce(null);
     await expect(service.requireSelfBooking(user, 'SC-2026-111111111111')).rejects.toBeInstanceOf(NotFoundException);
   });
@@ -303,13 +302,31 @@ describe('BookingsService quote-backed PostgreSQL locking', () => {
     const patientRepository = { findOne: jest.fn().mockResolvedValue(patient) };
     const fulfilmentModes = { findOne: jest.fn().mockResolvedValue({ id: 'mode-1', code: 'PROVIDER_LOCATION' }) };
     const capabilities = { findEligibleProviders: jest.fn().mockResolvedValue([{ id: offering.id }]) };
+    const patientAccess = { resolveAccessiblePatient: jest.fn().mockResolvedValue(patient) };
     const service = new BookingsService(
       bookingRepository as never, {} as never, patientRepository as never, {} as never, {} as never,
-      fulfilmentModes as never, capabilities as never, quoteRepository as never,
+      fulfilmentModes as never, capabilities as never, quoteRepository as never, patientAccess as never,
     );
     jest.spyOn(service, 'findByReference').mockResolvedValue({ bookingReference: savedBooking.bookingReference } as any);
-    return { service, quote, offering, quoteRepository, offeringRepository, bookingRepositoryInTransaction, addressRepository, bookingRepository, capabilities };
+    return { service, quote, offering, quoteRepository, offeringRepository, bookingRepositoryInTransaction, addressRepository, bookingRepository, capabilities, patientRepository, patientAccess };
   }
+
+  it('preserves SELF resolution when participantPatientReference is omitted', async () => {
+    const value = harness();
+    await value.service.createSelf(user, dto);
+    expect(value.patientRepository.findOne).toHaveBeenCalledWith({ where: { userId: user.id }, withDeleted: true });
+    expect(value.patientAccess.resolveAccessiblePatient).not.toHaveBeenCalled();
+  });
+
+  it('uses PatientAccessService for an explicit dependant and keeps booker separate from participant', async () => {
+    const value = harness();
+    const dependant = { id: 'dependant-1', patientReference: 'SCP-CHLD-0001', userId: null, email: null, phone: null };
+    value.patientAccess.resolveAccessiblePatient.mockResolvedValue(dependant);
+    value.quote.patientId = dependant.id;
+    await value.service.createSelf(user, { ...dto, participantPatientReference: dependant.patientReference });
+    expect(value.patientAccess.resolveAccessiblePatient).toHaveBeenCalledWith(user.id, dependant.patientReference);
+    expect(value.bookingRepositoryInTransaction.create).toHaveBeenCalledWith(expect.objectContaining({ bookerUserId: user.id, participantPatientId: dependant.id }));
+  });
 
   it('locks only the quote base row and loads optional related configuration separately', async () => {
     const value = harness();

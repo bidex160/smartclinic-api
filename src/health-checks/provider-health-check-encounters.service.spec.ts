@@ -15,12 +15,12 @@ import { ProviderAssignment } from '../providers/entities/provider-assignment.en
 describe('ProviderHealthCheckEncountersService', () => {
   const user: any = { id: 'user-1' }; const provider: any = { id: 'provider-1' };
   let booking: any, assignment: any, encounter: any, measurements: any[], encounterHistory: any[], measurementHistory: any[], bookingHistory: any[];
-  let encounterRepository: any, bookingRepository: any, assignmentRepository: any, measurementRepository: any, manager: any, subject: ProviderHealthCheckEncountersService;
+  let encounterRepository: any, bookingRepository: any, assignmentRepository: any, measurementRepository: any, manager: any, referrals: any, subject: ProviderHealthCheckEncountersService;
   const dto: any = { bloodPressure: { systolic: 120, diastolic: 80 }, bloodGlucose: { value: 95 }, bmi: { value: 24.2 }, temperature: { value: 36.8 }, oxygenSaturation: { value: 98 }, pulse: { value: 72 } };
   const response: any = { bookingReference: 'SC-2026-7F23B0C9D1E4', status: HealthCheckEncounterStatus.IN_PROGRESS, measurements: [] };
 
   beforeEach(() => {
-    booking = { id: 'booking-1', bookingReference: response.bookingReference, status: BookingStatus.SCHEDULED };
+    booking = { id: 'booking-1', bookingReference: response.bookingReference, bookerUserId: 'guardian-1', participantPatientId: 'dependant-1', status: BookingStatus.SCHEDULED };
     assignment = { id: 'assignment-1', bookingId: booking.id, providerId: provider.id, status: ProviderAssignmentStatus.CONFIRMED };
     encounter = null; measurements = []; encounterHistory = []; measurementHistory = []; bookingHistory = [];
     bookingRepository = { findOne: jest.fn(async () => booking), save: jest.fn(async (value) => value) };
@@ -31,7 +31,8 @@ describe('ProviderHealthCheckEncountersService', () => {
     const encounterHistoryRepository = historyRepository(encounterHistory); const measurementHistoryRepository = historyRepository(measurementHistory); const bookingHistoryRepository = historyRepository(bookingHistory);
     manager = { getRepository: jest.fn((entity) => entity === Booking ? bookingRepository : entity === ProviderAssignment ? assignmentRepository : entity === HealthCheckEncounter ? encounterRepository : entity === HealthCheckMeasurement ? measurementRepository : entity === HealthCheckEncounterHistory ? encounterHistoryRepository : entity === HealthCheckMeasurementHistory ? measurementHistoryRepository : entity === BookingStatusHistory ? bookingHistoryRepository : {}), transaction: jest.fn(async (work) => work(manager)) };
     encounterRepository.manager = manager;
-    subject = new ProviderHealthCheckEncountersService(encounterRepository, { resolve: jest.fn().mockResolvedValue(provider) } as any, { recordPatientFirstCareAction: jest.fn(), logQualificationFailure: jest.fn() } as any, { markHealthCheckPayable: jest.fn().mockResolvedValue(null) } as any);
+    referrals = { recordPatientFirstCareAction: jest.fn().mockResolvedValue(undefined), logQualificationFailure: jest.fn() };
+    subject = new ProviderHealthCheckEncountersService(encounterRepository, { resolve: jest.fn().mockResolvedValue(provider) } as any, referrals as any, { markHealthCheckPayable: jest.fn().mockResolvedValue(null) } as any);
     jest.spyOn(subject, 'get').mockResolvedValue(response);
   });
 
@@ -96,7 +97,7 @@ describe('ProviderHealthCheckEncountersService', () => {
   it('persists additional results using the frozen result type and unit', async () => {
     booking.commercialConfigurationSnapshot = { includedContents: [], selectedAddons: [{ code: 'CHOLESTEROL', name: 'Cholesterol', category: 'LAB', resultType: 'SINGLE_NUMERIC', unit: 'mmol/L' }] };
     encounter = { id: 'encounter-1', bookingId: booking.id, providerId: provider.id, providerAssignmentId: assignment.id, status: HealthCheckEncounterStatus.IN_PROGRESS };
-    await subject.saveMeasurements(user, booking.bookingReference, { ...dto, additionalResults: [{ code: 'CHOLESTEROL', value: 4.2 }] });
+    await subject.saveMeasurements(user, booking.bookingReference, { additionalResults: [{ code: 'CHOLESTEROL', value: 4.2 }] } as any);
     expect(measurements.find((item) => item.code === 'CHOLESTEROL')).toMatchObject({ valueNumeric: '4.2000', valueSecondaryNumeric: null, unit: 'mmol/L' });
   });
 
@@ -110,6 +111,7 @@ describe('ProviderHealthCheckEncountersService', () => {
     measurements = Object.values(HealthCheckMeasurementCode).map((code) => ({ code })); await subject.complete(user, booking.bookingReference);
     expect(encounter.status).toBe(HealthCheckEncounterStatus.COMPLETED); expect(encounter.completedAt).toEqual(expect.any(Date)); expect(booking.status).toBe(BookingStatus.COMPLETED); expect(encounterHistory).toHaveLength(1); expect(bookingHistory[0]).toMatchObject({ fromStatus: BookingStatus.IN_PROGRESS, toStatus: BookingStatus.COMPLETED });
     expect((subject as any).earnings.markHealthCheckPayable).toHaveBeenCalledWith(manager, booking.id, user.id);
+    expect(referrals.recordPatientFirstCareAction).toHaveBeenCalledWith('dependant-1', 'HEALTH_CHECK_COMPLETED', booking.bookingReference);
   });
 
   it('maps only the safe provider encounter projection', () => {

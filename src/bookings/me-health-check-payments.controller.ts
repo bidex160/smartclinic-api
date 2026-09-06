@@ -37,7 +37,7 @@ export class MeHealthCheckPaymentsController {
     @Param() { reference }: BookingReferenceParamsDto,
     @Body() dto: PublicCheckoutSelectionDto,
   ): Promise<PublicPaymentInitiationResponseDto> {
-    await this.bookings.requireSelfBooking(request.user, reference);
+    await this.bookings.requireOwnedBooking(request.user, reference);
     const option = dto?.option ?? CheckoutFundingOption.PAY_NOW;
     const funding = await this.payments.initializeFunding(reference, request.user.id, option);
     if (option === CheckoutFundingOption.PAY_LATER)
@@ -55,7 +55,7 @@ export class MeHealthCheckPaymentsController {
     @Req() request: { user: User },
     @Param() { reference }: BookingReferenceParamsDto,
   ): Promise<PublicPaymentStatusResponseDto> {
-    await this.bookings.requireSelfBooking(request.user, reference);
+    await this.bookings.requireOwnedBooking(request.user, reference);
     return this.payments.getPublicPaymentStatus(reference);
   }
 
@@ -69,7 +69,7 @@ export class MeHealthCheckPaymentsController {
     @Req() request: { user: User },
     @Param() { reference }: BookingReferenceParamsDto,
   ): Promise<PublicPaymentStatusResponseDto> {
-    await this.bookings.requireSelfBooking(request.user, reference);
+    await this.bookings.requireOwnedBooking(request.user, reference);
     return this.payments.verifyLatestBookingPayment(reference, request.user.id);
   }
 }
@@ -82,9 +82,9 @@ export class MeHealthCheckPaymentsController {
 export class MeHealthCheckRewardsController {
   constructor(private readonly bookings: BookingsService, private readonly payments: PaymentFlowService) {}
   @Get('preview') @ApiOperation({ summary: 'Preview server-authoritative reward redemption limits' })
-  async preview(@Req() request: { user: User }, @Param() { reference }: BookingReferenceParamsDto) { await this.bookings.requireSelfBooking(request.user, reference); return this.payments.previewRewardRedemption(reference, request.user.id); }
+  async preview(@Req() request: { user: User }, @Param() { reference }: BookingReferenceParamsDto) { await this.bookings.requireOwnedBooking(request.user, reference); return this.payments.previewRewardRedemption(reference, request.user.id); }
   @Post('apply') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Reserve reward points toward an owned Health Check' })
-  async apply(@Req() request: { user: User }, @Param() { reference }: BookingReferenceParamsDto, @Body() body: ApplyRewardPointsDto) { await this.bookings.requireSelfBooking(request.user, reference); return this.payments.applyRewardPoints(reference, request.user.id, body.points); }
+  async apply(@Req() request: { user: User }, @Param() { reference }: BookingReferenceParamsDto, @Body() body: ApplyRewardPointsDto) { await this.bookings.requireOwnedBooking(request.user, reference); return this.payments.applyRewardPoints(reference, request.user.id, body.points); }
   @Delete() @ApiOperation({ summary: 'Release an unsettled Health Check reward reservation' })
-  async release(@Req() request: { user: User }, @Param() { reference }: BookingReferenceParamsDto) { await this.bookings.requireSelfBooking(request.user, reference); return this.payments.releaseRewardPoints(reference, request.user.id); }
+  async release(@Req() request: { user: User }, @Param() { reference }: BookingReferenceParamsDto) { await this.bookings.requireOwnedBooking(request.user, reference); return this.payments.releaseRewardPoints(reference, request.user.id); }
 }

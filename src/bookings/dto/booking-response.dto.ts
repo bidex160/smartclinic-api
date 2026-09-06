@@ -20,11 +20,17 @@ class BookingFulfilmentModeResponseDto {
 }
 
 class BookingParticipantResponseDto {
+  @ApiProperty({ example: 'SCP-AB12-CD34' })
+  patientReference!: string;
+
   @ApiProperty({ example: 'Ada' })
   givenName!: string;
 
   @ApiProperty({ example: 'Okafor' })
   familyName!: string;
+
+  @ApiProperty({ example: 'Ada Okafor' })
+  displayName!: string;
 }
 
 export class BookingResponseDto {
@@ -91,8 +97,10 @@ export class BookingResponseDto {
         name: booking.fulfilmentMode.name,
       },
       participant: {
+        patientReference: booking.participant.patientReference,
         givenName: booking.participant.givenName,
         familyName: booking.participant.familyName,
+        displayName: `${booking.participant.givenName} ${booking.participant.familyName}`.trim(),
       },
       quotedAmount: booking.quotedAmount,
       quotedCurrency: booking.currency,

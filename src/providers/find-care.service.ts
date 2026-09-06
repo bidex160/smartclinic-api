@@ -34,6 +34,7 @@ export class FindCareService {
     if (query.q) builder.andWhere(new Brackets((where) => where.where('provider.displayName ILIKE :search', { search: `%${query.q}%` }).orWhere('definition.name ILIKE :search', { search: `%${query.q}%` })));
     if (query.serviceCode) builder.andWhere('definition.code = :serviceCode', { serviceCode: query.serviceCode });
     if (query.providerType) builder.andWhere('provider.providerType = :providerType', { providerType: query.providerType });
+    if (query.fastTrackOnly) builder.andWhere('careService.supportsFastTrack = true').andWhere('careService.fastTrackFeeMinor IS NOT NULL').andWhere('careService.fastTrackCurrency IS NOT NULL');
     if (query.deliveryMode) builder.andWhere('EXISTS (SELECT 1 FROM provider_care_service_delivery_options filtered_option WHERE filtered_option.provider_care_service_id = careService.id AND filtered_option.delivery_mode = :deliveryMode)', { deliveryMode: query.deliveryMode });
     if (query.deliveryMode !== CareDeliveryMode.VIRTUAL) this.applyPlace(builder, query);
     builder.orderBy('provider.displayName', 'ASC').addOrderBy('provider.providerReference', 'ASC').skip((query.page - 1) * query.limit).take(query.limit);
