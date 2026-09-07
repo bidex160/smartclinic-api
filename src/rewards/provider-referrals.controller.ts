@@ -22,7 +22,7 @@ import { ReferralsService } from './referrals.service';
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.PROVIDER)
-@Controller('provider/referrals/invitatiion')
+@Controller('provider/referrals')
 export class ProviderReferralsController {
   constructor(private readonly referrals: ReferralsService) {}
 
