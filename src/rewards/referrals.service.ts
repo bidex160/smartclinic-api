@@ -248,9 +248,10 @@ export class ReferralsService {
       referralCode: code.codeNormalized,
       links: {
         PATIENT: `/register?ref=${code.codeNormalized}`,
-        CLINIC: `/provider/register?ref=${code.codeNormalized}&type=CLINIC`,
-        LABORATORY: `/provider/register?ref=${code.codeNormalized}&type=LABORATORY`,
-        PHARMACY: `/provider/register?ref=${code.codeNormalized}&type=PHARMACY`,
+  CLINIC: `/provider/register?ref=${code.codeNormalized}&type=CLINIC`,
+  HOSPITAL: `/provider/register?ref=${code.codeNormalized}&type=HOSPITAL`,
+  LABORATORY: `/provider/register?ref=${code.codeNormalized}&type=LABORATORY`,
+  PHARMACY: `/provider/register?ref=${code.codeNormalized}&type=PHARMACY`,
       },
       ...balance,
       levelProgress,
