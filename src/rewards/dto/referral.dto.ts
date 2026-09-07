@@ -11,6 +11,7 @@ export class ReferralTargetProgressDto {
 
 export class ReferralLevelProgressDto {
   @ApiProperty({ type: ReferralTargetProgressDto }) patients!: ReferralTargetProgressDto;
+  @ApiProperty({ type: ReferralTargetProgressDto }) individuals!: ReferralTargetProgressDto;
   @ApiProperty({ type: ReferralTargetProgressDto }) clinics!: ReferralTargetProgressDto;
   @ApiProperty({ type: ReferralTargetProgressDto }) laboratories!: ReferralTargetProgressDto;
   @ApiProperty({ type: ReferralTargetProgressDto }) pharmacies!: ReferralTargetProgressDto;

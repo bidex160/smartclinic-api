@@ -20,7 +20,7 @@ describe('ProviderDashboardService', () => {
     expect(qb.select).toHaveBeenCalledWith(expect.stringContaining('AT TIME ZONE booking.scheduledTimezone'), 'today');
     expect(encounters.count).toHaveBeenNthCalledWith(1, { where: { providerId: 'provider-a', status: HealthCheckEncounterStatus.IN_PROGRESS } });
     expect(encounters.count).toHaveBeenNthCalledWith(2, { where: { providerId: 'provider-a', status: HealthCheckEncounterStatus.COMPLETED } });
-    expect(result).toEqual({ offers: { new: 3 }, appointments: { today: 2, upcoming: 7 }, healthChecks: { inProgress: 1, completed: 42 }, referrals: { availablePoints: 220, reservedPoints: 30, currentLevel: null, nextLevel: { code: 'LEVEL_1', name: 'Level 1', ordinal: 1 }, nextLevelRequirements: [{ targetType: 'PATIENT', qualified: 3, required: 10, remaining: 7, completed: false }], highestConfiguredLevelReached: false, qualifiedPatients: 3, qualifiedClinics: 1, qualifiedLaboratories: 0, qualifiedPharmacies: 0 } });
+    expect(result).toEqual({ offers: { new: 3 }, appointments: { today: 2, upcoming: 7 }, healthChecks: { inProgress: 1, completed: 42 }, referrals: { availablePoints: 220, reservedPoints: 30, currentLevel: null, nextLevel: { code: 'LEVEL_1', name: 'Level 1', ordinal: 1 }, nextLevelRequirements: [{ targetType: 'PATIENT', qualified: 3, required: 10, remaining: 7, completed: false }], highestConfiguredLevelReached: false, qualifiedPatients: 3, qualifiedIndividuals: 0, qualifiedClinics: 1, qualifiedLaboratories: 0, qualifiedPharmacies: 0 } });
     expect(result).not.toHaveProperty('earnings');
     expect(JSON.stringify(result)).not.toContain('provider-a');
   });

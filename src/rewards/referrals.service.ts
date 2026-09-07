@@ -38,6 +38,7 @@ const MILESTONE_RULE = {
   PROVIDER_REGISTERED: 'PROVIDER_REGISTERED',
   PROVIDER_VERIFIED: 'PROVIDER_VERIFIED',
   PROVIDER_ACTIVATED: 'PROVIDER_ACTIVATED',
+  INDIVIDUAL_PROVIDER_QUALIFIED: 'INDIVIDUAL_PROVIDER_QUALIFIED',
   PATIENT_REGISTERED: 'PATIENT_REGISTERED',
   PATIENT_FIRST_CARE_ACTION: 'PATIENT_FIRST_CARE_ACTION',
 } as const;
@@ -194,6 +195,12 @@ export class ReferralsService {
       if (!provider || provider.deletedAt) return;
       if (this.providerTarget(provider.providerType) !== referral.targetType)
         return;
+      if (referral.targetType === ReferralTargetType.INDIVIDUAL) {
+        if (provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED || provider.status !== ProviderStatus.ACTIVE) return;
+        await this.awardMilestone(manager, referral, MILESTONE_RULE.INDIVIDUAL_PROVIDER_QUALIFIED);
+        await this.markQualified(manager, referral);
+        return;
+      }
       await this.awardMilestone(manager, referral, MILESTONE_RULE.PROVIDER_REGISTERED);
       if (provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED) return;
       await this.awardMilestone(manager, referral, MILESTONE_RULE.PROVIDER_VERIFIED);
@@ -248,10 +255,10 @@ export class ReferralsService {
       referralCode: code.codeNormalized,
       links: {
         PATIENT: `/register?ref=${code.codeNormalized}`,
-  CLINIC: `/provider/register?ref=${code.codeNormalized}&type=CLINIC`,
-  HOSPITAL: `/provider/register?ref=${code.codeNormalized}&type=HOSPITAL`,
-  LABORATORY: `/provider/register?ref=${code.codeNormalized}&type=LABORATORY`,
-  PHARMACY: `/provider/register?ref=${code.codeNormalized}&type=PHARMACY`,
+        INDIVIDUAL: `/provider/register?ref=${code.codeNormalized}&type=INDIVIDUAL`,
+        CLINIC: `/provider/register?ref=${code.codeNormalized}&type=CLINIC`,
+        LABORATORY: `/provider/register?ref=${code.codeNormalized}&type=LABORATORY`,
+        PHARMACY: `/provider/register?ref=${code.codeNormalized}&type=PHARMACY`,
       },
       ...balance,
       levelProgress,
@@ -479,7 +486,8 @@ export class ReferralsService {
         qualifiedAt: null,
       }),
     );
-    await this.awardMilestone(manager, referral, targetType === ReferralTargetType.PATIENT ? MILESTONE_RULE.PATIENT_REGISTERED : MILESTONE_RULE.PROVIDER_REGISTERED);
+    if (targetType === ReferralTargetType.PATIENT) await this.awardMilestone(manager, referral, MILESTONE_RULE.PATIENT_REGISTERED);
+    else if (targetType !== ReferralTargetType.INDIVIDUAL) await this.awardMilestone(manager, referral, MILESTONE_RULE.PROVIDER_REGISTERED);
     return referral;
   }
 
@@ -644,6 +652,7 @@ export class ReferralsService {
     });
     return {
       patients: value(ReferralTargetType.PATIENT),
+      individuals: value(ReferralTargetType.INDIVIDUAL),
       clinics: value(ReferralTargetType.CLINIC),
       laboratories: value(ReferralTargetType.LABORATORY),
       pharmacies: value(ReferralTargetType.PHARMACY),
@@ -702,6 +711,8 @@ private providerTarget(
   providerType: ProviderType,
 ): ReferralTargetType | null {
   switch (providerType) {
+    case ProviderType.INDIVIDUAL:
+      return ReferralTargetType.INDIVIDUAL;
     case ProviderType.CLINIC:
     case ProviderType.HOSPITAL:
       return ReferralTargetType.CLINIC;

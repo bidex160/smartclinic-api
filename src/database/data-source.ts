@@ -15,6 +15,7 @@ export default new DataSource({
   username: appConfiguration.database.username,
   password: appConfiguration.database.password,
   database: appConfiguration.database.name,
+  migrationsTransactionMode: 'each',
   entities: [join(__dirname, '../**/*.entity{.ts,.js}')],
   migrations: [join(__dirname, 'migrations/*{.ts,.js}')],
   migrationsRun: false,

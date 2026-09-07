@@ -43,6 +43,7 @@ export class ProviderDashboardService {
         nextLevelRequirements: referralSummary.levelProgress.requirements,
         highestConfiguredLevelReached: referralSummary.levelProgress.highestConfiguredLevelReached,
         qualifiedPatients: referralSummary.levelProgress.qualifiedCounts.PATIENT,
+        qualifiedIndividuals: referralSummary.levelProgress.qualifiedCounts.INDIVIDUAL ?? 0,
         qualifiedClinics: referralSummary.levelProgress.qualifiedCounts.CLINIC,
         qualifiedLaboratories: referralSummary.levelProgress.qualifiedCounts.LABORATORY,
         qualifiedPharmacies: referralSummary.levelProgress.qualifiedCounts.PHARMACY,

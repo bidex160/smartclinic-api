@@ -22,6 +22,7 @@ class ProviderDashboardReferralsDto {
   @ApiProperty({ type: [Object] }) nextLevelRequirements!: { targetType: string; qualified: number; required: number; remaining: number; completed: boolean }[];
   @ApiProperty() highestConfiguredLevelReached!: boolean;
   @ApiProperty() qualifiedPatients!: number;
+  @ApiProperty() qualifiedIndividuals!: number;
   @ApiProperty() qualifiedClinics!: number;
   @ApiProperty() qualifiedLaboratories!: number;
   @ApiProperty() qualifiedPharmacies!: number;

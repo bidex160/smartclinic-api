@@ -26,7 +26,7 @@ describe('ReferralsService', () => {
     codes = [{ id: 'code-1', userId: referrerUserId, codeNormalized: 'SC-AB12CD', isActive: true }];
     referrals = []; ledger = []; achievements = []; providers = []; dependantProvenance = []; completedPatients = new Set();
     const requirements = [
-      [ReferralTargetType.CLINIC, 2], [ReferralTargetType.LABORATORY, 2], [ReferralTargetType.PHARMACY, 2], [ReferralTargetType.PATIENT, 10],
+      [ReferralTargetType.CLINIC, 2], [ReferralTargetType.INDIVIDUAL, 2], [ReferralTargetType.LABORATORY, 2], [ReferralTargetType.PHARMACY, 2], [ReferralTargetType.PATIENT, 10],
     ].map(([targetType, requiredCount]) => ({ targetType, requiredCount }));
     const level = { id: 'level-1', code: 'LEVEL_1', name: 'Level 1', ordinal: 1, isActive: true, requirements };
     levelDefinitions = [level];
@@ -34,6 +34,7 @@ describe('ReferralsService', () => {
       { code: 'PROVIDER_REGISTERED', points: 2, isActive: true },
       { code: 'PROVIDER_VERIFIED', points: 4, isActive: true },
       { code: 'PROVIDER_ACTIVATED', points: 8, isActive: true },
+      { code: 'INDIVIDUAL_PROVIDER_QUALIFIED', points: 7, isActive: true },
       { code: 'PATIENT_REGISTERED', points: 1, isActive: true },
       { code: 'PATIENT_FIRST_CARE_ACTION', points: 1, isActive: true },
       { code: 'DEPENDANT_FIRST_CARE_ACTION', points: 0, isActive: false },
@@ -135,6 +136,21 @@ describe('ReferralsService', () => {
     expect(ledger.reduce((sum, entry) => sum + entry.points, 0)).toBe(14);
   });
 
+  it('maps INDIVIDUAL providers to their own target and awards exactly seven points at qualification', async () => {
+    const provider: any = { id: 'individual-provider', userId: 'user-individual', providerType: ProviderType.INDIVIDUAL, status: ProviderStatus.PENDING, onboardingStatus: ProviderOnboardingStatus.DRAFT, deletedAt: null };
+    providers.push(provider);
+    await subject.captureProvider(manager, 'SC-AB12CD', provider, ReferralTargetType.INDIVIDUAL);
+    expect(referrals[0]).toMatchObject({ targetType: ReferralTargetType.INDIVIDUAL, status: ReferralStatus.REGISTERED });
+    expect(ledger).toHaveLength(0);
+    provider.status = ProviderStatus.ACTIVE;
+    provider.onboardingStatus = ProviderOnboardingStatus.APPROVED;
+    await subject.qualifyProvider(provider.id);
+    await subject.qualifyProvider(provider.id);
+    expect(referrals[0].status).toBe(ReferralStatus.QUALIFIED);
+    expect(ledger).toEqual([expect.objectContaining({ eventType: 'INDIVIDUAL_PROVIDER_QUALIFIED', points: 7 })]);
+    expect(ledger.reduce((sum, entry) => sum + entry.points, 0)).toBe(7);
+  });
+
   it('does not award milestone credits to a legacy referral with an old qualification credit', async () => {
     const provider: any = { id: 'provider-legacy', userId: 'user-legacy', providerType: ProviderType.CLINIC, status: ProviderStatus.ACTIVE, onboardingStatus: ProviderOnboardingStatus.APPROVED, deletedAt: null };
     providers.push(provider);
@@ -160,8 +176,13 @@ describe('ReferralsService', () => {
     expect(referrals).toHaveLength(0);
   });
 
-  it('achieves configured Level 1 only when all four requirements are met and awards its bonus once', async () => {
-    const targets = [ReferralTargetType.CLINIC, ReferralTargetType.CLINIC, ReferralTargetType.LABORATORY, ReferralTargetType.LABORATORY, ReferralTargetType.PHARMACY, ReferralTargetType.PHARMACY, ...Array(9).fill(ReferralTargetType.PATIENT)];
+  it('rejects mismatched INDIVIDUAL referral intent', async () => {
+    const provider: any = { id: 'individual-provider', userId: 'user-individual', providerType: ProviderType.INDIVIDUAL };
+    await expect(subject.captureProvider(manager, 'SC-AB12CD', provider, ReferralTargetType.CLINIC)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('achieves configured Level 1 only when all five requirements are met and awards its bonus once', async () => {
+    const targets = [ReferralTargetType.CLINIC, ReferralTargetType.CLINIC, ReferralTargetType.INDIVIDUAL, ReferralTargetType.INDIVIDUAL, ReferralTargetType.LABORATORY, ReferralTargetType.LABORATORY, ReferralTargetType.PHARMACY, ReferralTargetType.PHARMACY, ...Array(9).fill(ReferralTargetType.PATIENT)];
     targets.forEach((targetType, index) => referrals.push({ id: `qualified-${index}`, referrerUserId, targetType, status: ReferralStatus.QUALIFIED }));
     referrals.push({ id: 'last-patient', referrerUserId, targetType: ReferralTargetType.PATIENT, status: ReferralStatus.REGISTERED, referredPatientId: 'patient-last', rewardModelVersion: 2 });
     completedPatients.add('patient-last');
@@ -181,7 +202,7 @@ describe('ReferralsService', () => {
     ledgerBuilder.getRawOne = jest.fn().mockResolvedValue({ available: '270', earned: '300' });
     (subject as any).ledger.createQueryBuilder = jest.fn().mockReturnValue(ledgerBuilder);
     (subject as any).withdrawals.balance.mockResolvedValue({ availablePoints: 270, reservedPoints: 30, lifetimeEarnedPoints: 300, lifetimeRedeemedPoints: 0 });
-    const level = { id: 'level-1', code: 'LEVEL_1', name: 'Level 1', ordinal: 1, isActive: true, requirements: [{ targetType: ReferralTargetType.PATIENT, requiredCount: 10 }, { targetType: ReferralTargetType.CLINIC, requiredCount: 2 }, { targetType: ReferralTargetType.LABORATORY, requiredCount: 2 }, { targetType: ReferralTargetType.PHARMACY, requiredCount: 2 }] };
+    const level = { id: 'level-1', code: 'LEVEL_1', name: 'Level 1', ordinal: 1, isActive: true, requirements: [{ targetType: ReferralTargetType.PATIENT, requiredCount: 10 }, { targetType: ReferralTargetType.INDIVIDUAL, requiredCount: 2 }, { targetType: ReferralTargetType.CLINIC, requiredCount: 2 }, { targetType: ReferralTargetType.LABORATORY, requiredCount: 2 }, { targetType: ReferralTargetType.PHARMACY, requiredCount: 2 }] };
     (subject as any).levels.find = jest.fn().mockResolvedValue([level]);
     const originalGetRepository = manager.getRepository.getMockImplementation();
     manager.getRepository = jest.fn((entity: any) => entity === RewardLevelAchievement ? { find: jest.fn().mockResolvedValue([]) } : entity === Referral ? (subject as any).referrals : originalGetRepository(entity));
@@ -193,6 +214,7 @@ describe('ReferralsService', () => {
       const ordinal = index + 1;
       return { id: `level-${ordinal}`, code: `LEVEL_${ordinal}`, name: `Level ${ordinal}`, ordinal, isActive: true, requirements: [
         { targetType: ReferralTargetType.PATIENT, requiredCount: ordinal * 10 },
+        { targetType: ReferralTargetType.INDIVIDUAL, requiredCount: ordinal * 2 },
         { targetType: ReferralTargetType.CLINIC, requiredCount: ordinal * 2 },
         { targetType: ReferralTargetType.LABORATORY, requiredCount: ordinal * 2 },
         { targetType: ReferralTargetType.PHARMACY, requiredCount: ordinal * 2 },
@@ -203,6 +225,7 @@ describe('ReferralsService', () => {
   const addQualifiedCounts = (patients: number, providersPerType: number) => {
     const targets = [
       ...Array(patients).fill(ReferralTargetType.PATIENT),
+      ...Array(providersPerType).fill(ReferralTargetType.INDIVIDUAL),
       ...Array(providersPerType).fill(ReferralTargetType.CLINIC),
       ...Array(providersPerType).fill(ReferralTargetType.LABORATORY),
       ...Array(providersPerType).fill(ReferralTargetType.PHARMACY),
@@ -238,6 +261,19 @@ describe('ReferralsService', () => {
       { targetType: ReferralTargetType.CLINIC, qualified: 5, required: 6, remaining: 1, completed: false },
       { targetType: ReferralTargetType.LABORATORY, qualified: 4, required: 6, remaining: 2, completed: false },
     ]));
+  });
+
+  it('preserves a previously achieved level when newly configured requirements are unmet', () => {
+    configureFiveLevels();
+    const counts = new Map<ReferralTargetType, number>([
+      [ReferralTargetType.PATIENT, 10],
+      [ReferralTargetType.CLINIC, 2],
+      [ReferralTargetType.LABORATORY, 2],
+      [ReferralTargetType.PHARMACY, 2],
+    ]);
+    const progress = (subject as any).levelProgress(levelDefinitions, [{ levelId: 'level-1' }], counts);
+    expect(progress.currentLevel).toMatchObject({ code: 'LEVEL_1' });
+    expect(progress.highestLevelAchieved).toBe(1);
   });
 
   it('reports Level 5 as the highest configured level with no next requirements', () => {

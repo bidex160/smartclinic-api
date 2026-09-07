@@ -1,7 +1,7 @@
 export enum ReferralTargetType {
   PATIENT = 'PATIENT',
+  INDIVIDUAL = 'INDIVIDUAL',
   CLINIC = 'CLINIC',
-  HOSPITAL = 'HOSPITAL',
   LABORATORY = 'LABORATORY',
   PHARMACY = 'PHARMACY',
 }

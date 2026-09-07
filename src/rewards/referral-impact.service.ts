@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
@@ -6,7 +6,7 @@ import { PublicReferralLeaderboardDto, ReferralImpactDto } from './dto/referral.
 import { ReferralsService } from './referrals.service';
 import { ReferralTargetType } from './enums/referral-target-type.enum';
 import { ConfigType } from '@nestjs/config';
-import { appConfig } from 'src/config/app.config';
+import { appConfig } from '../config/app.config';
 
 const PUBLIC_LEADERBOARD_LIMIT = 20;
 
@@ -35,8 +35,8 @@ export class ReferralImpactService {
     private readonly dataSource: DataSource,
     @InjectRepository(User) private readonly users: Repository<User>,
     private readonly referrals: ReferralsService,
-     @Inject(appConfig.KEY)
-        private readonly config: ConfigType<typeof appConfig>,
+     @Optional() @Inject(appConfig.KEY)
+        private readonly config?: ConfigType<typeof appConfig>,
   ) {}
 
   async leaderboard(): Promise<PublicReferralLeaderboardDto> {
@@ -93,7 +93,7 @@ export class ReferralImpactService {
     if (!user) throw new NotFoundException('User was not found');
     const position = user.publicLeaderboard ? await this.position(userId) : null;
  
-     const inviteLinks = this.prefixWithFrontendUrl(summary.links, this.config.frontendUrl)    
+     const inviteLinks = this.prefixWithFrontendUrl(summary.links, this.config?.frontendUrl ?? 'http://localhost')
     return {
       referralCode: summary.referralCode,
       balances: {
