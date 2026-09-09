@@ -55,13 +55,22 @@ export interface AppConfiguration {
     cookieDomain?: string;
   };
   payments: {
-    provider: "none" | "test" | "paystack";
+    provider: "none" | "test" | "paystack" | "opay";
     verificationMinIntervalSeconds: number;
     paystack: {
       secretKey?: string;
       publicKey?: string;
       callbackUrl?: string;
       patientCallbackUrl?: string;
+      webhookEnabled: boolean;
+    };
+    opay: {
+      baseUrl: string;
+      merchantId?: string;
+      publicKey?: string;
+      privateKey?: string;
+      callbackUrl?: string;
+      returnUrl?: string;
       webhookEnabled: boolean;
     };
   };
@@ -193,6 +202,7 @@ export function createAppConfiguration(
           | "none"
           | "test"
           | "paystack"
+          | "opay"
           | undefined) ?? (environmentName === "test" ? "test" : "none"),
       verificationMinIntervalSeconds: Number(
         environment.PAYMENT_VERIFICATION_MIN_INTERVAL_SECONDS ?? 30,
@@ -203,6 +213,15 @@ export function createAppConfiguration(
         callbackUrl: environment.PAYSTACK_CALLBACK_URL,
         patientCallbackUrl: environment.PAYSTACK_PATIENT_CALLBACK_URL,
         webhookEnabled: environment.PAYSTACK_WEBHOOK_ENABLED !== "false",
+      },
+      opay: {
+        baseUrl: environment.OPAY_BASE_URL ?? "https://testapi.opaycheckout.com",
+        merchantId: environment.OPAY_MERCHANT_ID,
+        publicKey: environment.OPAY_PUBLIC_KEY,
+        privateKey: environment.OPAY_PRIVATE_KEY,
+        callbackUrl: environment.OPAY_CALLBACK_URL,
+        returnUrl: environment.OPAY_RETURN_URL,
+        webhookEnabled: environment.OPAY_WEBHOOK_ENABLED !== "false",
       },
     },
     database: {

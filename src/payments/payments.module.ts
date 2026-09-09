@@ -9,13 +9,16 @@ import { Booking } from "../bookings/entities/booking.entity";
 import { appConfig } from "../config/app.config";
 import { AdminPaymentFlowController } from "./admin-payment-flow.controller";
 import { PaystackPaymentProviderAdapter } from "./adapters/paystack-payment-provider.adapter";
+import { OpayPaymentProviderAdapter } from "./adapters/opay-payment-provider.adapter";
 import { TestPaymentProviderAdapter } from "./adapters/test-payment-provider.adapter";
 import { UnavailablePaymentProviderAdapter } from "./adapters/unavailable-payment-provider.adapter";
 import { PaymentAttempt } from "./entities/payment-attempt.entity";
 import { PaymentTransaction } from "./entities/payment-transaction.entity";
 import { PaymentFlowService } from "./payment-flow.service";
 import { PAYMENT_PROVIDER_ADAPTER } from "./payment-provider.adapter";
+import { PaymentProviderRegistry } from './payment-provider.registry';
 import { PaystackWebhookController } from "./paystack-webhook.controller";
+import { OpayWebhookController } from "./opay-webhook.controller";
 import { User } from "../users/entities/user.entity";
 import { ProvidersModule } from "../providers/providers.module";
 import { RewardsModule } from "../rewards/rewards.module";
@@ -61,27 +64,33 @@ import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy
       ,PharmacyFulfillmentFunding,PharmacyQuote,ClinicalOrderFulfillment,PharmacyDispensing,Patient,GuidedSelfCheck,GuidedSelfCheckHistory
     ]),
   ],
-  controllers: [AdminPaymentFlowController, PaystackWebhookController, MeCareRequestFundingController,MePharmacyFundingController,MeGuidedSelfCheckFundingController],
+  controllers: [AdminPaymentFlowController, PaystackWebhookController, OpayWebhookController, MeCareRequestFundingController,MePharmacyFundingController,MeGuidedSelfCheckFundingController],
   providers: [
     PaymentFlowService,
     TestPaymentProviderAdapter,
     PaystackPaymentProviderAdapter,
+    OpayPaymentProviderAdapter,
+    PaymentProviderRegistry,
     {
       provide: PAYMENT_PROVIDER_ADAPTER,
       useFactory: (
         config: ConfigType<typeof appConfig>,
         test: TestPaymentProviderAdapter,
         paystack: PaystackPaymentProviderAdapter,
+        opay: OpayPaymentProviderAdapter,
       ) =>
         config.payments.provider === "paystack"
-          ? paystack
-          : config.payments.provider === "test"
+            ? paystack
+            : config.payments.provider === "opay"
+              ? opay
+            : config.payments.provider === "test"
             ? test
             : new UnavailablePaymentProviderAdapter(),
       inject: [
         appConfig.KEY,
         TestPaymentProviderAdapter,
         PaystackPaymentProviderAdapter,
+        OpayPaymentProviderAdapter,
       ],
     },
   ],

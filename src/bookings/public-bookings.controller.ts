@@ -113,7 +113,9 @@ export class PublicBookingsController {
     if (option === CheckoutFundingOption.PAY_LATER)
       return PublicPaymentInitiationResponseDto.fromOperation(funding, option);
     return PublicPaymentInitiationResponseDto.fromOperation(
-      await this.payments.initiatePublicPayment(p.reference, option, dto?.paymentEmail),
+      await (dto?.paymentProvider
+        ? this.payments.initiatePublicPayment(p.reference, option, dto.paymentEmail, dto.paymentProvider)
+        : this.payments.initiatePublicPayment(p.reference, option, dto?.paymentEmail)),
       option,
     );
   }

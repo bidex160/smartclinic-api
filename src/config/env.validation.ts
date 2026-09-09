@@ -97,13 +97,20 @@ class EnvironmentVariables {
 
   @IsOptional() @IsString()
   PUBLIC_BOOKING_COOKIE_DOMAIN?: string;
-  @IsIn(['none', 'test', 'paystack']) PAYMENT_PROVIDER = process.env.NODE_ENV === 'test' ? 'test' : 'none';
+  @IsIn(['none', 'test', 'paystack', 'opay']) PAYMENT_PROVIDER = process.env.NODE_ENV === 'test' ? 'test' : 'none';
   @Type(() => Number) @IsInt() @Min(1) PAYMENT_VERIFICATION_MIN_INTERVAL_SECONDS = 30;
   @IsOptional() @IsString() PAYSTACK_SECRET_KEY?: string;
   @IsOptional() @IsString() PAYSTACK_PUBLIC_KEY?: string;
   @IsOptional() @IsString() PAYSTACK_CALLBACK_URL?: string;
   @IsOptional() @IsUrl({ require_tld: false }) PAYSTACK_PATIENT_CALLBACK_URL?: string;
   @IsOptional() @IsIn(['true', 'false']) PAYSTACK_WEBHOOK_ENABLED?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) OPAY_BASE_URL?: string;
+  @IsOptional() @IsString() OPAY_MERCHANT_ID?: string;
+  @IsOptional() @IsString() OPAY_PUBLIC_KEY?: string;
+  @IsOptional() @IsString() OPAY_PRIVATE_KEY?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) OPAY_CALLBACK_URL?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) OPAY_RETURN_URL?: string;
+  @IsOptional() @IsIn(['true', 'false']) OPAY_WEBHOOK_ENABLED?: string;
   @IsOptional() @IsString() PAYOUT_ACCOUNT_ENCRYPTION_KEY?: string;
 }
 
@@ -117,6 +124,7 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
     throw new Error(`Invalid environment configuration: ${errors.toString()}`);
   }
   if (validatedConfig.NODE_ENV === 'production' && validatedConfig.PAYMENT_PROVIDER === 'paystack' && !validatedConfig.PAYSTACK_SECRET_KEY) throw new Error('Invalid environment configuration: PAYSTACK_SECRET_KEY is required when PAYMENT_PROVIDER=paystack');
+  if (validatedConfig.NODE_ENV === 'production' && validatedConfig.PAYMENT_PROVIDER === 'opay' && (!validatedConfig.OPAY_BASE_URL || !validatedConfig.OPAY_MERCHANT_ID || !validatedConfig.OPAY_PUBLIC_KEY || !validatedConfig.OPAY_PRIVATE_KEY)) throw new Error('Invalid environment configuration: OPAY_BASE_URL, OPAY_MERCHANT_ID, OPAY_PUBLIC_KEY, and OPAY_PRIVATE_KEY are required when PAYMENT_PROVIDER=opay');
   if (validatedConfig.NODE_ENV === 'production' && validatedConfig.PAYMENT_PROVIDER === 'test') throw new Error('Invalid environment configuration: PAYMENT_PROVIDER=test is not allowed in production');
   if (validatedConfig.NODE_ENV === 'production' && config.PROVIDER_INVITATION_TTL === undefined) throw new Error('Invalid environment configuration: PROVIDER_INVITATION_TTL is required in production');
   if (validatedConfig.NODE_ENV === 'production' && !validatedConfig.PROVIDER_INVITATION_FRONTEND_URL) throw new Error('Invalid environment configuration: PROVIDER_INVITATION_FRONTEND_URL is required in production');

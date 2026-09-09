@@ -32,7 +32,9 @@ export class MeGuidedSelfCheckFundingController {
     @Req() r: { user: User },
     @Body() dto: PaymentContactDto,
   ) {
-    return this.s.initializeGuidedSelfCheckFunding(ref, r.user.id, dto?.paymentEmail);
+    return dto?.paymentProvider
+      ? this.s.initializeGuidedSelfCheckFunding(ref, r.user.id, dto.paymentEmail, dto.paymentProvider)
+      : this.s.initializeGuidedSelfCheckFunding(ref, r.user.id, dto?.paymentEmail);
   }
   @Post("verify-latest") @HttpCode(HttpStatus.OK) verify(
     @Param("reference") ref: string,

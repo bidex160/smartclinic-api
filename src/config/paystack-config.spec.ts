@@ -32,4 +32,8 @@ describe("Paystack production configuration", () => {
     expect(() =>
       validateEnvironment({ ...base, PAYMENT_PROVIDER: "test" }),
     ).toThrow("not allowed"));
+  it("accepts explicitly configured OPay only with its merchant credentials", () => {
+    expect(() => validateEnvironment({ ...base, PAYMENT_PROVIDER: "opay" })).toThrow("OPAY_BASE_URL");
+    expect(validateEnvironment({ ...base, PAYMENT_PROVIDER: "opay", OPAY_BASE_URL: "https://api.opaycheckout.com", OPAY_MERCHANT_ID: "merchant", OPAY_PUBLIC_KEY: "public", OPAY_PRIVATE_KEY: "private" }).PAYMENT_PROVIDER).toBe("opay");
+  });
 });

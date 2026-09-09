@@ -113,6 +113,7 @@ export class MePatientProviderConnectionsController {
       p.reference,
       r.user.id,
       dto?.paymentEmail,
+      ...(dto?.paymentProvider ? [dto.paymentProvider] : []),
     );
   }
   @Post("patient-provider-connections/:reference/funding/verify-latest")

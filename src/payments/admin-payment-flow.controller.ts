@@ -64,7 +64,7 @@ export class AdminPaymentFlowController {
     @Body() dto: InitiatePaymentDto,
   ) {
     this.assertTestEndpoint();
-    return this.payments.initiatePayment(p.reference, dto.idempotencyKey, undefined, dto.paymentEmail);
+    return this.payments.initiatePayment(p.reference, dto.idempotencyKey, undefined, dto.paymentEmail, dto.paymentProvider);
   }
   @Post("payment-attempts/:id/confirm-test")
   @HttpCode(HttpStatus.OK)

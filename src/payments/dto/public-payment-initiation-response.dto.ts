@@ -13,6 +13,7 @@ export class PublicPaymentInitiationResponseDto {
   @ApiProperty() currency!: string;
   @ApiPropertyOptional({ nullable: true }) checkoutUrl!: string | null;
   @ApiPropertyOptional({ nullable: true }) accessCode!: string | null;
+  @ApiPropertyOptional({ nullable: true }) provider!: string | null;
   static fromOperation(
     value: PaymentOperationResponseDto,
     option: CheckoutFundingOption,
@@ -27,6 +28,7 @@ export class PublicPaymentInitiationResponseDto {
       currency: value.currency,
       checkoutUrl: option === CheckoutFundingOption.PAY_LATER ? null : value.checkoutUrl,
       accessCode: option === CheckoutFundingOption.PAY_NOW ? value.accessCode : null,
+      provider: value.provider,
     };
   }
 }

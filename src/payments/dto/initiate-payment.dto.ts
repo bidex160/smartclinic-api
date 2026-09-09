@@ -1,8 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'; import { Transform } from 'class-transformer'; import { IsEmail, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { CheckoutFundingOption } from '../../bookings/enums/checkout-funding-option.enum';
+import { PaymentProvider } from '../enums/payment-provider.enum';
 const normalizeOptionalEmail = ({ value }: { value: unknown }): unknown => typeof value === 'string' ? value.trim().toLowerCase() || undefined : value;
 
 export class PaymentContactDto {
+  @ApiPropertyOptional({ enum: PaymentProvider, description: 'Payment gateway to use. Omit to use the configured default provider.' })
+  @IsOptional()
+  @IsEnum(PaymentProvider)
+  paymentProvider?: PaymentProvider;
   @ApiPropertyOptional({ description: 'Real contact email used for payment only when the account has no usable email.', maxLength: 254 })
   @Transform(normalizeOptionalEmail)
   @IsOptional()
