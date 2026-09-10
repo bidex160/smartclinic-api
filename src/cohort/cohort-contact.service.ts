@@ -51,6 +51,7 @@ export class CohortContactService {
         text: this.buildText(contact),
         html: this.buildHtml(contact),
         idempotencyKey: `cohort-contact:${contact.id}`,
+        cc: dto.email || ''
       });
 
       if (delivery.outcome === EmailSendOutcome.SENT) {

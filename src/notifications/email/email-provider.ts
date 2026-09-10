@@ -8,6 +8,7 @@ export interface TransactionalEmailMessage {
   html: string;
   text: string;
   idempotencyKey?: string;
+  cc?: string
 }
 
 export enum EmailSendOutcome { SENT = 'SENT', UNAVAILABLE = 'UNAVAILABLE' }
