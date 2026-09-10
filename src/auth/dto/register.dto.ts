@@ -11,7 +11,8 @@ import {
 import { Transform } from 'class-transformer';
 
 export class RegisterDto {
-  @ApiProperty({ example: 'ada@example.com' })
+  @ApiPropertyOptional({ example: 'ada@example.com' })
+  @IsOptional()
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().toLowerCase() : value,
   )

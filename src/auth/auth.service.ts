@@ -42,11 +42,11 @@ export class AuthService {
     private readonly referrals: ReferralsService,
   ) {}
   async register(dto: RegisterDto): Promise<UserResponseDto> {
-    const email = dto.email.trim().toLowerCase();
+    const email = dto.email?.trim()?.toLowerCase() || null;
     const phone = dto.phone ? normalizePhoneNumber(dto.phone) : null;
     if (dto.phone && !phone)
       throw new ConflictException("A valid phone number is required");
-    if (await this.users.exists({ where: { emailNormalized: email } }))
+    if (email && await this.users.exists({ where: { emailNormalized: email } }))
       throw new ConflictException("An account already exists for this email");
     if (
       phone &&
