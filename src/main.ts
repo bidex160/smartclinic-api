@@ -19,7 +19,13 @@ async function bootstrap(): Promise<void> {
   const allowedOrigins = [
   'https://cohort.smartclinicnetwork.com', 
   'http://localhost:4200',
+  'http://localhost:8101',
+  'http://localhost:8100',
   'http://localhost:5173',
+    // Capacitor native apps
+  'capacitor://localhost', // iOS
+  'http://localhost',  
+  'https://localhost',      // Android
   configuration.frontendUrl // keep your env one
 ]
 

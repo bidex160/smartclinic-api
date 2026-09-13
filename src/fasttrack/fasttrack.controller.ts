@@ -75,7 +75,9 @@ export class MeFastTrackController {
     @Param() p: FastTrackReferenceParamsDto,
     @Body() dto: PaymentContactDto,
   ) {
-    return dto?.paymentProvider
+    return dto?.clientPlatform
+      ? this.payments.initializeFastTrackPayment(p.reference, req.user.id, dto.paymentEmail, dto.paymentProvider, dto.clientPlatform)
+      : dto?.paymentProvider
       ? this.payments.initializeFastTrackPayment(
           p.reference,
           req.user.id,

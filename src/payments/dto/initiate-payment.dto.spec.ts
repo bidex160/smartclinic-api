@@ -2,6 +2,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { PaymentContactDto, PublicCheckoutSelectionDto } from './initiate-payment.dto';
 import { PaymentProvider } from '../enums/payment-provider.enum';
+import { PaymentClientPlatform } from '../enums/payment-client-platform.enum';
 
 describe('payment contact DTOs', () => {
   it.each([PaymentContactDto, PublicCheckoutSelectionDto])('accepts and normalizes optional paymentEmail for %p', async (Dto) => {
@@ -23,5 +24,10 @@ describe('payment contact DTOs', () => {
   it('validates the optional request-level provider', async () => {
     expect(await validate(plainToInstance(PaymentContactDto, { paymentProvider: PaymentProvider.OPAY }))).toEqual([]);
     expect(await validate(plainToInstance(PaymentContactDto, { paymentProvider: 'STRIPE' }))).not.toEqual([]);
+  });
+
+  it('accepts only the explicit mobile/web client platform context', async () => {
+    expect(await validate(plainToInstance(PaymentContactDto, { clientPlatform: PaymentClientPlatform.MOBILE }))).toEqual([]);
+    expect(await validate(plainToInstance(PaymentContactDto, { clientPlatform: 'NATIVE' }))).not.toEqual([]);
   });
 });

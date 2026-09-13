@@ -86,6 +86,7 @@ export class OpayPaymentProviderAdapter implements PaymentProviderAdapter {
         "OPay supports only NGN payments for this merchant",
       );
 
+      
     const body: Record<string, unknown> = {
       amount: {
         currency: input.currency.toUpperCase(),
@@ -100,6 +101,7 @@ export class OpayPaymentProviderAdapter implements PaymentProviderAdapter {
       },
     };
     if (opay.callbackUrl) body.callbackUrl = opay.callbackUrl;
+
     const envelope = await this.request<OpayPaymentData>(
       "/api/v1/international/cashier/create",
       {

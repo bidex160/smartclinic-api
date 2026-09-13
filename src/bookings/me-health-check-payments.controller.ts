@@ -43,7 +43,11 @@ export class MeHealthCheckPaymentsController {
     if (option === CheckoutFundingOption.PAY_LATER)
       return PublicPaymentInitiationResponseDto.fromOperation(funding, option);
     return PublicPaymentInitiationResponseDto.fromOperation(
-      await this.payments.initiatePatientPayment(reference, option, dto?.paymentEmail, dto.paymentProvider),
+      await (dto.clientPlatform
+        ? this.payments.initiatePatientPayment(reference, option, dto?.paymentEmail, dto.paymentProvider, dto.clientPlatform)
+        : dto.paymentProvider
+          ? this.payments.initiatePatientPayment(reference, option, dto?.paymentEmail, dto.paymentProvider)
+          : this.payments.initiatePatientPayment(reference, option, dto?.paymentEmail)),
       option,
     );
   }

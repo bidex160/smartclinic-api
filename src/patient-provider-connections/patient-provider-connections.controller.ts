@@ -109,12 +109,13 @@ export class MePatientProviderConnectionsController {
     @Param() p: ConnectionReferenceParamsDto,
     @Body() dto: PaymentContactDto,
   ) {
-    return this.payments.initializePatientProviderConnectionFunding(
-      p.reference,
-      r.user.id,
-      dto?.paymentEmail,
-      ...(dto?.paymentProvider ? [dto.paymentProvider] : []),
-    );
+    if (dto?.clientPlatform) {
+      return this.payments.initializePatientProviderConnectionFunding(p.reference, r.user.id, dto.paymentEmail, dto.paymentProvider, dto.clientPlatform);
+    }
+    if (dto?.paymentProvider) {
+      return this.payments.initializePatientProviderConnectionFunding(p.reference, r.user.id, dto.paymentEmail, dto.paymentProvider);
+    }
+    return this.payments.initializePatientProviderConnectionFunding(p.reference, r.user.id, dto?.paymentEmail);
   }
   @Post("patient-provider-connections/:reference/funding/verify-latest")
   @HttpCode(HttpStatus.OK)

@@ -12,6 +12,10 @@ import { PaymentContactDto } from './dto/initiate-payment.dto';
 export class MeCareRequestFundingController {
   constructor(private readonly payments: PaymentFlowService) {}
   @Get() @ApiOperation({ summary: 'Read authoritative General Care funding status' }) @ApiOkResponse() get(@Req() request: { user: User }, @Param() { reference }: CareRequestReferenceParamsDto) { return this.payments.getCareRequestFunding(reference, request.user.id); }
-  @Post('initialize') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Initialize or reuse General Care payment' }) initialize(@Req() request: { user: User }, @Param() { reference }: CareRequestReferenceParamsDto, @Body() dto: PaymentContactDto) { return dto?.paymentProvider ? this.payments.initializeCareRequestFunding(reference, request.user.id, dto.paymentEmail, dto.paymentProvider) : this.payments.initializeCareRequestFunding(reference, request.user.id, dto?.paymentEmail); }
+  @Post('initialize') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Initialize or reuse General Care payment' }) initialize(@Req() request: { user: User }, @Param() { reference }: CareRequestReferenceParamsDto, @Body() dto: PaymentContactDto) {
+    if (dto?.clientPlatform) return this.payments.initializeCareRequestFunding(reference, request.user.id, dto.paymentEmail, dto.paymentProvider, dto.clientPlatform);
+    if (dto?.paymentProvider) return this.payments.initializeCareRequestFunding(reference, request.user.id, dto.paymentEmail, dto.paymentProvider);
+    return this.payments.initializeCareRequestFunding(reference, request.user.id, dto?.paymentEmail);
+  }
   @Post('verify-latest') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Verify the latest stored General Care payment attempt' }) verify(@Req() request: { user: User }, @Param() { reference }: CareRequestReferenceParamsDto) { return this.payments.verifyLatestCareRequestFunding(reference, request.user.id); }
 }

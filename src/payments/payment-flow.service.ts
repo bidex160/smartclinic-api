@@ -643,6 +643,7 @@ async initiatePatientPayment(
   option: CheckoutFundingOption = CheckoutFundingOption.PAY_NOW,
   paymentEmail?: string,
   paymentProvider?: PaymentProvider,
+  clientPlatform?: import('./enums/payment-client-platform.enum').PaymentClientPlatform,
 ): Promise<PaymentOperationResponseDto> {
   if (option === CheckoutFundingOption.PAY_LATER) {
     throw new BadRequestException(
@@ -713,7 +714,7 @@ async initiatePatientPayment(
   return this.initiatePayment(
     reference,
     `PATIENT-${randomBytes(16).toString("hex")}`,
-    this.healthCheckReturnUrl(reference),
+    this.healthCheckReturnUrl(reference, clientPlatform),
     paymentEmail,
     paymentProvider,
   );
@@ -821,6 +822,7 @@ async initializeGuidedSelfCheckFunding(
   userId: string,
   paymentEmail?: string,
   paymentProvider?: PaymentProvider,
+  clientPlatform?: import('./enums/payment-client-platform.enum').PaymentClientPlatform,
 ) {
   const s = await this.bookings.manager
     .getRepository(GuidedSelfCheck)
@@ -917,7 +919,7 @@ async initializeGuidedSelfCheckFunding(
     bookingReference: s.reference,
     customerEmail,
     paymentReference,
-    callbackUrl: this.guidedSelfCheckReturnUrl(s.reference),
+    callbackUrl: this.guidedSelfCheckReturnUrl(s.reference, clientPlatform),
   });
 
   return this.bookings.manager.transaction(async (manager) => {
@@ -1167,11 +1169,12 @@ async initializeGuidedSelfCheckFunding(
     });
     return this.pharmacyFundingResponse(q, funding, attempt);
   }
- async initializePharmacyFunding(
+async initializePharmacyFunding(
   quoteReference: string,
   userId: string,
   paymentEmail?: string,
   paymentProvider?: PaymentProvider,
+  clientPlatform?: import('./enums/payment-client-platform.enum').PaymentClientPlatform,
 ) {
   if (!this.commissions) {
     throw new ConflictException(
@@ -1357,7 +1360,7 @@ async initializeGuidedSelfCheckFunding(
     bookingReference: quoteReference,
     customerEmail,
     paymentReference,
-    callbackUrl: this.pharmacyReturnUrl(),
+    callbackUrl: this.pharmacyReturnUrl(quoteReference, clientPlatform),
   });
 
   return this.bookings.manager.transaction(
@@ -1633,6 +1636,7 @@ async initializePatientProviderConnectionFunding(
   userId: string,
   paymentEmail?: string,
   paymentProvider?: PaymentProvider,
+  clientPlatform?: import('./enums/payment-client-platform.enum').PaymentClientPlatform,
 ) {
   if (!this.commissions) {
     throw new ConflictException(
@@ -1813,8 +1817,7 @@ async initializePatientProviderConnectionFunding(
     bookingReference: reference,
     customerEmail,
     paymentReference,
-    callbackUrl:
-      this.providerConnectionReturnUrl(reference),
+    callbackUrl: this.providerConnectionReturnUrl(reference, clientPlatform),
   });
 
   return this.bookings.manager.transaction(
@@ -2154,6 +2157,7 @@ async initializePatientProviderConnectionFunding(
   userId: string,
   paymentEmail?: string,
   paymentProvider?: PaymentProvider,
+  clientPlatform?: import('./enums/payment-client-platform.enum').PaymentClientPlatform,
 ) {
   if (!this.commissions) {
     throw new ConflictException(
@@ -2365,7 +2369,7 @@ async initializePatientProviderConnectionFunding(
     bookingReference: reference,
     customerEmail,
     paymentReference,
-    callbackUrl: this.careReturnUrl(reference),
+    callbackUrl: this.careReturnUrl(reference, clientPlatform),
   });
 
   return this.bookings.manager.transaction(
@@ -2607,6 +2611,7 @@ async initializeFastTrackPayment(
   userId: string,
   paymentEmail?: string,
   paymentProvider?: PaymentProvider,
+  clientPlatform?: import('./enums/payment-client-platform.enum').PaymentClientPlatform,
 ) {
   const existingRequest = await this.bookings.manager
     .getRepository(FastTrackRequest)
@@ -2724,7 +2729,7 @@ async initializeFastTrackPayment(
     bookingReference: reference,
     customerEmail,
     paymentReference,
-    callbackUrl: this.fastTrackReturnUrl(reference),
+    callbackUrl: this.fastTrackReturnUrl(reference, clientPlatform),
   });
 
   return this.bookings.manager.transaction(
@@ -3505,37 +3510,46 @@ private publicPaymentReturnUrl(reference: string): string | undefined {
   );
 }
 
-private healthCheckReturnUrl(reference: string): string | undefined {
-  return this.frontendUrl(
-    `/me/health-checks/${encodeURIComponent(reference)}?reference=${reference}`,
-  );
+private healthCheckReturnUrl(reference: string, clientPlatform?: import('./enums/payment-client-platform.enum').PaymentClientPlatform): string | undefined {
+  if (clientPlatform === 'MOBILE') return this.mobileUrl(`/mobile/payment-return/${encodeURIComponent(reference)}`);
+  return this.frontendUrl(`/me/health-checks/${encodeURIComponent(reference)}?reference=${reference}`);
+}
+private mobileUrl(path: string): string | undefined {
+  const base = this.config?.mobileAppUrl ?? 'https://smartclinicnetwork.com';
+  return `${base.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
 }
 
-private fastTrackReturnUrl(reference: string): string | undefined {
+private fastTrackReturnUrl(reference: string, clientPlatform?: import('./enums/payment-client-platform.enum').PaymentClientPlatform): string | undefined {
+  if (clientPlatform === 'MOBILE') return this.mobileUrl(`/mobile/payment-return/fasttrack/${encodeURIComponent(reference)}`);
   return this.frontendUrl(
     `/me/fasttrack/${encodeURIComponent(reference)}`,
   );
 }
 
-private careReturnUrl(reference: string): string | undefined {
+private careReturnUrl(reference: string, clientPlatform?: import('./enums/payment-client-platform.enum').PaymentClientPlatform): string | undefined {
+  if (clientPlatform === 'MOBILE') return this.mobileUrl(`/mobile/payment-return/care/${encodeURIComponent(reference)}`);
   return this.frontendUrl(
     `/me/care/${encodeURIComponent(reference)}`,
   );
 }
 
-private providerConnectionReturnUrl(reference: string): string | undefined {
+private providerConnectionReturnUrl(reference: string, clientPlatform?: import('./enums/payment-client-platform.enum').PaymentClientPlatform): string | undefined {
+  if (clientPlatform === 'MOBILE') return this.mobileUrl(`/mobile/payment-return/provider-connection/${encodeURIComponent(reference)}`);
   return this.frontendUrl(
     `/me/providers/${encodeURIComponent(reference)}`,
   );
 }
 
-private guidedSelfCheckReturnUrl(reference: string): string | undefined {
+private guidedSelfCheckReturnUrl(reference: string, clientPlatform?: import('./enums/payment-client-platform.enum').PaymentClientPlatform): string | undefined {
+  if (clientPlatform === 'MOBILE')
+    return this.mobileUrl(`/mobile/payment-return/self-check/${encodeURIComponent(reference)}`);
   return this.frontendUrl(
     `/me/self-checks/${encodeURIComponent(reference)}`,
   );
 }
 
-private pharmacyReturnUrl(): string | undefined {
+private pharmacyReturnUrl(reference: string, clientPlatform?: import('./enums/payment-client-platform.enum').PaymentClientPlatform): string | undefined {
+  if (clientPlatform === 'MOBILE') return this.mobileUrl(`/mobile/payment-return/pharmacy/${encodeURIComponent(reference)}`);
   return this.frontendUrl('/me/prescriptions');
 }
 }

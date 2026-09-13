@@ -4,6 +4,7 @@ export interface AppConfiguration {
   environment: EnvironmentName;
   port: number;
   frontendUrl: string;
+  mobileAppUrl: string;
   auth: {
     jwtSecret: string;
     jwtExpiresIn: string;
@@ -101,6 +102,7 @@ export function createAppConfiguration(
     environment: environmentName,
     port: getNumber(environment.PORT, 3000),
     frontendUrl: environment.FRONTEND_URL ?? "http://localhost:3500",
+    mobileAppUrl: environment.MOBILE_APP_URL ?? "https://smartclinicnetwork.com",
     auth: {
       jwtSecret:
         environment.JWT_SECRET ??
