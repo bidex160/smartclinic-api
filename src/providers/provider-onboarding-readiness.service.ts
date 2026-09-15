@@ -19,6 +19,19 @@ export class ProviderOnboardingReadinessService {
     @InjectRepository(ProviderServiceArea) private readonly serviceAreas: Repository<ProviderServiceArea>,
   ) {}
 
+  async evaluateAccountReadiness(
+    providerId: string,
+    manager?: EntityManager,
+  ): Promise<Pick<ProviderOnboardingReadinessDto, 'profileComplete' | 'blockers'>> {
+    const providers = manager?.getRepository(Provider) ?? this.providers;
+    const provider = await providers.findOne({ where: { id: providerId }, withDeleted: true });
+    const profileComplete = this.isProfileComplete(provider);
+    return {
+      profileComplete,
+      blockers: profileComplete ? [] : [ProviderOnboardingBlocker.PROFILE_INCOMPLETE],
+    };
+  }
+
   async evaluate(providerId: string, manager?: EntityManager): Promise<ProviderOnboardingReadinessDto> {
     const providers = manager?.getRepository(Provider) ?? this.providers;
     const services = manager?.getRepository(ProviderService) ?? this.services;
@@ -33,7 +46,7 @@ export class ProviderOnboardingReadinessService {
       availability.count({ where: { providerId, isActive: true } }),
     ]);
     const activeCapabilities = capabilityRows.filter((service) => service.isActive);
-    const profileComplete = !!provider && [provider.displayName, provider.email, provider.providerType, provider.countryCode, provider.stateOrRegion, provider.city].every(Boolean);
+    const profileComplete = this.isProfileComplete(provider);
     const providerLocationReady = activeCapabilities.filter((service) => service.fulfilmentMode?.code === PROVIDER_LOCATION_MODE).every((service) => service.locationLinks?.some((link) => link.providerLocation?.isActive));
     const homeVisitCapabilities = activeCapabilities.filter((service) => service.fulfilmentMode?.code === 'HOME_VISIT');
     const coveredHomeVisitServiceIds = homeVisitCapabilities.length ? new Set((await serviceAreas.find({ where: { providerId, isActive: true } })).map((area) => area.providerServiceId)) : new Set<string>();
@@ -45,5 +58,9 @@ export class ProviderOnboardingReadinessService {
     if (!availabilityCount) blockers.push(ProviderOnboardingBlocker.NO_WEEKLY_AVAILABILITY);
     if (!homeVisitReady) blockers.push(ProviderOnboardingBlocker.HOME_VISIT_WITHOUT_SERVICE_AREA);
     return { profileComplete, hasActiveCapability: activeCapabilities.length > 0, providerLocationReady, homeVisitReady, hasAvailability: availabilityCount > 0, blockers, capabilityCount: capabilityRows.length, activeCapabilityCount: activeCapabilities.length, locationCount, activeLocationCount, availabilityCount };
+  }
+
+  private isProfileComplete(provider: Provider | null): boolean {
+    return !!provider && [provider.displayName, provider.email, provider.providerType, provider.countryCode, provider.stateOrRegion, provider.city].every(Boolean);
   }
 }

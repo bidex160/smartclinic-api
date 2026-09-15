@@ -31,4 +31,25 @@ describe('ProviderOnboardingReadinessService', () => {
     const service = repositories(completeProvider, [{ isActive: true, fulfilmentMode: { code: 'HOME_VISIT' }, locationLinks: [] }], 0, 0, 1);
     await expect(service.evaluate('provider-1')).resolves.toMatchObject({ blockers: [], providerLocationReady: true });
   });
+
+  it('reports a complete account without Health Check configuration', async () => {
+    const service = repositories(completeProvider, [], 0, 0, 0);
+    await expect(service.evaluateAccountReadiness('provider-1')).resolves.toEqual({ profileComplete: true, blockers: [] });
+    const repositoriesUsed = service as any;
+    expect(repositoriesUsed.services.find).not.toHaveBeenCalled();
+    expect(repositoriesUsed.locations.count).not.toHaveBeenCalled();
+    expect(repositoriesUsed.availability.count).not.toHaveBeenCalled();
+    expect(repositoriesUsed.serviceAreas.find).not.toHaveBeenCalled();
+  });
+
+  it('reports PROFILE_INCOMPLETE without Health Check blockers', async () => {
+    const service = repositories({ ...completeProvider, city: null }, [], 0, 0, 0);
+    await expect(service.evaluateAccountReadiness('provider-1')).resolves.toEqual({ profileComplete: false, blockers: [ProviderOnboardingBlocker.PROFILE_INCOMPLETE] });
+  });
+
+  it('keeps Health Check HOME_VISIT service-area blockers in aggregate readiness', async () => {
+    const service = repositories(completeProvider, [{ id: 'home-service', isActive: true, fulfilmentMode: { code: 'HOME_VISIT' }, locationLinks: [] }], 0, 0, 1);
+    (service as any).serviceAreas.find.mockResolvedValue([]);
+    await expect(service.evaluate('provider-1')).resolves.toMatchObject({ blockers: [ProviderOnboardingBlocker.HOME_VISIT_WITHOUT_SERVICE_AREA] });
+  });
 });

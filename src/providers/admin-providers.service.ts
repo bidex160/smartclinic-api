@@ -151,7 +151,7 @@ export class AdminProvidersService {
       if (!provider.userId) throw new ConflictException("Provider requires a linked account before approval");
       const user = await manager.getRepository(User).findOne({ where: { id: provider.userId }, withDeleted: true, lock: { mode: "pessimistic_write" } });
       if (!user || user.deletedAt || user.status !== UserStatus.ACTIVE || !user.roles.includes(UserRole.PROVIDER)) throw new ConflictException("Linked provider account is not eligible for approval");
-      const readiness = await this.readiness.evaluate(provider.id, manager);
+      const readiness = await this.readiness.evaluateAccountReadiness(provider.id, manager);
       if (readiness.blockers.length) throw new ConflictException({ message: "Provider onboarding configuration is incomplete", blockers: readiness.blockers, readiness });
       provider.onboardingStatus = ProviderOnboardingStatus.APPROVED;
       provider.status = ProviderStatus.ACTIVE;

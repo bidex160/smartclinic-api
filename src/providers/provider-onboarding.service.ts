@@ -72,7 +72,7 @@ export class ProviderOnboardingService {
       if (!provider || provider.deletedAt) throw new ForbiddenException('A linked provider account is required');
       const account = await manager.getRepository(User).findOne({ where: { id: user.id }, withDeleted: true, lock: { mode: 'pessimistic_write' } });
       if (!account || account.deletedAt || account.status !== UserStatus.ACTIVE || !account.roles.includes(UserRole.PROVIDER)) throw new ForbiddenException('Provider account is not eligible for onboarding');
-      const readiness = await this.readiness.evaluate(provider.id, manager);
+      const readiness = await this.readiness.evaluateAccountReadiness(provider.id, manager);
       if (readiness.blockers.length) throw new ConflictException({ message: 'Provider onboarding configuration is incomplete', blockers: readiness.blockers, readiness });
       if (provider.onboardingStatus === ProviderOnboardingStatus.APPROVED) throw new ConflictException('Provider onboarding is already approved');
       provider.onboardingStatus = ProviderOnboardingStatus.SUBMITTED;
