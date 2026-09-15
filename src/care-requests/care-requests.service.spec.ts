@@ -26,7 +26,7 @@ describe('CareRequestsService', () => {
     manager = { getRepository: (entity: any) => repositories.get(entity), transaction: jest.fn(async (fn) => fn(manager)) };
     (patientRepo as any).manager = manager;
     requests = { manager };
-    eligibility = { requireEligible: jest.fn().mockResolvedValue({ id: 'offering-1', providerId: provider.id, provider, selectedDeliveryOption: { deliveryMode: CareDeliveryMode.IN_PERSON, priceMinor: '1500000', currency: 'NGN' } }) };
+    eligibility = { requireEligible: jest.fn().mockResolvedValue({ id: 'offering-1', providerId: provider.id, provider, selectedDeliveryOption: { deliveryMode: CareDeliveryMode.IN_PERSON, priceMinor: '1500000', currency: 'NGN' } }), findEligibleCareProvider: jest.fn().mockResolvedValue(null) };
     current = { resolveOperational: jest.fn().mockResolvedValue(provider) };
     access = { resolveAccessiblePatient: jest.fn().mockResolvedValue(patient) };
     subject = new CareRequestsService(requests, patientRepo as any, eligibility, current, access);
@@ -36,6 +36,7 @@ describe('CareRequestsService', () => {
   it('creates no-preference requests atomically in MATCHING', async () => {
     const result: any = await subject.create(user, dto);
     expect(result.status).toBe(CareRequestStatus.MATCHING); expect(rows[0].assignedProviderId).toBeNull(); expect(eligibility.requireEligible).not.toHaveBeenCalled();
+    expect(eligibility.findEligibleCareProvider).toHaveBeenCalledWith(expect.objectContaining({ careServiceDefinitionId: definition.id, deliveryMode: CareDeliveryMode.IN_PERSON, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja' }), manager);
     expect(rows[0].deliveryMode).toBe(CareDeliveryMode.IN_PERSON);
     expect(rows[0]).toMatchObject({ servicePriceMinor: null, serviceCurrency: null });
     expect(histories).toEqual([expect.objectContaining({ fromStatus: null, toStatus: CareRequestStatus.MATCHING, actorUserId: user.id, reasonCode: 'MATCHING_REQUESTED' })]);
@@ -66,7 +67,15 @@ describe('CareRequestsService', () => {
   it('routes an eligible preferred provider and exact offering for response', async () => {
     const result: any = await subject.create(user, { ...dto, preferredProviderReference: provider.providerReference });
     expect(result.status).toBe(CareRequestStatus.AWAITING_PROVIDER_RESPONSE);
+    expect(eligibility.findEligibleCareProvider).not.toHaveBeenCalled();
     expect(rows[0]).toMatchObject({ preferredProviderId: provider.id, preferredProviderCareServiceId: 'offering-1', assignedProviderId: provider.id, assignedProviderCareServiceId: 'offering-1', servicePriceMinor: '1500000', serviceCurrency: 'NGN' });
+  });
+  it('persists an automatically workload-matched provider and offering', async () => {
+    eligibility.findEligibleCareProvider.mockResolvedValue({ id: 'offering-1', providerId: provider.id, provider, selectedDeliveryOption: { deliveryMode: CareDeliveryMode.IN_PERSON, priceMinor: '1500000', currency: 'NGN' } });
+    const result: any = await subject.create(user, dto);
+    expect(result.status).toBe(CareRequestStatus.AWAITING_PROVIDER_RESPONSE);
+    expect(rows[0]).toMatchObject({ preferredProviderId: null, preferredProviderCareServiceId: null, assignedProviderId: provider.id, assignedProviderCareServiceId: 'offering-1', servicePriceMinor: '1500000', serviceCurrency: 'NGN' });
+    expect(histories).toEqual([expect.objectContaining({ reasonCode: 'PROVIDER_AUTO_MATCHED' })]);
   });
 
   it('preserves SELF creation when participant reference is omitted', async () => {

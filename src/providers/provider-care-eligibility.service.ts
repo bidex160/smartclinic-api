@@ -1,6 +1,6 @@
 import { ConflictException, Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { EntityManager, Repository } from "typeorm";
+import { EntityManager, In, Repository } from "typeorm";
 import { ProviderCareService } from "./entities/provider-care-service.entity";
 import { Provider } from "./entities/provider.entity";
 import { ProviderLocation } from "./entities/provider-location.entity";
@@ -9,6 +9,8 @@ import { ProviderOnboardingStatus } from "./enums/provider-onboarding-status.enu
 import { ProviderStatus } from "./enums/provider-status.enum";
 import { CareDeliveryMode } from "./enums/care-delivery-mode.enum";
 import { ProviderCareServiceDeliveryOption } from "./entities/provider-care-service-delivery-option.entity";
+import { CareRequest } from "../care-requests/entities/care-request.entity";
+import { CareRequestStatus } from "../care-requests/enums/care-request-status.enum";
 
 export type EligibleProviderCareService = ProviderCareService & {
   selectedDeliveryOption: ProviderCareServiceDeliveryOption;
@@ -23,6 +25,14 @@ export type ProviderCareEligibilityInput = {
   providerId?: string;
   deliveryMode: CareDeliveryMode;
 };
+
+const ACTIVE_CARE_REQUEST_WORKLOAD_STATUSES = [
+  CareRequestStatus.PROVIDER_SELECTED,
+  CareRequestStatus.AWAITING_PROVIDER_RESPONSE,
+  CareRequestStatus.PROVIDER_ACCEPTED,
+  CareRequestStatus.SCHEDULED,
+  CareRequestStatus.IN_PROGRESS,
+];
 
 @Injectable()
 export class ProviderCareEligibilityService {
@@ -305,20 +315,9 @@ async findEligibleCareProvider(
    * that this ProviderCareService supports VIRTUAL.
    */
   if (input.deliveryMode === CareDeliveryMode.VIRTUAL) {
-    const candidate = await query
-      .orderBy("service.createdAt", "ASC")
-      .addOrderBy("service.id", "ASC")
-      .getOne();
-
-    if (!candidate) {
-      return null;
-    }
-
-    return this.requireEligible(
-      {
-        ...input,
-        providerId: candidate.providerId,
-      },
+    return this.rankAndValidateAutomaticCandidates(
+      query.orderBy("service.id", "ASC"),
+      input,
       manager,
     );
   }
@@ -402,31 +401,111 @@ async findEligibleCareProvider(
     );
   }
 
-  /**
-   * Deterministic matching for now.
-   *
-   * Later we can replace this with availability,
-   * workload, round-robin, rating, etc.
-   */
-  const candidate = await query
-    .orderBy("service.createdAt", "ASC")
-    .addOrderBy("service.id", "ASC")
-    .getOne();
+  return this.rankAndValidateAutomaticCandidates(
+    query.orderBy("service.id", "ASC"),
+    input,
+    manager,
+  );
+}
 
-  if (!candidate) {
+private async rankAndValidateAutomaticCandidates(
+  query: ReturnType<Repository<ProviderCareService>["createQueryBuilder"]>,
+  input: ProviderCareEligibilityInput,
+  manager: EntityManager,
+): Promise<EligibleProviderCareService | null> {
+  const candidates = await query.getMany();
+
+  if (candidates.length === 0) {
     return null;
   }
 
-  /**
-   * Final authoritative eligibility validation.
-   */
-  return this.requireEligible(
-    {
-      ...input,
-      providerId: candidate.providerId,
-    },
-    manager,
+  const lockedCandidates = await manager
+    .getRepository(ProviderCareService)
+    .find({
+      where: {
+        id: In(candidates.map((candidate) => candidate.id)),
+      },
+      order: {
+        id: "ASC",
+      },
+      lock: {
+        mode: "pessimistic_write",
+      },
+    });
+
+  if (lockedCandidates.length === 0) {
+    return null;
+  }
+
+  const providerIds = [
+    ...new Set(
+      lockedCandidates.map((candidate) => candidate.providerId),
+    ),
+  ];
+
+  const workloadRows = await manager
+    .getRepository(CareRequest)
+    .createQueryBuilder("request")
+    .select("request.assignedProviderId", "providerId")
+    .addSelect("COUNT(request.id)", "activeWorkload")
+    .where("request.assignedProviderId IN (:...providerIds)", {
+      providerIds,
+    })
+    .andWhere("request.status IN (:...statuses)", {
+      statuses: ACTIVE_CARE_REQUEST_WORKLOAD_STATUSES,
+    })
+    .groupBy("request.assignedProviderId")
+    .getRawMany<{
+      providerId: string;
+      activeWorkload: string;
+    }>();
+
+  const workloadByProviderId = new Map(
+    workloadRows.map((row) => [
+      row.providerId,
+      Number(row.activeWorkload),
+    ]),
   );
+
+  const rankedCandidates = [...lockedCandidates].sort((left, right) => {
+    const leftWorkload =
+      workloadByProviderId.get(left.providerId) ?? 0;
+    const rightWorkload =
+      workloadByProviderId.get(right.providerId) ?? 0;
+
+    if (leftWorkload !== rightWorkload) {
+      return leftWorkload - rightWorkload;
+    }
+
+    const createdAtDifference =
+      left.createdAt.getTime() - right.createdAt.getTime();
+
+    if (createdAtDifference !== 0) {
+      return createdAtDifference;
+    }
+
+    return left.id.localeCompare(right.id);
+  });
+
+  for (const candidate of rankedCandidates) {
+    try {
+      return await this.requireEligible(
+        {
+          ...input,
+          providerId: candidate.providerId,
+        },
+        manager,
+      );
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  return null;
 }
 
   private ineligible(): never {
