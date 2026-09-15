@@ -1,16 +1,18 @@
-import { ConflictException, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
-import { ProviderCareService } from './entities/provider-care-service.entity';
-import { Provider } from './entities/provider.entity';
-import { ProviderLocation } from './entities/provider-location.entity';
-import { CareServiceDefinition } from './entities/care-service-definition.entity';
-import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
-import { ProviderStatus } from './enums/provider-status.enum';
-import { CareDeliveryMode } from './enums/care-delivery-mode.enum';
-import { ProviderCareServiceDeliveryOption } from './entities/provider-care-service-delivery-option.entity';
+import { ConflictException, Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { EntityManager, Repository } from "typeorm";
+import { ProviderCareService } from "./entities/provider-care-service.entity";
+import { Provider } from "./entities/provider.entity";
+import { ProviderLocation } from "./entities/provider-location.entity";
+import { CareServiceDefinition } from "./entities/care-service-definition.entity";
+import { ProviderOnboardingStatus } from "./enums/provider-onboarding-status.enum";
+import { ProviderStatus } from "./enums/provider-status.enum";
+import { CareDeliveryMode } from "./enums/care-delivery-mode.enum";
+import { ProviderCareServiceDeliveryOption } from "./entities/provider-care-service-delivery-option.entity";
 
-export type EligibleProviderCareService = ProviderCareService & { selectedDeliveryOption: ProviderCareServiceDeliveryOption };
+export type EligibleProviderCareService = ProviderCareService & {
+  selectedDeliveryOption: ProviderCareServiceDeliveryOption;
+};
 
 export type ProviderCareEligibilityInput = {
   careServiceDefinitionId: string;
@@ -24,35 +26,412 @@ export type ProviderCareEligibilityInput = {
 
 @Injectable()
 export class ProviderCareEligibilityService {
-  constructor(@InjectRepository(ProviderCareService) private readonly services: Repository<ProviderCareService>) {}
+  constructor(
+    @InjectRepository(ProviderCareService)
+    private readonly services: Repository<ProviderCareService>,
+  ) {}
 
-  async requireEligible(input: ProviderCareEligibilityInput, manager: EntityManager = this.services.manager): Promise<EligibleProviderCareService> {
-    const repository = manager.getRepository(ProviderCareService);
-    const builder = repository.createQueryBuilder('service').innerJoin('service.provider', 'provider')
-      .where('service.careServiceDefinitionId = :definitionId', { definitionId: input.careServiceDefinitionId });
-    if (input.providerReference) builder.andWhere('provider.providerReference = :providerReference', { providerReference: input.providerReference });
-    if (input.providerId) builder.andWhere('provider.id = :providerId', { providerId: input.providerId });
-    const candidate = await builder.getOne();
-    if (!candidate) return this.ineligible();
-    const service = await repository.findOne({ where: { id: candidate.id }, lock: { mode: 'pessimistic_write' } });
-    const selectedDeliveryOption = service ? await manager.getRepository(ProviderCareServiceDeliveryOption).findOne({
-      where: { providerCareServiceId: service.id, deliveryMode: input.deliveryMode },
-      lock: { mode: 'pessimistic_read' },
-    }) : null;
-    if (!service || !service.isActive || !service.supportsAppointmentRequests || !selectedDeliveryOption) return this.ineligible();
-    const [provider, definition] = await Promise.all([
-      manager.getRepository(Provider).findOne({ where: { id: service.providerId }, withDeleted: true, lock: { mode: 'pessimistic_read' } }),
-      manager.getRepository(CareServiceDefinition).findOne({ where: { id: service.careServiceDefinitionId }, lock: { mode: 'pessimistic_read' } }),
-    ]);
-    if (!provider || provider.deletedAt || provider.status !== ProviderStatus.ACTIVE || provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED || !definition?.isActive) return this.ineligible();
-    if (input.deliveryMode === CareDeliveryMode.VIRTUAL) { service.provider = provider; service.definition = definition; return Object.assign(service, { selectedDeliveryOption }); }
-    if (!input.countryCode || !input.stateOrRegion || !input.city) return this.ineligible();
-    const profileMatches = provider.countryCode === input.countryCode && provider.stateOrRegion?.toLocaleLowerCase() === input.stateOrRegion.toLocaleLowerCase() && provider.city?.toLocaleLowerCase() === input.city.toLocaleLowerCase();
-    const locationMatches = profileMatches ? true : await manager.getRepository(ProviderLocation).createQueryBuilder('location').where('location.providerId = :providerId', { providerId: provider.id }).andWhere('location.isActive = true').andWhere('location.countryCode = :country', { country: input.countryCode }).andWhere('LOWER(location.state) = LOWER(:state)', { state: input.stateOrRegion }).andWhere('LOWER(location.city) = LOWER(:city)', { city: input.city }).getExists();
-    if (!locationMatches) return this.ineligible();
-    service.provider = provider; service.definition = definition;
-    return Object.assign(service, { selectedDeliveryOption });
+/**
+ * Validate one specific provider/service combination.
+ *
+ * Used for:
+ *
+ * - patient-selected preferred providers
+ * - final validation of an automatically matched provider
+ */
+async requireEligible(
+  input: ProviderCareEligibilityInput,
+  manager: EntityManager = this.services.manager,
+): Promise<EligibleProviderCareService> {
+  const repository = manager.getRepository(ProviderCareService);
+
+  const builder = repository
+    .createQueryBuilder("service")
+    .innerJoin("service.provider", "provider")
+    .where(
+      "service.careServiceDefinitionId = :definitionId",
+      {
+        definitionId: input.careServiceDefinitionId,
+      },
+    );
+
+  if (input.providerReference) {
+    builder.andWhere(
+      "provider.providerReference = :providerReference",
+      {
+        providerReference: input.providerReference,
+      },
+    );
   }
 
-  private ineligible(): never { throw new ConflictException('Provider is not eligible for the selected care service and location'); }
+  if (input.providerId) {
+    builder.andWhere(
+      "provider.id = :providerId",
+      {
+        providerId: input.providerId,
+      },
+    );
+  }
+
+  const candidate = await builder.getOne();
+
+  if (!candidate) {
+    return this.ineligible();
+  }
+
+  /**
+   * Lock the care-service row because this provider is about
+   * to become the assigned provider for the request.
+   */
+  const service = await repository.findOne({
+    where: {
+      id: candidate.id,
+    },
+    lock: {
+      mode: "pessimistic_write",
+    },
+  });
+
+  if (!service) {
+    return this.ineligible();
+  }
+
+  /**
+   * The provider must explicitly support the requested delivery
+   * mode for THIS care service.
+   *
+   * For example:
+   *
+   * GENERAL_CONSULTATION
+   *   VIRTUAL
+   *
+   * is different from:
+   *
+   * GENERAL_CONSULTATION
+   *   PROVIDER_LOCATION
+   */
+  const selectedDeliveryOption = await manager
+    .getRepository(ProviderCareServiceDeliveryOption)
+    .findOne({
+      where: {
+        providerCareServiceId: service.id,
+        deliveryMode: input.deliveryMode,
+      },
+      lock: {
+        mode: "pessimistic_read",
+      },
+    });
+
+  if (
+    !service.isActive ||
+    !service.supportsAppointmentRequests ||
+    !selectedDeliveryOption
+  ) {
+    return this.ineligible();
+  }
+
+  const [provider, definition] = await Promise.all([
+    manager
+      .getRepository(Provider)
+      .findOne({
+        where: {
+          id: service.providerId,
+        },
+        withDeleted: true,
+        lock: {
+          mode: "pessimistic_read",
+        },
+      }),
+
+    manager
+      .getRepository(CareServiceDefinition)
+      .findOne({
+        where: {
+          id: service.careServiceDefinitionId,
+        },
+        lock: {
+          mode: "pessimistic_read",
+        },
+      }),
+  ]);
+
+  if (
+    !provider ||
+    provider.deletedAt ||
+    provider.status !== ProviderStatus.ACTIVE ||
+    provider.onboardingStatus !==
+      ProviderOnboardingStatus.APPROVED ||
+    !definition?.isActive
+  ) {
+    return this.ineligible();
+  }
+
+  /**
+   * VIRTUAL
+   *
+   * Geography is deliberately ignored.
+   *
+   * The fact that selectedDeliveryOption exists for VIRTUAL is
+   * sufficient from a location perspective.
+   */
+  if (input.deliveryMode === CareDeliveryMode.VIRTUAL) {
+    service.provider = provider;
+    service.definition = definition;
+
+    return Object.assign(service, {
+      selectedDeliveryOption,
+    });
+  }
+
+  /**
+   * Every non-virtual delivery mode requires geography.
+   */
+  if (
+    !input.countryCode ||
+    !input.stateOrRegion ||
+    !input.city
+  ) {
+    return this.ineligible();
+  }
+
+  /**
+   * First check the provider's primary profile.
+   */
+  const profileMatches =
+    provider.countryCode === input.countryCode &&
+    provider.stateOrRegion?.toLocaleLowerCase() ===
+      input.stateOrRegion.toLocaleLowerCase() &&
+    provider.city?.toLocaleLowerCase() ===
+      input.city.toLocaleLowerCase();
+
+  /**
+   * If the primary profile doesn't match, check additional
+   * provider locations.
+   */
+  const locationMatches = profileMatches
+    ? true
+    : await manager
+        .getRepository(ProviderLocation)
+        .createQueryBuilder("location")
+        .where(
+          "location.providerId = :providerId",
+          {
+            providerId: provider.id,
+          },
+        )
+        .andWhere("location.isActive = true")
+        .andWhere(
+          "location.countryCode = :countryCode",
+          {
+            countryCode: input.countryCode,
+          },
+        )
+        .andWhere(
+          "LOWER(location.state) = LOWER(:stateOrRegion)",
+          {
+            stateOrRegion: input.stateOrRegion,
+          },
+        )
+        .andWhere(
+          "LOWER(location.city) = LOWER(:city)",
+          {
+            city: input.city,
+          },
+        )
+        .getExists();
+
+  if (!locationMatches) {
+    return this.ineligible();
+  }
+
+  service.provider = provider;
+  service.definition = definition;
+
+  return Object.assign(service, {
+    selectedDeliveryOption,
+  });
+}
+
+async findEligibleCareProvider(
+  input: ProviderCareEligibilityInput,
+  manager: EntityManager = this.services.manager,
+): Promise<EligibleProviderCareService | null> {
+  const repository = manager.getRepository(ProviderCareService);
+
+  const query = repository
+    .createQueryBuilder("service")
+    .innerJoin("service.provider", "provider")
+    .innerJoin("service.definition", "definition")
+    .innerJoin(
+      ProviderCareServiceDeliveryOption,
+      "deliveryOption",
+      `
+        deliveryOption.providerCareServiceId = service.id
+        AND deliveryOption.deliveryMode = :deliveryMode
+      `,
+      {
+        deliveryMode: input.deliveryMode,
+      },
+    )
+    .where(
+      "service.careServiceDefinitionId = :definitionId",
+      {
+        definitionId: input.careServiceDefinitionId,
+      },
+    )
+    .andWhere("service.isActive = true")
+    .andWhere(
+      "service.supportsAppointmentRequests = true",
+    )
+    .andWhere("provider.deletedAt IS NULL")
+    .andWhere("provider.status = :providerStatus", {
+      providerStatus: ProviderStatus.ACTIVE,
+    })
+    .andWhere(
+      "provider.onboardingStatus = :onboardingStatus",
+      {
+        onboardingStatus:
+          ProviderOnboardingStatus.APPROVED,
+      },
+    )
+    .andWhere("definition.isActive = true");
+
+  /**
+   * VIRTUAL
+   *
+   * No geography matching.
+   *
+   * The deliveryOption join above already guarantees
+   * that this ProviderCareService supports VIRTUAL.
+   */
+  if (input.deliveryMode === CareDeliveryMode.VIRTUAL) {
+    const candidate = await query
+      .orderBy("service.createdAt", "ASC")
+      .addOrderBy("service.id", "ASC")
+      .getOne();
+
+    if (!candidate) {
+      return null;
+    }
+
+    return this.requireEligible(
+      {
+        ...input,
+        providerId: candidate.providerId,
+      },
+      manager,
+    );
+  }
+
+  /**
+   * Physical delivery modes require geography.
+   */
+  if (
+    !input.countryCode ||
+    !input.stateOrRegion ||
+    !input.city
+  ) {
+    return null;
+  }
+
+  /**
+   * PROVIDER_LOCATION
+   *
+   * Provider must have an active ProviderLocation
+   * matching the requested country/state/city.
+   */
+  if (
+    input.deliveryMode ===
+    CareDeliveryMode.IN_PERSON
+  ) {
+    const locationQuery = manager
+      .getRepository(ProviderLocation)
+      .createQueryBuilder("location")
+      .select("1")
+      .where("location.providerId = provider.id")
+      .andWhere("location.isActive = true")
+      .andWhere(
+        "location.countryCode = :countryCode",
+      )
+      .andWhere(
+        "LOWER(location.state) = LOWER(:stateOrRegion)",
+      )
+      .andWhere(
+        "LOWER(location.city) = LOWER(:city)",
+      );
+
+    query.andWhere(
+      `EXISTS (${locationQuery.getQuery()})`,
+      {
+        countryCode: input.countryCode,
+        stateOrRegion: input.stateOrRegion,
+        city: input.city,
+      },
+    );
+  } else {
+    /**
+     * Current fallback for other physical delivery modes.
+     *
+     * If you have HOME_VISIT, we should eventually match that
+     * against a care-specific service area instead of assuming
+     * ProviderLocation.
+     */
+    const locationQuery = manager
+      .getRepository(ProviderLocation)
+      .createQueryBuilder("location")
+      .select("1")
+      .where("location.providerId = provider.id")
+      .andWhere("location.isActive = true")
+      .andWhere(
+        "location.countryCode = :countryCode",
+      )
+      .andWhere(
+        "LOWER(location.state) = LOWER(:stateOrRegion)",
+      )
+      .andWhere(
+        "LOWER(location.city) = LOWER(:city)",
+      );
+
+    query.andWhere(
+      `EXISTS (${locationQuery.getQuery()})`,
+      {
+        countryCode: input.countryCode,
+        stateOrRegion: input.stateOrRegion,
+        city: input.city,
+      },
+    );
+  }
+
+  /**
+   * Deterministic matching for now.
+   *
+   * Later we can replace this with availability,
+   * workload, round-robin, rating, etc.
+   */
+  const candidate = await query
+    .orderBy("service.createdAt", "ASC")
+    .addOrderBy("service.id", "ASC")
+    .getOne();
+
+  if (!candidate) {
+    return null;
+  }
+
+  /**
+   * Final authoritative eligibility validation.
+   */
+  return this.requireEligible(
+    {
+      ...input,
+      providerId: candidate.providerId,
+    },
+    manager,
+  );
+}
+
+  private ineligible(): never {
+    throw new ConflictException(
+      "Provider is not eligible for the selected care service and location",
+    );
+  }
 }
