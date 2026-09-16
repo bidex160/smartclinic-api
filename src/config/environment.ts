@@ -46,6 +46,13 @@ export interface AppConfiguration {
     dispatchBatchSize: number;
     emailMaxAttempts: number;
     processingStaleAfterMs: number;
+    push: {
+      provider: 'none' | 'firebase';
+      firebaseProjectId?: string;
+      firebaseClientEmail?: string;
+      firebasePrivateKey?: string;
+      maxAttempts: number;
+    };
   };
   whatsapp: {
     enabled: boolean;
@@ -202,6 +209,13 @@ export function createAppConfiguration(
         environment.NOTIFICATION_PROCESSING_STALE_AFTER_MS,
         300_000,
       ),
+      push: {
+        provider: (environment.PUSH_PROVIDER as 'none' | 'firebase' | undefined) ?? 'none',
+        firebaseProjectId: environment.FIREBASE_PROJECT_ID,
+        firebaseClientEmail: environment.FIREBASE_CLIENT_EMAIL,
+        firebasePrivateKey: environment.FIREBASE_PRIVATE_KEY,
+        maxAttempts: getNumber(environment.NOTIFICATION_PUSH_MAX_ATTEMPTS, 5),
+      },
     },
     whatsapp: {
       enabled: environment.WHATSAPP_ENABLED === "true",

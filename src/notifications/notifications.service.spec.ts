@@ -4,6 +4,8 @@ import { User } from '../users/entities/user.entity';
 import { UserStatus } from '../users/enums/user-status.enum';
 import { NotificationOutbox } from './entities/notification-outbox.entity';
 import { Notification } from './entities/notification.entity';
+import { NotificationPushOutbox } from './entities/notification-push-outbox.entity';
+import { UserPushDevice } from './entities/user-push-device.entity';
 import { NotificationActionType } from './enums/notification-action-type.enum';
 import { NotificationEntityType } from './enums/notification-entity-type.enum';
 import { NotificationOutboxStatus } from './enums/notification-outbox-status.enum';
@@ -34,9 +36,11 @@ describe('NotificationsService', () => {
       createQueryBuilder: jest.fn(() => ({ update: jest.fn().mockReturnThis(), set: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), execute: jest.fn(async () => { notifications.forEach((row) => { if (!row.readAt) row.readAt = new Date(); }); }) })),
     };
     const outbox = { create: jest.fn((value) => value), save: jest.fn(async (value) => { outboxRows.push(value); return value; }) };
+    const devices = { find: jest.fn(async () => []) };
+    const pushOutbox = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) };
     const userRepo = { findOne: jest.fn(async ({ where }: any) => users.find((row) => row.id === where.id) ?? null) };
     const providerRepo = { findOne: jest.fn(async ({ where }: any) => providers.find((row) => row.id === where.id) ?? null) };
-    manager = { getRepository: jest.fn((entity) => entity === Notification ? repo : entity === NotificationOutbox ? outbox : entity === User ? userRepo : entity === Provider ? providerRepo : {}) };
+    manager = { getRepository: jest.fn((entity) => entity === Notification ? repo : entity === NotificationOutbox ? outbox : entity === NotificationPushOutbox ? pushOutbox : entity === UserPushDevice ? devices : entity === User ? userRepo : entity === Provider ? providerRepo : {}) };
     service = new NotificationsService(repo);
   });
 

@@ -69,6 +69,14 @@ export class ProviderOnboardingService {
     return this.map(provider);
   }
 
+    async updateStateCity(user: User, dto: UpdateProviderProfileDto): Promise<ProviderOnboardingProfileResponseDto> {
+    const provider = await this.context.resolve(user, true);
+    if (dto.stateOrRegion !== undefined) provider.stateOrRegion = dto.stateOrRegion.trim();
+    if (dto.city !== undefined) provider.city = dto.city.trim();
+    await this.providers.save(provider);
+    return this.map(provider);
+  }
+
   async submit(user: User): Promise<ProviderOnboardingProfileResponseDto> {
     await this.context.resolve(user, true);
     await this.providers.manager.transaction(async (manager) => {

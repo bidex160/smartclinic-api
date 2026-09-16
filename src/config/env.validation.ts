@@ -82,6 +82,11 @@ class EnvironmentVariables {
   @Type(() => Number) @IsInt() @Min(1) NOTIFICATION_DISPATCH_BATCH_SIZE = 25;
   @Type(() => Number) @IsInt() @Min(1) NOTIFICATION_EMAIL_MAX_ATTEMPTS = 5;
   @Type(() => Number) @IsInt() @Min(60000) NOTIFICATION_PROCESSING_STALE_AFTER_MS = 300000;
+  @IsOptional() @IsIn(['none', 'firebase']) PUSH_PROVIDER?: string;
+  @IsOptional() @IsString() FIREBASE_PROJECT_ID?: string;
+  @IsOptional() @IsString() FIREBASE_CLIENT_EMAIL?: string;
+  @IsOptional() @IsString() FIREBASE_PRIVATE_KEY?: string;
+  @Type(() => Number) @IsInt() @Min(1) NOTIFICATION_PUSH_MAX_ATTEMPTS = 5;
 
   @IsOptional() @IsIn(['true', 'false']) WHATSAPP_ENABLED?: string;
   @IsOptional() @IsString() WHATSAPP_META_ACCESS_TOKEN?: string;
@@ -147,6 +152,7 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
   if (validatedConfig.EMAIL_PROVIDER === 'resend' && !validatedConfig.RESEND_API_KEY) throw new Error('Invalid environment configuration: RESEND_API_KEY is required when EMAIL_PROVIDER=resend');
   if (validatedConfig.WHATSAPP_ENABLED === 'true' && (!validatedConfig.WHATSAPP_META_ACCESS_TOKEN || !validatedConfig.WHATSAPP_META_PHONE_NUMBER_ID || !validatedConfig.WHATSAPP_WEBHOOK_VERIFY_TOKEN)) throw new Error('Invalid environment configuration: Meta WhatsApp access token, phone number ID, and webhook verify token are required when WhatsApp is enabled');
   if (validatedConfig.CLINICAL_ATTACHMENT_STORAGE_PROVIDER === 'cloudinary' && (!validatedConfig.CLOUDINARY_CLOUD_NAME || !validatedConfig.CLOUDINARY_API_KEY || !validatedConfig.CLOUDINARY_API_SECRET)) throw new Error('Invalid environment configuration: Cloudinary clinical attachment credentials are required when CLINICAL_ATTACHMENT_STORAGE_PROVIDER=cloudinary');
+  if (validatedConfig.PUSH_PROVIDER === 'firebase' && (!validatedConfig.FIREBASE_PROJECT_ID || !validatedConfig.FIREBASE_CLIENT_EMAIL || !validatedConfig.FIREBASE_PRIVATE_KEY)) throw new Error('Invalid environment configuration: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY are required when PUSH_PROVIDER=firebase');
   if (validatedConfig.PAYOUT_ACCOUNT_ENCRYPTION_KEY && Buffer.from(validatedConfig.PAYOUT_ACCOUNT_ENCRYPTION_KEY, 'base64').length !== 32) throw new Error('Invalid environment configuration: PAYOUT_ACCOUNT_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
 
   return validatedConfig;

@@ -6,6 +6,7 @@ import { NotificationActionType } from '../enums/notification-action-type.enum';
 import { NotificationEntityType } from '../enums/notification-entity-type.enum';
 import { NotificationType } from '../enums/notification-type.enum';
 import { NotificationOutbox } from './notification-outbox.entity';
+import { NotificationPushOutbox } from './notification-push-outbox.entity';
 
 @Entity('notifications')
 @Index('UQ_notifications_reference', ['reference'], { unique: true })
@@ -63,5 +64,7 @@ export class Notification {
 
   @OneToMany(() => NotificationOutbox, (outbox) => outbox.notification)
   outboxEntries!: NotificationOutbox[];
-}
 
+  @OneToMany(() => NotificationPushOutbox, (outbox) => outbox.notification)
+  pushOutboxEntries!: NotificationPushOutbox[];
+}

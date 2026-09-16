@@ -14,6 +14,8 @@ import { NotificationOutboxChannel } from './enums/notification-outbox-channel.e
 import { NotificationOutboxStatus } from './enums/notification-outbox-status.enum';
 import { NotificationType } from './enums/notification-type.enum';
 import { NotificationRealtimeService } from './notification-realtime.service';
+import { NotificationPushOutbox } from './entities/notification-push-outbox.entity';
+import { UserPushDevice } from './entities/user-push-device.entity';
 
 export interface CreateNotificationInput {
   userId: string;
@@ -80,6 +82,30 @@ export class NotificationsService {
           errorCode: null,
           idempotencyKey: `${input.idempotencyKey ?? notification.reference}:email`,
         }));
+      }
+
+      const devices = await manager.getRepository(UserPushDevice).find({ where: { userId: user.id, isActive: true } });
+      if (devices.length) {
+        const pushOutbox = manager.getRepository(NotificationPushOutbox);
+        await pushOutbox.save(devices.map((device) => pushOutbox.create({
+          notificationId: notification.id,
+          deviceId: device.id,
+          token: device.token,
+          payload: {
+            notificationReference: notification.reference,
+            title: notification.title,
+            body: notification.message,
+            entityType: notification.entityType,
+            entityReference: notification.entityReference,
+            actionType: notification.actionType,
+          },
+          status: NotificationOutboxStatus.PENDING,
+          attemptCount: 0,
+          nextAttemptAt: null,
+          lastAttemptAt: null,
+          errorCode: null,
+          idempotencyKey: `${input.idempotencyKey ?? notification.reference}:push:${device.id}`,
+        })));
       }
 
       const mapped = this.map(notification);
