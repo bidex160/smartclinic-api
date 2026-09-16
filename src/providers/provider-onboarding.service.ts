@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { QueryFailedError, Repository } from 'typeorm';
@@ -13,6 +13,10 @@ import { ProviderStatus } from './enums/provider-status.enum';
 import { ProviderConfigurationContextService } from './provider-configuration-context.service';
 import { ProviderOnboardingReadinessService } from './provider-onboarding-readiness.service';
 import { ReferralsService } from '../rewards/referrals.service';
+import { NotificationActionType } from '../notifications/enums/notification-action-type.enum';
+import { NotificationEntityType } from '../notifications/enums/notification-entity-type.enum';
+import { NotificationType } from '../notifications/enums/notification-type.enum';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ProviderOnboardingService {
@@ -23,6 +27,7 @@ export class ProviderOnboardingService {
     private readonly context: ProviderConfigurationContextService,
     private readonly readiness: ProviderOnboardingReadinessService,
     private readonly referrals: ReferralsService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
   async register(dto: RegisterProviderDto): Promise<ProviderOnboardingProfileResponseDto> {
@@ -82,6 +87,18 @@ export class ProviderOnboardingService {
       provider.reviewedByUserId = null;
       provider.reviewNote = null;
       await providerRepository.save(provider);
+      await this.notifications?.createTransactionalNotification(manager, {
+        userId: user.id,
+        type: NotificationType.PROVIDER_ONBOARDING_SUBMITTED,
+        title: 'Provider onboarding submitted',
+        message: 'Your provider onboarding has been submitted for review.',
+        entityType: NotificationEntityType.PROVIDER_PROFILE,
+        entityReference: provider.providerReference,
+        actionType: NotificationActionType.VIEW,
+        metadata: { onboardingStatus: provider.onboardingStatus },
+        idempotencyKey: `provider:${provider.providerReference}:onboarding-submitted:${provider.submittedAt?.toISOString()}`,
+        email: { enabled: true },
+      });
     });
     return this.get(user);
   }

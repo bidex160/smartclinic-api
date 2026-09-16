@@ -2,6 +2,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
@@ -26,6 +27,10 @@ import { ProviderStatus } from "./enums/provider-status.enum";
 import { ProviderOnboardingStatus } from "./enums/provider-onboarding-status.enum";
 import { ProviderOnboardingReadinessService } from "./provider-onboarding-readiness.service";
 import { ReferralsService } from '../rewards/referrals.service';
+import { NotificationActionType } from "../notifications/enums/notification-action-type.enum";
+import { NotificationEntityType } from "../notifications/enums/notification-entity-type.enum";
+import { NotificationType } from "../notifications/enums/notification-type.enum";
+import { NotificationsService } from "../notifications/notifications.service";
 
 @Injectable()
 export class AdminProvidersService {
@@ -43,6 +48,7 @@ export class AdminProvidersService {
     private readonly locations: Repository<ProviderLocation>,
     private readonly readiness: ProviderOnboardingReadinessService,
     private readonly referrals: ReferralsService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
  async list(
@@ -160,6 +166,18 @@ export class AdminProvidersService {
       provider.reviewNote = null;
       await providerRepository.save(provider);
       await this.referrals.qualifyProvider(id, manager);
+      await this.notifications?.createTransactionalNotification(manager, {
+        userId: provider.userId,
+        type: NotificationType.PROVIDER_APPROVED,
+        title: "Provider account approved",
+        message: "Your SmartClinic provider account has been approved.",
+        entityType: NotificationEntityType.PROVIDER_PROFILE,
+        entityReference: provider.providerReference,
+        actionType: NotificationActionType.VIEW,
+        metadata: { onboardingStatus: provider.onboardingStatus, providerStatus: provider.status },
+        idempotencyKey: `provider:${provider.providerReference}:approved:${provider.reviewedAt?.toISOString()}`,
+        email: { enabled: true },
+      });
     });
     return this.get(id);
   }
@@ -176,6 +194,20 @@ export class AdminProvidersService {
       provider.reviewedByUserId = actorUserId;
       provider.reviewNote = reviewNote?.trim() || null;
       await repository.save(provider);
+      if (provider.userId) {
+        await this.notifications?.createTransactionalNotification(manager, {
+          userId: provider.userId,
+          type: NotificationType.PROVIDER_REJECTED,
+          title: "Provider onboarding update",
+          message: "Your provider onboarding was not approved. Sign in to review the update.",
+          entityType: NotificationEntityType.PROVIDER_PROFILE,
+          entityReference: provider.providerReference,
+          actionType: NotificationActionType.VIEW,
+          metadata: { onboardingStatus: provider.onboardingStatus, hasReviewNote: Boolean(provider.reviewNote) },
+          idempotencyKey: `provider:${provider.providerReference}:rejected:${provider.reviewedAt?.toISOString()}`,
+          email: { enabled: true },
+        });
+      }
     });
     return this.get(id);
   }

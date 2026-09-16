@@ -38,6 +38,14 @@ export interface AppConfiguration {
     resendApiKey?: string;
     sendTimeoutMs: number;
     contactToAddress: string;
+    logoUrl?: string;
+  };
+  notifications: {
+    dispatcherEnabled: boolean;
+    dispatchIntervalMs: number;
+    dispatchBatchSize: number;
+    emailMaxAttempts: number;
+    processingStaleAfterMs: number;
   };
   whatsapp: {
     enabled: boolean;
@@ -169,8 +177,31 @@ export function createAppConfiguration(
         environment.EMAIL_FROM_ADDRESS ?? "no-reply@smartclinic.invalid",
       contactToAddress: environment.CONTACT_TO_ADDRESS ?? "contact@smartclinic.invalid",
       fromName: environment.EMAIL_FROM_NAME,
+      logoUrl: environment.EMAIL_LOGO_URL,
       resendApiKey: environment.RESEND_API_KEY,
       sendTimeoutMs: getNumber(environment.EMAIL_SEND_TIMEOUT_MS, 10_000),
+    },
+    notifications: {
+      dispatcherEnabled:
+        environment.NOTIFICATION_DISPATCHER_ENABLED === "true" ||
+        (environment.NOTIFICATION_DISPATCHER_ENABLED !== "false" &&
+          environmentName !== "test"),
+      dispatchIntervalMs: getNumber(
+        environment.NOTIFICATION_DISPATCH_INTERVAL_MS,
+        15_000,
+      ),
+      dispatchBatchSize: getNumber(
+        environment.NOTIFICATION_DISPATCH_BATCH_SIZE,
+        25,
+      ),
+      emailMaxAttempts: getNumber(
+        environment.NOTIFICATION_EMAIL_MAX_ATTEMPTS,
+        5,
+      ),
+      processingStaleAfterMs: getNumber(
+        environment.NOTIFICATION_PROCESSING_STALE_AFTER_MS,
+        300_000,
+      ),
     },
     whatsapp: {
       enabled: environment.WHATSAPP_ENABLED === "true",

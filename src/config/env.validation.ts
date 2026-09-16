@@ -75,7 +75,13 @@ class EnvironmentVariables {
   @IsOptional() @IsString() EMAIL_FROM_ADDRESS: string | undefined = process.env.NODE_ENV === 'test' ? 'no-reply@smartclinic.invalid' : undefined;
   @IsOptional() @IsString() EMAIL_FROM_NAME: string | undefined = process.env.NODE_ENV === 'test' ? 'SmartClinic' : undefined;
   @IsOptional() @IsString() RESEND_API_KEY?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) EMAIL_LOGO_URL?: string;
   @Type(() => Number) @IsInt() @Min(1000) EMAIL_SEND_TIMEOUT_MS = 10000;
+  @IsOptional() @IsIn(['true', 'false']) NOTIFICATION_DISPATCHER_ENABLED?: string;
+  @Type(() => Number) @IsInt() @Min(1000) NOTIFICATION_DISPATCH_INTERVAL_MS = 15000;
+  @Type(() => Number) @IsInt() @Min(1) NOTIFICATION_DISPATCH_BATCH_SIZE = 25;
+  @Type(() => Number) @IsInt() @Min(1) NOTIFICATION_EMAIL_MAX_ATTEMPTS = 5;
+  @Type(() => Number) @IsInt() @Min(60000) NOTIFICATION_PROCESSING_STALE_AFTER_MS = 300000;
 
   @IsOptional() @IsIn(['true', 'false']) WHATSAPP_ENABLED?: string;
   @IsOptional() @IsString() WHATSAPP_META_ACCESS_TOKEN?: string;
@@ -122,6 +128,14 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
 
   if (errors.length > 0) {
     throw new Error(`Invalid environment configuration: ${errors.toString()}`);
+  }
+  if (validatedConfig.EMAIL_LOGO_URL) {
+    try {
+      const logoUrl = new URL(validatedConfig.EMAIL_LOGO_URL);
+      if (logoUrl.protocol !== 'http:' && logoUrl.protocol !== 'https:') throw new Error();
+    } catch {
+      throw new Error('Invalid environment configuration: EMAIL_LOGO_URL must use http or https');
+    }
   }
   if (validatedConfig.NODE_ENV === 'production' && validatedConfig.PAYMENT_PROVIDER === 'paystack' && !validatedConfig.PAYSTACK_SECRET_KEY) throw new Error('Invalid environment configuration: PAYSTACK_SECRET_KEY is required when PAYMENT_PROVIDER=paystack');
   if (validatedConfig.NODE_ENV === 'production' && validatedConfig.PAYMENT_PROVIDER === 'opay' && (!validatedConfig.OPAY_BASE_URL || !validatedConfig.OPAY_MERCHANT_ID || !validatedConfig.OPAY_PUBLIC_KEY || !validatedConfig.OPAY_PRIVATE_KEY)) throw new Error('Invalid environment configuration: OPAY_BASE_URL, OPAY_MERCHANT_ID, OPAY_PUBLIC_KEY, and OPAY_PRIVATE_KEY are required when PAYMENT_PROVIDER=opay');

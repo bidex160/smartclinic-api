@@ -18,6 +18,7 @@ import {
   EmailProvider,
   EmailSendOutcome,
 } from "../notifications/email/email-provider";
+import { renderTransactionalEmail, sanitizeEmailSubject } from "../notifications/email/transactional-email-renderer";
 import { UserCredential } from "../users/entities/user-credential.entity";
 import { User } from "../users/entities/user.entity";
 import { UserRole } from "../users/enums/user-role.enum";
@@ -487,30 +488,25 @@ export class ProviderInvitationsService {
   private invitationEmail(invitation: ProviderInvitation, link: string) {
     const providerName = invitation.provider.displayName;
     const expiresAt = invitation.expiresAt.toISOString();
-    const text = `SmartClinic provider invitation\n\nYou have been invited to set up the provider account for ${providerName} using ${invitation.email}.\n\nComplete setup: ${link}\n\nThis link expires at ${expiresAt} and can be used only once. If you did not expect this invitation, ignore this email or contact SmartClinic.`;
-    const html = `<h1>SmartClinic provider invitation</h1><p>You have been invited to set up the provider account for <strong>${this.escapeHtml(providerName)}</strong> using ${this.escapeHtml(invitation.email)}.</p><p><a href="${this.escapeHtml(link)}">Set up provider account</a></p><p>This single-use link expires at ${this.escapeHtml(expiresAt)}.</p><p>If you did not expect this invitation, ignore this email or contact SmartClinic.</p>`;
+    const rendered = renderTransactionalEmail({
+      preheader: 'Set up your SmartClinic Network provider account.',
+      title: 'SmartClinic provider invitation',
+      body: [
+        `You have been invited to set up the provider account for ${providerName} using ${invitation.email}.`,
+        `This link expires at ${expiresAt} and can be used only once. If you did not expect this invitation, ignore this email or contact SmartClinic.`,
+      ],
+      action: { label: 'Set up provider account', url: link },
+      details: [{ label: 'Provider', value: providerName }],
+    }, { logoUrl: this.config.email.logoUrl });
     return {
       to: invitation.email,
       fromAddress: this.config.email.fromAddress,
       fromName: this.config.email.fromName,
-      subject: `Set up your SmartClinic provider account`,
-      html,
-      text,
+      subject: sanitizeEmailSubject(`Set up your SmartClinic provider account`),
+      html: rendered.html,
+      text: rendered.text,
       idempotencyKey: `provider-invitation:${invitation.id}:initial`,
     };
-  }
-  private escapeHtml(value: string): string {
-    return value.replace(
-      /[&<>"']/g,
-      (character) =>
-        ({
-          "&": "&amp;",
-          "<": "&lt;",
-          ">": "&gt;",
-          '"': "&quot;",
-          "'": "&#39;",
-        })[character]!,
-    );
   }
   private mask(email: string): string {
     const [local, domain] = email.split("@");

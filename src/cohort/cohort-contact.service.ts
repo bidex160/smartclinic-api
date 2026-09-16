@@ -9,6 +9,7 @@ import {
   EmailProvider,
   EmailSendOutcome,
 } from '../notifications/email/email-provider';
+import { renderTransactionalEmail, sanitizeEmailSubject } from '../notifications/email/transactional-email-renderer';
 import {  CohortContactSubmissionStatus, CohortContactSubmission } from './entities/cohort-contact-submission.entity';
 import { CohortContactSubmissionDto } from './dto/cohort-contact-submission.dto';
 
@@ -47,7 +48,7 @@ export class CohortContactService {
         to: this.config.email.contactToAddress,
         fromAddress: this.config.email.fromAddress,
         fromName: this.config.email.fromName,
-        subject: `[SmartClinic Contact] ${contact.subject}`,
+        subject: sanitizeEmailSubject(`[SmartClinic Contact] ${contact.subject}`),
         text: this.buildText(contact),
         html: this.buildHtml(contact),
         idempotencyKey: `cohort-contact:${contact.id}`,
@@ -72,48 +73,25 @@ export class CohortContactService {
   }
 
   private buildText(contact: CohortContactSubmission): string {
-    return [
-      'New SmartClinic contact enquiry',
-      '',
-      `Name: ${contact.name}`,
-      `Email: ${contact.email}`,
-      `Phone: ${contact.phone ?? 'Not provided'}`,
-      `Organisation: ${contact.organisation ?? 'Not provided'}`,
-      `Subject: ${contact.subject}`,
-      '',
-      'Message:',
-      contact.message,
-    ].join('\n');
+    return this.render(contact).text;
   }
 
   private buildHtml(contact: CohortContactSubmission): string {
-    const message = this.escapeHtml(contact.message).replace(/\n/g, '<br>');
-
-    return `
-      <h1>New SmartClinic contact enquiry</h1>
-
-      <p><strong>Name:</strong> ${this.escapeHtml(contact.name)}</p>
-      <p><strong>Email:</strong> ${this.escapeHtml(contact.email)}</p>
-      <p><strong>Phone:</strong> ${this.escapeHtml(contact.phone ?? 'Not provided')}</p>
-      <p><strong>Organisation:</strong> ${this.escapeHtml(contact.organisation ?? 'Not provided')}</p>
-      <p><strong>Subject:</strong> ${this.escapeHtml(contact.subject)}</p>
-
-      <h2>Message</h2>
-      <p>${message}</p>
-    `;
+    return this.render(contact).html;
   }
 
-  private escapeHtml(value: string): string {
-    return value.replace(
-      /[&<>"']/g,
-      (character) =>
-        ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;',
-        })[character]!,
-    );
+  private render(contact: CohortContactSubmission) {
+    return renderTransactionalEmail({
+      preheader: 'New SmartClinic contact enquiry.',
+      title: 'New SmartClinic contact enquiry',
+      body: ['A new contact enquiry was submitted.', `Message:\n${contact.message}`],
+      details: [
+        { label: 'Name', value: contact.name },
+        { label: 'Email', value: contact.email },
+        { label: 'Phone', value: contact.phone ?? 'Not provided' },
+        { label: 'Organisation', value: contact.organisation ?? 'Not provided' },
+        { label: 'Subject', value: contact.subject },
+      ],
+    }, { logoUrl: this.config.email.logoUrl });
   }
 }

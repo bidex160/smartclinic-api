@@ -5,6 +5,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { IsNull, Not, Repository } from 'typeorm';
 import { appConfig } from '../config/app.config';
 import { EMAIL_PROVIDER, EmailProvider, EmailSendOutcome } from '../notifications/email/email-provider';
+import { renderTransactionalEmail, sanitizeEmailSubject } from '../notifications/email/transactional-email-renderer';
 import { User } from '../users/entities/user.entity';
 import { UserCredential } from '../users/entities/user-credential.entity';
 import { UserStatus } from '../users/enums/user-status.enum';
@@ -43,13 +44,22 @@ export class PasswordResetService {
 
     try {
       const resetUrl = `${this.config.frontendUrl.replace(/\/+$/, '')}/reset-password?token=${encodeURIComponent(rawToken)}`;
+      const email = renderTransactionalEmail({
+        preheader: 'Reset your SmartClinic password.',
+        title: 'Reset your password',
+        body: [
+          'We received a request to reset your SmartClinic password.',
+          `This link expires in ${this.config.auth.passwordResetTokenTtlMinutes} minutes. If you did not request this, you can ignore this email.`,
+        ],
+        action: { label: 'Reset your password', url: resetUrl },
+      }, { logoUrl: this.config.email.logoUrl });
       const result = await this.emailProvider.sendTransactionalEmail({
         to: user.emailNormalized,
         fromAddress: this.config.email.fromAddress,
         fromName: this.config.email.fromName,
-        subject: 'Reset your SmartClinic password',
-        text: `Reset your SmartClinic password using this link: ${resetUrl}\n\nThis link expires in ${this.config.auth.passwordResetTokenTtlMinutes} minutes. If you did not request this, you can ignore this email.`,
-        html: `<p>We received a request to reset your SmartClinic password.</p><p><a href="${resetUrl}">Reset your password</a></p><p>This link expires in ${this.config.auth.passwordResetTokenTtlMinutes} minutes. If you did not request this, you can ignore this email.</p>`,
+        subject: sanitizeEmailSubject('Reset your SmartClinic password'),
+        text: email.text,
+        html: email.html,
         idempotencyKey: `PASSWORD-RESET-${token.id}`,
       });
       if (result.outcome !== EmailSendOutcome.SENT) throw new Error('Email provider unavailable');

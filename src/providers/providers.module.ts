@@ -42,6 +42,7 @@ import { ProviderInvitationsService } from "./provider-invitations.service";
 import { AdminProviderInvitationsController } from "./admin-provider-invitations.controller";
 import { PublicProviderInvitationsController } from "./public-provider-invitations.controller";
 import { EmailModule } from "../notifications/email/email.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 import { AdminBookingSchedulingController } from "./admin-booking-scheduling.controller";
 import { AdminBookingSchedulingService } from "./admin-booking-scheduling.service";
 import { ProviderOnboardingService } from "./provider-onboarding.service";
@@ -75,6 +76,7 @@ import { HealthCheckPackageAddon } from '../health-checks/entities/health-check-
   imports: [
     AuthModule,
     EmailModule,
+    NotificationsModule,
     RewardsModule,
     TypeOrmModule.forFeature([
       Provider,

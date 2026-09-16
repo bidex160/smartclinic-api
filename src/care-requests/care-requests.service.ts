@@ -36,6 +36,10 @@ import { CareDeliveryMode } from "../providers/enums/care-delivery-mode.enum";
 import { CareRequestFunding } from "./entities/care-request-funding.entity";
 import { CareRequestFundingStatus } from "./enums/care-request-funding-status.enum";
 import { PatientAccessService } from "../patients/patient-access.service";
+import { NotificationActionType } from "../notifications/enums/notification-action-type.enum";
+import { NotificationEntityType } from "../notifications/enums/notification-entity-type.enum";
+import { NotificationType } from "../notifications/enums/notification-type.enum";
+import { NotificationsService } from "../notifications/notifications.service";
 
 const PATIENT_CANCELLABLE = [
   CareRequestStatus.SUBMITTED,
@@ -63,6 +67,7 @@ export class CareRequestsService {
     private readonly eligibility: ProviderCareEligibilityService,
     private readonly currentProvider: CurrentProviderService,
     private readonly patientAccess: PatientAccessService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(user: User, dto: CreateCareRequestDto) {
@@ -158,7 +163,7 @@ export class CareRequestsService {
             : offering
               ? "PROVIDER_AUTO_MATCHED"
               : "MATCHING_REQUESTED";
-          await this.history(
+          const statusHistory = await this.history(
             manager,
             request.id,
             null,
@@ -167,6 +172,19 @@ export class CareRequestsService {
             reasonCode,
             null,
           );
+          if (offering) {
+            await this.notifications.createForProviderTransactional(manager, offering.providerId, {
+              type: NotificationType.CARE_REQUEST_ASSIGNED,
+              title: "New care request",
+              message: `A patient has requested ${definition.name}.`,
+              entityType: NotificationEntityType.CARE_REQUEST,
+              entityReference: request.reference,
+              actionType: NotificationActionType.VIEW,
+              metadata: { serviceName: definition.name, requestStatus: request.status },
+              idempotencyKey: `care-request:${request.reference}:assigned:${offering.providerId}:${statusHistory.id}`,
+              email: { enabled: true },
+            });
+          }
           request.patient = patient;
           request.careServiceDefinition = definition;
           request.preferredProvider = patientSelectedProvider
@@ -225,6 +243,17 @@ export class CareRequestsService {
         "PATIENT_CANCELLED",
         null,
       );
+      await this.notifications.createForProviderTransactional(manager, request.assignedProviderId, {
+        type: NotificationType.CARE_REQUEST_CANCELLED,
+        title: "Care request cancelled",
+        message: "A care request assigned to you was cancelled.",
+        entityType: NotificationEntityType.CARE_REQUEST,
+        entityReference: request.reference,
+        actionType: NotificationActionType.VIEW,
+        metadata: { requestStatus: request.status },
+        idempotencyKey: `care-request:${request.reference}:cancelled:${request.assignedProviderId ?? "unassigned"}`,
+        email: { enabled: false },
+      });
       return this.getMapped(manager, request.id);
     });
   }
@@ -299,6 +328,18 @@ export class CareRequestsService {
         accept ? "PROVIDER_ACCEPTED" : "PROVIDER_DECLINED",
         reason,
       );
+      await this.notifications.createTransactionalNotification(manager, {
+        userId: request.userId,
+        type: accept ? NotificationType.CARE_REQUEST_ACCEPTED : NotificationType.CARE_REQUEST_DECLINED,
+        title: accept ? "Care request accepted" : "Care request declined",
+        message: accept ? "Your care request has been accepted." : "The assigned provider declined your care request.",
+        entityType: NotificationEntityType.CARE_REQUEST,
+        entityReference: request.reference,
+        actionType: NotificationActionType.VIEW,
+        metadata: { requestStatus: request.status },
+        idempotencyKey: `care-request:${request.reference}:${accept ? "accepted" : "declined"}`,
+        email: { enabled: true },
+      });
       if (
         accept &&
         request.servicePriceMinor === "0" &&
@@ -389,6 +430,7 @@ export class CareRequestsService {
         manager,
       );
       const previousStatus = request.status;
+      const previousProviderId = request.assignedProviderId;
       const reassignment = Boolean(
         request.assignedProviderId &&
         request.assignedProviderId !== offering.providerId,
@@ -399,7 +441,7 @@ export class CareRequestsService {
       request.serviceCurrency = offering.selectedDeliveryOption.currency;
       request.status = CareRequestStatus.AWAITING_PROVIDER_RESPONSE;
       await manager.getRepository(CareRequest).save(request);
-      await this.history(
+      const statusHistory = await this.history(
         manager,
         request.id,
         previousStatus,
@@ -408,6 +450,42 @@ export class CareRequestsService {
         reassignment ? "PROVIDER_REASSIGNED" : "PROVIDER_ASSIGNED",
         dto.reason ?? null,
       );
+      await this.notifications.createForProviderTransactional(manager, offering.providerId, {
+        type: reassignment ? NotificationType.CARE_REQUEST_REASSIGNED : NotificationType.CARE_REQUEST_ASSIGNED,
+        title: reassignment ? "Care request reassigned to you" : "New care request",
+        message: reassignment ? "A care request has been reassigned to you." : "A patient has requested a service you offer.",
+        entityType: NotificationEntityType.CARE_REQUEST,
+        entityReference: request.reference,
+        actionType: NotificationActionType.VIEW,
+        metadata: { requestStatus: request.status },
+        idempotencyKey: `care-request:${request.reference}:${reassignment ? "reassigned-new" : "admin-assigned"}:${offering.providerId}:${statusHistory.id}`,
+        email: { enabled: true },
+      });
+      if (reassignment) {
+        await this.notifications.createTransactionalNotification(manager, {
+          userId: request.userId,
+          type: NotificationType.CARE_REQUEST_REASSIGNED,
+          title: "Care request reassigned",
+          message: "Your care request has been assigned to a different provider.",
+          entityType: NotificationEntityType.CARE_REQUEST,
+          entityReference: request.reference,
+          actionType: NotificationActionType.VIEW,
+          metadata: { requestStatus: request.status },
+          idempotencyKey: `care-request:${request.reference}:reassigned-patient:${statusHistory.id}`,
+          email: { enabled: true },
+        });
+        await this.notifications.createForProviderTransactional(manager, previousProviderId, {
+          type: NotificationType.CARE_REQUEST_REASSIGNED,
+          title: "Care request reassigned",
+          message: "A care request is no longer assigned to you.",
+          entityType: NotificationEntityType.CARE_REQUEST,
+          entityReference: request.reference,
+          actionType: NotificationActionType.VIEW,
+          metadata: { requestStatus: request.status },
+          idempotencyKey: `care-request:${request.reference}:reassigned-old:${previousProviderId}:${statusHistory.id}`,
+          email: { enabled: false },
+        });
+      }
       return this.getMapped(manager, request.id);
     });
   }
@@ -540,7 +618,7 @@ export class CareRequestsService {
     reasonNote: string | null,
   ) {
     const repository = manager.getRepository(CareRequestStatusHistory);
-    await repository.save(
+    return repository.save(
       repository.create({
         careRequestId,
         fromStatus,

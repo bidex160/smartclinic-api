@@ -7,6 +7,7 @@ import { appConfig } from '../config/app.config';
 import { FulfilmentMode } from '../health-checks/entities/fulfilment-mode.entity';
 import { HealthCheckPackage } from '../health-checks/entities/health-check-package.entity';
 import { EMAIL_PROVIDER, EmailProvider, EmailSendOutcome } from '../notifications/email/email-provider';
+import { renderTransactionalEmail, sanitizeEmailSubject } from '../notifications/email/transactional-email-renderer';
 import { User } from '../users/entities/user.entity';
 import { CreateProviderRecruitmentInvitationDto } from './dto/create-provider-recruitment-invitation.dto';
 import { ProviderRecruitmentInvitationResponseDto } from './dto/provider-recruitment-invitation-response.dto';
@@ -97,13 +98,25 @@ export class ProviderRecruitmentInvitationsService {
   private email(invitation: ProviderRecruitmentInvitation) {
     const location = [invitation.city, invitation.stateOrRegion, invitation.countryCode].filter(Boolean).join(', ');
     const registrationUrl = `${this.config.frontendUrl.replace(/\/+$/, '')}/provider/register`;
-    const context = [`Health Check package: ${invitation.packageCode}`, location ? `Location: ${location}` : null].filter(Boolean).join('\n');
-    const htmlContext = [`<li>Health Check package: ${this.escapeHtml(invitation.packageCode ?? '')}</li>`, location ? `<li>Location: ${this.escapeHtml(location)}</li>` : null].filter(Boolean).join('');
+    const rendered = renderTransactionalEmail({
+      preheader: 'A SmartClinic patient invited your organisation to join.',
+      title: 'Join the SmartClinic Network',
+      body: [
+        `A SmartClinic patient invited ${invitation.organisationName} to join the SmartClinic Network.`,
+        'This invitation does not create a provider account or booking.',
+      ],
+      action: { label: 'Register your organisation', url: registrationUrl },
+      details: [
+        { label: 'Health Check package', value: invitation.packageCode },
+        { label: 'Location', value: location || null },
+      ],
+      reference: invitation.reference,
+    }, { logoUrl: this.config.email.logoUrl });
     return {
       to: invitation.email!, fromAddress: this.config.email.fromAddress, fromName: this.config.email.fromName,
-      subject: 'A SmartClinic patient invited your organisation',
-      text: `SmartClinic provider invitation\n\nA SmartClinic patient invited ${invitation.organisationName} to join the SmartClinic Network.\n\n${context}\n\nRegister your organisation: ${registrationUrl}\n\nThis invitation does not create a provider account or booking.`,
-      html: `<h1>Join the SmartClinic Network</h1><p>A SmartClinic patient invited <strong>${this.escapeHtml(invitation.organisationName)}</strong> to join the SmartClinic Network.</p><ul>${htmlContext}</ul><p><a href="${this.escapeHtml(registrationUrl)}">Register your organisation</a></p><p>This invitation does not create a provider account or booking.</p>`,
+      subject: sanitizeEmailSubject('A SmartClinic patient invited your organisation'),
+      text: rendered.text,
+      html: rendered.html,
       idempotencyKey: `provider-recruitment-invitation:${invitation.id}:initial`,
     };
   }
@@ -121,7 +134,4 @@ export class ProviderRecruitmentInvitationsService {
     ])).digest('hex');
   }
 
-  private escapeHtml(value: string): string {
-    return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
-  }
 }

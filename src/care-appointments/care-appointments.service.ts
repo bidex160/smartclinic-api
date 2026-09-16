@@ -43,6 +43,10 @@ import { ProviderType } from "../providers/enums/provider-type.enum";
 import { ClinicalOrdersService } from "../clinical-orders/clinical-orders.service";
 import { ReferralsService } from '../rewards/referrals.service';
 import { PatientCareActionSource } from '../rewards/enums/patient-care-action-source.enum';
+import { NotificationActionType } from "../notifications/enums/notification-action-type.enum";
+import { NotificationEntityType } from "../notifications/enums/notification-entity-type.enum";
+import { NotificationType } from "../notifications/enums/notification-type.enum";
+import { NotificationsService } from "../notifications/notifications.service";
 
 const ACTIVE = [
   CareAppointmentStatus.SCHEDULED,
@@ -61,6 +65,7 @@ export class CareAppointmentsService {
     private readonly clinicalRecords: ClinicalRecordsService,
     @Optional() private readonly referrals?: ReferralsService,
     @Optional() private readonly clinicalOrders?: ClinicalOrdersService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
 async schedule(
@@ -427,6 +432,18 @@ async schedule(
           "CARE_APPOINTMENT_SCHEDULED",
           null,
         );
+        await this.notifications?.createTransactionalNotification(manager, {
+          userId: care.userId,
+          type: NotificationType.CARE_APPOINTMENT_SCHEDULED,
+          title: "Care appointment scheduled",
+          message: "Your care appointment has been scheduled.",
+          entityType: NotificationEntityType.CARE_APPOINTMENT,
+          entityReference: appointment.reference,
+          actionType: NotificationActionType.VIEW,
+          metadata: { careRequestReference: care.reference, appointmentStatus: appointment.status },
+          idempotencyKey: `care-appointment:${appointment.reference}:scheduled`,
+          email: { enabled: true },
+        });
 
         return this.getMapped(
           manager,
@@ -735,6 +752,33 @@ async schedule(
         code,
         reason,
       );
+      if (code === "PROVIDER_CANCELLED") {
+        await this.notifications?.createTransactionalNotification(manager, {
+          userId: care.userId,
+          type: NotificationType.CARE_APPOINTMENT_CANCELLED,
+          title: "Care appointment cancelled",
+          message: "Your care appointment was cancelled by the provider.",
+          entityType: NotificationEntityType.CARE_APPOINTMENT,
+          entityReference: appointment.reference,
+          actionType: NotificationActionType.VIEW,
+          metadata: { careRequestReference: care.reference, appointmentStatus: appointment.status },
+          idempotencyKey: `care-appointment:${appointment.reference}:provider-cancelled`,
+          email: { enabled: true },
+        });
+      }
+      if (code === "PATIENT_CANCELLED_APPOINTMENT") {
+        await this.notifications?.createForProviderTransactional(manager, appointment.providerId, {
+          type: NotificationType.CARE_APPOINTMENT_CANCELLED,
+          title: "Care appointment cancelled",
+          message: "A patient cancelled a care appointment.",
+          entityType: NotificationEntityType.CARE_APPOINTMENT,
+          entityReference: appointment.reference,
+          actionType: NotificationActionType.VIEW,
+          metadata: { careRequestReference: care.reference, appointmentStatus: appointment.status },
+          idempotencyKey: `care-appointment:${appointment.reference}:patient-cancelled:${appointment.providerId}`,
+          email: { enabled: true },
+        });
+      }
       if (to === CareAppointmentStatus.COMPLETED)
         await this.earnings.markGeneralCarePayable(
           manager,

@@ -20,10 +20,10 @@ import { ClinicalRecordType } from '../clinical-records/enums/clinical-record-ty
 
 describe('CareAppointmentsService', () => {
   const user: any = { id: 'provider-user' };
-  const provider: any = { id: 'provider-id', status: 'ACTIVE', onboardingStatus: 'APPROVED', deletedAt: null };
-  const care: any = { id: 'care-id', reference: 'SC-CARE-ABCDEF123456', patientId: 'patient-id', assignedProviderId: provider.id, assignedProviderCareServiceId: 'offering-id', careServiceDefinitionId: 'definition-id', deliveryMode: CareDeliveryMode.IN_PERSON, servicePriceMinor: '2000000', serviceCurrency: 'NGN', status: CareRequestStatus.PROVIDER_ACCEPTED };
+  const provider: any = { id: 'provider-id', status: 'ACTIVE', onboardingStatus: 'APPROVED', providerType: 'INDIVIDUAL', deletedAt: null };
+  const care: any = { id: 'care-id', reference: 'SC-CARE-ABCDEF123456', userId: 'patient-user', patientId: 'patient-id', assignedProviderId: provider.id, assignedProviderCareServiceId: 'offering-id', careServiceDefinitionId: 'definition-id', deliveryMode: CareDeliveryMode.IN_PERSON, servicePriceMinor: '2000000', serviceCurrency: 'NGN', status: CareRequestStatus.PROVIDER_ACCEPTED };
   const dto: any = { scheduledDate: '2099-09-10', scheduledTimeFrom: '10:30', scheduledTimeTo: '11:00', timezone: 'Africa/Lagos', providerLocationReference: 'SCPL-ABCDEF0123456789' };
-  let manager: any; let appointmentRepo: any; let providerRepo: any; let careRepo: any; let fundingRepo: any; let offeringRepo: any; let locationRepo: any; let definitionRepo: any; let clinicalRecordRepo: any; let appointmentHistory: any; let requestHistory: any; let overlap: boolean; let referrals: any; let subject: CareAppointmentsService;
+  let manager: any; let appointmentRepo: any; let providerRepo: any; let careRepo: any; let fundingRepo: any; let offeringRepo: any; let locationRepo: any; let definitionRepo: any; let clinicalRecordRepo: any; let appointmentHistory: any; let requestHistory: any; let overlap: boolean; let referrals: any; let notifications: any; let subject: CareAppointmentsService;
   beforeEach(() => {
     care.status = CareRequestStatus.PROVIDER_ACCEPTED; care.deliveryMode = CareDeliveryMode.IN_PERSON;
     overlap = false;
@@ -39,7 +39,8 @@ describe('CareAppointmentsService', () => {
     clinicalRecordRepo = { findOne: jest.fn().mockResolvedValue(null) };
     manager = { transaction: jest.fn(async (work) => work(manager)), getRepository: jest.fn((entity) => entity === CareAppointment ? appointmentRepo : entity === Provider ? providerRepo : entity === CareRequest ? careRepo : entity === CareRequestFunding ? fundingRepo : entity === ProviderCareService ? offeringRepo : entity === ProviderLocation ? locationRepo : entity === CareServiceDefinition ? definitionRepo : entity === ClinicalRecord ? clinicalRecordRepo : entity === CareAppointmentStatusHistory ? appointmentHistory : entity === CareRequestStatusHistory ? requestHistory : {}) };
     referrals = { recordPatientFirstCareAction: jest.fn().mockResolvedValue(undefined) };
-    subject = new CareAppointmentsService({ manager } as any, { findOne: jest.fn() } as any, { resolveOperational: jest.fn().mockResolvedValue(provider) } as any, { markGeneralCarePayable: jest.fn().mockResolvedValue(null) } as any, { ensureDraftForStartedAppointment: jest.fn().mockResolvedValue(null) } as any, referrals);
+    notifications = { createTransactionalNotification: jest.fn(), createForProviderTransactional: jest.fn() };
+    subject = new CareAppointmentsService({ manager } as any, { findOne: jest.fn() } as any, { resolveOperational: jest.fn().mockResolvedValue(provider) } as any, { markGeneralCarePayable: jest.fn().mockResolvedValue(null) } as any, { ensureDraftForStartedAppointment: jest.fn().mockResolvedValue(null) } as any, referrals, undefined, notifications);
     jest.spyOn(subject as any, 'getMapped').mockImplementation(async () => ({ appointmentReference: 'SC-APT-ABCDEF123456' }));
   });
 
@@ -49,6 +50,7 @@ describe('CareAppointmentsService', () => {
     expect(care.status).toBe(CareRequestStatus.SCHEDULED);
     expect(appointmentHistory.save).toHaveBeenCalledWith(expect.objectContaining({ fromStatus: null, toStatus: CareAppointmentStatus.SCHEDULED }));
     expect(requestHistory.save).toHaveBeenCalledWith(expect.objectContaining({ fromStatus: CareRequestStatus.PROVIDER_ACCEPTED, toStatus: CareRequestStatus.SCHEDULED }));
+    expect(notifications.createTransactionalNotification).toHaveBeenCalledWith(manager, expect.objectContaining({ userId: care.userId, type: 'CARE_APPOINTMENT_SCHEDULED', email: { enabled: true } }));
   });
 
   it('gates paid scheduling on authoritative funding and permits explicit free satisfaction', async () => { fundingRepo.findOne.mockResolvedValueOnce({ status: CareRequestFundingStatus.PENDING }); await expect(subject.schedule(user, care.reference, dto)).rejects.toBeInstanceOf(ConflictException); care.servicePriceMinor = '0'; fundingRepo.findOne.mockResolvedValueOnce(null); await expect(subject.schedule(user, care.reference, dto)).resolves.toBeDefined(); expect(fundingRepo.save).toHaveBeenCalledWith(expect.objectContaining({ status: CareRequestFundingStatus.SATISFIED_FREE, amountMinor: '0' })); care.servicePriceMinor = '2000000'; });

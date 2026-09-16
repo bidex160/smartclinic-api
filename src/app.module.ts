@@ -30,6 +30,7 @@ import { HealthPassportModule } from './health-passport/health-passport.module';
 import { CohortContactModule } from './cohort/cohort-contact.module';
 import { ProviderRecruitmentInvitationsModule } from './provider-recruitment-invitations/provider-recruitment-invitations.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -58,6 +59,7 @@ const persistenceDomainModules = configuration.database.enabled
       CohortContactModule,
       ProviderRecruitmentInvitationsModule,
       WhatsAppModule,
+      NotificationsModule,
     ]
   : [];
 

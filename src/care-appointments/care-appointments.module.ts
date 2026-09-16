@@ -23,6 +23,7 @@ import { ClinicalRecord } from '../clinical-records/entities/clinical-record.ent
 import { ClinicalRecordsModule } from '../clinical-records/clinical-records.module';
 import { ClinicalOrdersModule } from '../clinical-orders/clinical-orders.module';
 import { RewardsModule } from '../rewards/rewards.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { RewardsModule } from '../rewards/rewards.module';
     ClinicalRecordsModule,
     ClinicalOrdersModule,
     RewardsModule,
+    NotificationsModule,
     TypeOrmModule.forFeature([
       CareAppointment,
       CareAppointmentStatusHistory,

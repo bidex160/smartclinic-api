@@ -10,9 +10,10 @@ import { CareRequestsService } from './care-requests.service';
 import { User } from '../users/entities/user.entity';
 import { CareRequestFunding } from './entities/care-request-funding.entity';
 import { PatientsModule } from '../patients/patients.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [AuthModule, ProvidersModule, PatientsModule, TypeOrmModule.forFeature([CareRequest, CareRequestFunding, CareRequestStatusHistory, Patient, User])],
+  imports: [AuthModule, ProvidersModule, PatientsModule, NotificationsModule, TypeOrmModule.forFeature([CareRequest, CareRequestFunding, CareRequestStatusHistory, Patient, User])],
   controllers: [MeCareRequestsController, ProviderCareRequestsController, AdminCareRequestsController],
   providers: [CareRequestsService],
   exports: [CareRequestsService],
