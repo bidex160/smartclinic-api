@@ -15,6 +15,7 @@ import { ClinicalOrder } from "./entities/clinical-order.entity";
 import { ClinicalDiagnosticOrderItem } from "./entities/clinical-diagnostic-order-item.entity";
 import { DiagnosticQuote } from "./entities/diagnostic-quote.entity";
 import { DiagnosticFulfillmentFunding } from "./entities/diagnostic-fulfillment-funding.entity";
+import { DiagnosticExecution } from './entities/diagnostic-execution.entity';
 import { DiagnosticFulfillmentService } from './diagnostic-fulfillment.service';
 import { MeDiagnosticFulfillmentController,ProviderDiagnosticFulfillmentController } from './diagnostic-fulfillment.controller';
 import { ClinicalPrescriptionDetail } from "./entities/clinical-prescription-detail.entity";
@@ -40,6 +41,7 @@ import { PharmacyQuote } from './entities/pharmacy-quote.entity';import { Pharma
       ClinicalDiagnosticOrderItem,
       DiagnosticQuote,
       DiagnosticFulfillmentFunding,
+      DiagnosticExecution,
       ClinicalPrescriptionDetail,
       ClinicalPrescriptionItem,
       CareAppointment,
