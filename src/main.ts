@@ -18,6 +18,7 @@ async function bootstrap(): Promise<void> {
 
   const allowedOrigins = [
   'https://cohort.smartclinicnetwork.com', 
+  'https://staging.smartclinicnetwork.com', 
   'http://localhost:4200',
   'http://localhost:8101',
   'http://localhost:8100',
