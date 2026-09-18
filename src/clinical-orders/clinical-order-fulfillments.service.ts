@@ -277,6 +277,7 @@ export class ClinicalOrderFulfillmentsService {
     );
   }
   private async eligibleDirectory(q: FulfillmentDirectoryQueryDto) {
+    const unitType = this.unitTypeForOrder(q.orderType);
     const b = this.fulfillments.manager
       .getRepository(ProviderServiceUnit)
       .createQueryBuilder("unit")
@@ -285,7 +286,7 @@ export class ClinicalOrderFulfillmentsService {
       .where(
         "unit.type=:type AND unit.status=:unitStatus AND unit.deletedAt IS NULL",
         {
-          type: ProviderServiceUnitType.PHARMACY,
+          type: unitType,
           unitStatus: ProviderServiceUnitStatus.ACTIVE,
         },
       )
@@ -388,6 +389,20 @@ export class ClinicalOrderFulfillmentsService {
       await this.cancelRow(m, row, actorId, "ORDER_CANCELLED", reason);
     }
   }
+  private unitTypeForOrder(orderType?: ClinicalOrderType) {
+    switch (orderType) {
+      case ClinicalOrderType.LABORATORY:
+        return ProviderServiceUnitType.LABORATORY;
+      case ClinicalOrderType.IMAGING:
+        return ProviderServiceUnitType.RADIOLOGY;
+      case ClinicalOrderType.PRESCRIPTION:
+      case undefined:
+        return ProviderServiceUnitType.PHARMACY;
+      default:
+        throw new ConflictException("This Clinical Order type does not support patient fulfillment");
+    }
+  }
+
   private requirePrescription(order: ClinicalOrder) {
     if (
       order.type !== ClinicalOrderType.PRESCRIPTION ||
