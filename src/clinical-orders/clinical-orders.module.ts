@@ -1,6 +1,6 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { ClinicalRecordsModule } from '../clinical-records/clinical-records.module';
+import { ClinicalRecordsModule } from "../clinical-records/clinical-records.module";
 import { AuthModule } from "../auth/auth.module";
 import { CareAppointment } from "../care-appointments/entities/care-appointment.entity";
 import { ClinicalRecord } from "../clinical-records/entities/clinical-record.entity";
@@ -16,26 +16,44 @@ import { ClinicalOrder } from "./entities/clinical-order.entity";
 import { ClinicalDiagnosticOrderItem } from "./entities/clinical-diagnostic-order-item.entity";
 import { DiagnosticQuote } from "./entities/diagnostic-quote.entity";
 import { DiagnosticFulfillmentFunding } from "./entities/diagnostic-fulfillment-funding.entity";
-import { DiagnosticExecution } from './entities/diagnostic-execution.entity';
-import { DiagnosticFulfillmentService } from './diagnostic-fulfillment.service';
-import { MeDiagnosticFulfillmentController,ProviderDiagnosticFulfillmentController } from './diagnostic-fulfillment.controller';
+import { DiagnosticExecution } from "./entities/diagnostic-execution.entity";
+import { DiagnosticFulfillmentService } from "./diagnostic-fulfillment.service";
+import {
+  MeDiagnosticFulfillmentController,
+  ProviderDiagnosticFulfillmentController,
+} from "./diagnostic-fulfillment.controller";
 import { ClinicalPrescriptionDetail } from "./entities/clinical-prescription-detail.entity";
 import { ClinicalPrescriptionItem } from "./entities/clinical-prescription-item.entity";
 import { User } from "src/users/entities/user.entity";
-import { ProviderServiceUnitsModule } from '../provider-service-units/provider-service-units.module';
-import { RewardsModule } from '../rewards/rewards.module';
-import { ClinicalOrderFulfillment } from './entities/clinical-order-fulfillment.entity';
-import { ClinicalOrderFulfillmentHistory } from './entities/clinical-order-fulfillment-history.entity';
-import { ClinicalOrderFulfillmentsService } from './clinical-order-fulfillments.service';
-import { MeOrderFulfillmentsController, ProviderOrderFulfillmentsController } from './clinical-order-fulfillments.controller';
-import { PharmacyQuote } from './entities/pharmacy-quote.entity';import { PharmacyQuoteItem } from './entities/pharmacy-quote-item.entity';import { PharmacyFulfillmentFunding } from './entities/pharmacy-fulfillment-funding.entity';import { PharmacyDispensing } from './entities/pharmacy-dispensing.entity';import { PharmacyFulfillmentService } from './pharmacy-fulfillment.service';import { MePharmacyFulfillmentController,ProviderPharmacyFulfillmentController } from './pharmacy-fulfillment.controller';import { CommissionsModule } from '../commissions/commissions.module';import { EarningsModule } from '../earnings/earnings.module';
+import { ProviderServiceUnitsModule } from "../provider-service-units/provider-service-units.module";
+import { RewardsModule } from "../rewards/rewards.module";
+import { ClinicalOrderFulfillment } from "./entities/clinical-order-fulfillment.entity";
+import { ClinicalOrderFulfillmentHistory } from "./entities/clinical-order-fulfillment-history.entity";
+import { ClinicalOrderFulfillmentsService } from "./clinical-order-fulfillments.service";
+import {
+  MeOrderFulfillmentsController,
+  ProviderOrderFulfillmentsController,
+} from "./clinical-order-fulfillments.controller";
+import { PharmacyQuote } from "./entities/pharmacy-quote.entity";
+import { PharmacyQuoteItem } from "./entities/pharmacy-quote-item.entity";
+import { PharmacyFulfillmentFunding } from "./entities/pharmacy-fulfillment-funding.entity";
+import { PharmacyDispensing } from "./entities/pharmacy-dispensing.entity";
+import { PharmacyFulfillmentService } from "./pharmacy-fulfillment.service";
+import {
+  MePharmacyFulfillmentController,
+  ProviderPharmacyFulfillmentController,
+} from "./pharmacy-fulfillment.controller";
+import { CommissionsModule } from "../commissions/commissions.module";
+import { EarningsModule } from "../earnings/earnings.module";
+import { ClinicalRecordAttachmentsService } from "src/clinical-records/clinical-record-attachments.service";
 @Module({
   imports: [
     AuthModule,
     ClinicalRecordsModule,
     ProvidersModule,
     ProviderServiceUnitsModule,
-    CommissionsModule,EarningsModule,
+    CommissionsModule,
+    EarningsModule,
     RewardsModule,
     TypeOrmModule.forFeature([
       ClinicalOrder,
@@ -52,11 +70,28 @@ import { PharmacyQuote } from './entities/pharmacy-quote.entity';import { Pharma
       User,
       ClinicalOrderFulfillment,
       ClinicalOrderFulfillmentHistory,
-      PharmacyQuote,PharmacyQuoteItem,PharmacyFulfillmentFunding,PharmacyDispensing,
+      PharmacyQuote,
+      PharmacyQuoteItem,
+      PharmacyFulfillmentFunding,
+      PharmacyDispensing,
     ]),
   ],
-  controllers: [ProviderClinicalOrdersController, MeClinicalOrdersController, ProviderOrderFulfillmentsController, MeOrderFulfillmentsController,ProviderPharmacyFulfillmentController,MePharmacyFulfillmentController,ProviderDiagnosticFulfillmentController,MeDiagnosticFulfillmentController],
-  providers: [ClinicalOrdersService, ClinicalOrderFulfillmentsService,PharmacyFulfillmentService,DiagnosticFulfillmentService],
+  controllers: [
+    ProviderClinicalOrdersController,
+    MeClinicalOrdersController,
+    ProviderOrderFulfillmentsController,
+    MeOrderFulfillmentsController,
+    ProviderPharmacyFulfillmentController,
+    MePharmacyFulfillmentController,
+    ProviderDiagnosticFulfillmentController,
+    MeDiagnosticFulfillmentController,
+  ],
+  providers: [
+    ClinicalOrdersService,
+    ClinicalOrderFulfillmentsService,
+    PharmacyFulfillmentService,
+    DiagnosticFulfillmentService,
+  ],
   exports: [ClinicalOrdersService],
 })
 export class ClinicalOrdersModule {}
