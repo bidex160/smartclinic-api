@@ -1,25 +1,596 @@
-import { ConflictException,Injectable,NotFoundException } from '@nestjs/common';import { InjectRepository } from '@nestjs/typeorm';import { EntityManager,In,Repository } from 'typeorm';import { CareAppointment } from '../care-appointments/entities/care-appointment.entity';import { CareAppointmentStatus } from '../care-appointments/enums/care-appointment-status.enum';import { ClinicalRecord } from '../clinical-records/entities/clinical-record.entity';import { Patient } from '../patients/entities/patient.entity';import { PatientStatus } from '../patients/enums/patient-status.enum';import { CurrentProviderService } from '../providers/current-provider.service';import { User } from '../users/entities/user.entity';import { generateClinicalOrderReference } from './clinical-order-reference';import { CancelClinicalOrderDto,ClinicalOrderListQueryDto,CreateDiagnosticOrderDto,UpsertPrescriptionDto } from './dto/clinical-order.dto';import { ClinicalOrderStatusHistory } from './entities/clinical-order-status-history.entity';import { ClinicalOrder } from './entities/clinical-order.entity';import { ClinicalDiagnosticOrderItem } from './entities/clinical-diagnostic-order-item.entity';import { ClinicalPrescriptionDetail } from './entities/clinical-prescription-detail.entity';import { ClinicalPrescriptionItem } from './entities/clinical-prescription-item.entity';import { ClinicalOrderStatus } from './enums/clinical-order-status.enum';import { ClinicalOrderType } from './enums/clinical-order-type.enum';
-import { ClinicalOrderFulfillmentsService } from './clinical-order-fulfillments.service';
-@Injectable()export class ClinicalOrdersService{constructor(@InjectRepository(ClinicalOrder)private readonly orders:Repository<ClinicalOrder>,@InjectRepository(Patient)private readonly patients:Repository<Patient>,private readonly currentProvider:CurrentProviderService,private readonly fulfillments?:ClinicalOrderFulfillmentsService){}
- async createPrescription(user:User,appointmentReference:string,dto:UpsertPrescriptionDto){const provider=await this.currentProvider.resolveOperational(user);return this.orders.manager.transaction(async m=>{const context=await this.context(m,appointmentReference,provider.id,true);if(context.appointment.status!==CareAppointmentStatus.IN_PROGRESS)throw new ConflictException('Prescriptions may only be drafted during an appointment in progress');const repo=m.getRepository(ClinicalOrder);const order=await repo.save(repo.create({reference:generateClinicalOrderReference(),patientId:context.appointment.patientId,orderingProviderId:provider.id,orderingUserId:user.id,careRequestId:context.appointment.careRequestId,careAppointmentId:context.appointment.id,clinicalRecordId:context.record.id,type:ClinicalOrderType.PRESCRIPTION,status:ClinicalOrderStatus.DRAFT,clinicalNote:dto.clinicalNote??null,issuedAt:null,cancelledAt:null,cancelledByUserId:null,cancellationReason:null}));const detail=await m.getRepository(ClinicalPrescriptionDetail).save({clinicalOrderId:order.id,notes:dto.notes??null});await this.replaceItems(m,detail.id,dto.items);await this.history(m,order.id,null,order.status,user.id,'PRESCRIPTION_DRAFT_CREATED');return this.mapped(m,order.id);});}
- async createDiagnostic(user:User,appointmentReference:string,type:ClinicalOrderType,dto:CreateDiagnosticOrderDto){if(![ClinicalOrderType.LABORATORY,ClinicalOrderType.IMAGING].includes(type))throw new ConflictException('Diagnostic Clinical Order type is not supported');const provider=await this.currentProvider.resolveOperational(user);return this.orders.manager.transaction(async m=>{const context=await this.context(m,appointmentReference,provider.id,true);if(context.appointment.status!==CareAppointmentStatus.IN_PROGRESS)throw new ConflictException('Diagnostic orders may only be drafted during an appointment in progress');const repo=m.getRepository(ClinicalOrder);const order=await repo.save(repo.create({reference:generateClinicalOrderReference(),patientId:context.appointment.patientId,orderingProviderId:provider.id,orderingUserId:user.id,careRequestId:context.appointment.careRequestId,careAppointmentId:context.appointment.id,clinicalRecordId:context.record.id,type,status:ClinicalOrderStatus.DRAFT,clinicalNote:dto.clinicalNote??null,issuedAt:null,cancelledAt:null,cancelledByUserId:null,cancellationReason:null}));await this.replaceDiagnosticItems(m,order.id,dto.items);await this.history(m,order.id,null,order.status,user.id,type===ClinicalOrderType.LABORATORY?'LABORATORY_DRAFT_CREATED':'IMAGING_DRAFT_CREATED');return this.mapped(m,order.id);});}
- async updateDiagnostic(user:User,reference:string,dto:CreateDiagnosticOrderDto){const provider=await this.currentProvider.resolveOperational(user);return this.orders.manager.transaction(async m=>{const order=await this.lockOwned(m,reference,provider.id);if(![ClinicalOrderType.LABORATORY,ClinicalOrderType.IMAGING].includes(order.type))throw new ConflictException('This Clinical Order is not a diagnostic order');if(order.type!==ClinicalOrderType.PRESCRIPTION)throw new ConflictException('Use the diagnostic order endpoint to edit laboratory or imaging orders');if(order.status!==ClinicalOrderStatus.DRAFT)throw new ConflictException('Issued or cancelled Clinical Orders are immutable');const appointment=await m.getRepository(CareAppointment).findOne({where:{id:order.careAppointmentId},lock:{mode:'pessimistic_read'}});if(appointment?.status!==CareAppointmentStatus.IN_PROGRESS)throw new ConflictException('Diagnostic order can no longer be edited');order.clinicalNote=dto.clinicalNote??null;await m.getRepository(ClinicalOrder).save(order);await this.replaceDiagnosticItems(m,order.id,dto.items);return this.mapped(m,order.id);});}
- async update(user:User,reference:string,dto:UpsertPrescriptionDto){const provider=await this.currentProvider.resolveOperational(user);return this.orders.manager.transaction(async m=>{const order=await this.lockOwned(m,reference,provider.id);if(order.status!==ClinicalOrderStatus.DRAFT)throw new ConflictException('Issued or cancelled Clinical Orders are immutable');const appointment=await m.getRepository(CareAppointment).findOne({where:{id:order.careAppointmentId},lock:{mode:'pessimistic_read'}});if(appointment?.status!==CareAppointmentStatus.IN_PROGRESS)throw new ConflictException('Prescription can no longer be edited');order.clinicalNote=dto.clinicalNote??null;await m.getRepository(ClinicalOrder).save(order);const detail=await m.getRepository(ClinicalPrescriptionDetail).findOneOrFail({where:{clinicalOrderId:order.id}});detail.notes=dto.notes??null;await m.getRepository(ClinicalPrescriptionDetail).save(detail);await this.replaceItems(m,detail.id,dto.items);return this.mapped(m,order.id);});}
- async issue(user:User,reference:string){const provider=await this.currentProvider.resolveOperational(user);return this.orders.manager.transaction(async m=>{const order=await this.lockOwned(m,reference,provider.id);if(order.status===ClinicalOrderStatus.ISSUED)return this.mapped(m,order.id);if(order.status!==ClinicalOrderStatus.DRAFT)throw new ConflictException('Clinical Order cannot be issued');const appointment=await m.getRepository(CareAppointment).findOne({where:{id:order.careAppointmentId},lock:{mode:'pessimistic_read'}});if(appointment?.status!==CareAppointmentStatus.IN_PROGRESS)throw new ConflictException('Clinical Order may only be issued during an appointment in progress');if(order.type===ClinicalOrderType.PRESCRIPTION){const detail=await m.getRepository(ClinicalPrescriptionDetail).findOne({where:{clinicalOrderId:order.id}});if(!detail||await m.getRepository(ClinicalPrescriptionItem).count({where:{prescriptionDetailId:detail.id}})<1)throw new ConflictException('Prescription must contain at least one item');}else if([ClinicalOrderType.LABORATORY,ClinicalOrderType.IMAGING].includes(order.type)){if(await m.getRepository(ClinicalDiagnosticOrderItem).count({where:{clinicalOrderId:order.id}})<1)throw new ConflictException('Diagnostic order must contain at least one item');}else throw new ConflictException('This Clinical Order type cannot be issued here');order.status=ClinicalOrderStatus.ISSUED;order.issuedAt=new Date();await m.getRepository(ClinicalOrder).save(order);await this.history(m,order.id,ClinicalOrderStatus.DRAFT,order.status,user.id,order.type===ClinicalOrderType.PRESCRIPTION?'PRESCRIPTION_ISSUED':order.type===ClinicalOrderType.LABORATORY?'LABORATORY_ISSUED':'IMAGING_ISSUED');return this.mapped(m,order.id);});}
- async cancel(user:User,reference:string,dto:CancelClinicalOrderDto){const provider=await this.currentProvider.resolveOperational(user);return this.orders.manager.transaction(async m=>{const order=await this.lockOwned(m,reference,provider.id);if(order.status===ClinicalOrderStatus.CANCELLED)return this.mapped(m,order.id);const from=order.status;order.status=ClinicalOrderStatus.CANCELLED;order.cancelledAt=new Date();order.cancelledByUserId=user.id;order.cancellationReason=dto.reason??null;await m.getRepository(ClinicalOrder).save(order);await this.fulfillments?.cancelOpenForOrder(m,order.id,user.id,dto.reason??null);await this.history(m,order.id,from,order.status,user.id,'ORDER_CANCELLED',dto.reason??null);return this.mapped(m,order.id);});}
- async listProvider(user:User,appointmentReference:string,q:ClinicalOrderListQueryDto){const provider=await this.currentProvider.resolveOperational(user);const b=this.readBuilder().where('order.orderingProviderId=:providerId',{providerId:provider.id}).andWhere('appointment.reference=:appointmentReference',{appointmentReference});return this.page(b,q);}
- async getProvider(user:User,reference:string){const provider=await this.currentProvider.resolveOperational(user);const row=await this.readBuilder().where('order.reference=:reference',{reference}).andWhere('order.orderingProviderId=:providerId',{providerId:provider.id}).getOne();if(!row)this.notFound();return this.map(row);}
- async listMine(user:User,q:ClinicalOrderListQueryDto){const patient=await this.patient(user.id);const b=this.readBuilder().where('order.patientId=:patientId',{patientId:patient.id}).andWhere(`(order.status='ISSUED' OR (order.status='CANCELLED' AND order.issuedAt IS NOT NULL))`);return this.page(b,q,true);}
- async getMine(user:User,reference:string){const patient=await this.patient(user.id);const row=await this.readBuilder().where('order.reference=:reference',{reference}).andWhere('order.patientId=:patientId',{patientId:patient.id}).andWhere(`(order.status='ISSUED' OR (order.status='CANCELLED' AND order.issuedAt IS NOT NULL))`).getOne();if(!row)this.notFound();const summaries=await this.fulfillments?.summaries([row.id]);return this.map(row,summaries?.get(row.id)??null);}
- async requireNoDraftOrders(manager:EntityManager,appointmentId:string){if(await manager.getRepository(ClinicalOrder).exists({where:{careAppointmentId:appointmentId,status:ClinicalOrderStatus.DRAFT}}))throw new ConflictException('Draft Clinical Orders must be issued or cancelled before appointment completion');}
- private async context(m:EntityManager,reference:string,providerId:string,write=false){const appointment=await m.getRepository(CareAppointment).findOne({where:{reference,providerId},relations:{careRequest:true},lock:{mode:write?'pessimistic_write':'pessimistic_read',tables:['care_appointments']}});if(!appointment||appointment.careRequest.assignedProviderId!==providerId)throw new NotFoundException('Care Appointment was not found');const record=await m.getRepository(ClinicalRecord).findOne({where:{careAppointmentId:appointment.id,providerId}});if(!record||record.patientId!==appointment.patientId||record.careRequestId!==appointment.careRequestId)throw new ConflictException('Authoritative Clinical Record is required for this encounter');return{appointment,record};}
- private async lockOwned(m:EntityManager,reference:string,providerId:string){const row=await m.getRepository(ClinicalOrder).findOne({where:{reference,orderingProviderId:providerId},lock:{mode:'pessimistic_write'}});if(!row)this.notFound();return row;}
- private async replaceItems(m:EntityManager,detailId:string,items:UpsertPrescriptionDto['items']){const repo=m.getRepository(ClinicalPrescriptionItem);await repo.delete({prescriptionDetailId:detailId});await repo.save(items.map((i,index)=>repo.create({prescriptionDetailId:detailId,medicationName:i.medicationName,strength:i.strength??null,dosage:i.dosage,frequency:i.frequency,duration:i.duration??null,quantity:i.quantity??null,route:i.route??null,instructions:i.instructions??null,sortOrder:index})));}
- private async replaceDiagnosticItems(m:EntityManager,orderId:string,items:CreateDiagnosticOrderDto['items']){const repo=m.getRepository(ClinicalDiagnosticOrderItem);await repo.delete({clinicalOrderId:orderId});await repo.save(items.map((i,index)=>repo.create({clinicalOrderId:orderId,name:i.name,code:i.code??null,instructions:i.instructions??null,sortOrder:index})));}
- private readBuilder(m:EntityManager=this.orders.manager){return m.getRepository(ClinicalOrder).createQueryBuilder('order').innerJoinAndSelect('order.orderingProvider','provider').innerJoinAndSelect('order.careAppointment','appointment').innerJoinAndSelect('order.careRequest','careRequest').innerJoinAndSelect('order.clinicalRecord','clinicalRecord').leftJoinAndSelect('order.prescription','prescription').leftJoinAndSelect('prescription.items','items').leftJoinAndMapMany('order.diagnosticItems',ClinicalDiagnosticOrderItem,'diagnosticItem','diagnosticItem.clinicalOrderId=order.id');}
- private async mapped(m:EntityManager,id:string){const row=await this.readBuilder(m).where('order.id=:id',{id}).orderBy('items.sortOrder','ASC').addOrderBy('diagnosticItem.sortOrder','ASC').getOneOrFail();return this.map(row);}
- private map(o:ClinicalOrder,fulfillment:unknown=undefined){return{reference:o.reference,type:o.type,status:o.status,clinicalNote:o.clinicalNote,orderingProvider:{providerReference:o.orderingProvider.providerReference,displayName:o.orderingProvider.displayName,providerType:o.orderingProvider.providerType},careRequestReference:o.careRequest.reference,careAppointmentReference:o.careAppointment.reference,clinicalRecordReference:o.clinicalRecord?.reference??undefined,issuedAt:o.issuedAt,cancelledAt:o.cancelledAt,cancellationReason:o.cancellationReason,diagnosticItems:[...(((o as any).diagnosticItems)??[])].sort((a:any,b:any)=>a.sortOrder-b.sortOrder).map((i:any)=>({name:i.name,code:i.code,instructions:i.instructions,sortOrder:i.sortOrder})),prescription:o.type===ClinicalOrderType.PRESCRIPTION&&o.prescription?{notes:o.prescription.notes,items:[...(o.prescription.items??[])].sort((a,b)=>a.sortOrder-b.sortOrder).map(i=>({medicationName:i.medicationName,strength:i.strength,dosage:i.dosage,frequency:i.frequency,duration:i.duration,quantity:i.quantity,route:i.route,instructions:i.instructions,sortOrder:i.sortOrder}))}:null,createdAt:o.createdAt,updatedAt:o.updatedAt,...(fulfillment!==undefined?{fulfillment}:{})};}
- private async page(b:ReturnType<ClinicalOrdersService['readBuilder']>,q:ClinicalOrderListQueryDto,includeFulfillment=false){if(q.type)b.andWhere('order.type=:type',{type:q.type});b.orderBy('order.createdAt','DESC').addOrderBy('order.reference','DESC').skip((q.page-1)*q.limit).take(q.limit);const[rows,total]=await b.getManyAndCount();const summaries=includeFulfillment&&this.fulfillments?await this.fulfillments.summaries(rows.map(r=>r.id)):new Map<string,unknown>();return{items:rows.map(r=>this.map(r,includeFulfillment?(summaries.get(r.id)??null):undefined)),page:q.page,limit:q.limit,total,totalPages:total?Math.ceil(total/q.limit):0};}
- private async patient(userId:string){const p=await this.patients.findOne({where:{userId},withDeleted:true});if(!p||p.deletedAt||p.status!==PatientStatus.ACTIVE)throw new NotFoundException('Patient profile was not found');return p;}
- private async history(m:EntityManager,id:string,from:ClinicalOrderStatus|null,to:ClinicalOrderStatus,actor:string,code:string,note:string|null=null){await m.getRepository(ClinicalOrderStatusHistory).save({clinicalOrderId:id,fromStatus:from,toStatus:to,actorUserId:actor,reasonCode:code,reasonNote:note});}
- private notFound():never{throw new NotFoundException('Clinical Order was not found');}}
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { EntityManager, In, Repository } from "typeorm";
+import { CareAppointment } from "../care-appointments/entities/care-appointment.entity";
+import { CareAppointmentStatus } from "../care-appointments/enums/care-appointment-status.enum";
+import { ClinicalRecord } from "../clinical-records/entities/clinical-record.entity";
+import { Patient } from "../patients/entities/patient.entity";
+import { PatientStatus } from "../patients/enums/patient-status.enum";
+import { CurrentProviderService } from "../providers/current-provider.service";
+import { User } from "../users/entities/user.entity";
+import { generateClinicalOrderReference } from "./clinical-order-reference";
+import {
+  CancelClinicalOrderDto,
+  ClinicalOrderListQueryDto,
+  CreateDiagnosticOrderDto,
+  UpsertPrescriptionDto,
+} from "./dto/clinical-order.dto";
+import { ClinicalOrderStatusHistory } from "./entities/clinical-order-status-history.entity";
+import { ClinicalOrder } from "./entities/clinical-order.entity";
+import { ClinicalDiagnosticOrderItem } from "./entities/clinical-diagnostic-order-item.entity";
+import { ClinicalPrescriptionDetail } from "./entities/clinical-prescription-detail.entity";
+import { ClinicalPrescriptionItem } from "./entities/clinical-prescription-item.entity";
+import { ClinicalOrderStatus } from "./enums/clinical-order-status.enum";
+import { ClinicalOrderType } from "./enums/clinical-order-type.enum";
+import { ClinicalOrderFulfillmentsService } from "./clinical-order-fulfillments.service";
+@Injectable()
+export class ClinicalOrdersService {
+  constructor(
+    @InjectRepository(ClinicalOrder)
+    private readonly orders: Repository<ClinicalOrder>,
+    @InjectRepository(Patient) private readonly patients: Repository<Patient>,
+    private readonly currentProvider: CurrentProviderService,
+    private readonly fulfillments?: ClinicalOrderFulfillmentsService,
+  ) {}
+  async createPrescription(
+    user: User,
+    appointmentReference: string,
+    dto: UpsertPrescriptionDto,
+  ) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    return this.orders.manager.transaction(async (m) => {
+      const context = await this.context(
+        m,
+        appointmentReference,
+        provider.id,
+        true,
+      );
+      if (context.appointment.status !== CareAppointmentStatus.IN_PROGRESS)
+        throw new ConflictException(
+          "Prescriptions may only be drafted during an appointment in progress",
+        );
+      const repo = m.getRepository(ClinicalOrder);
+      const order = await repo.save(
+        repo.create({
+          reference: generateClinicalOrderReference(),
+          patientId: context.appointment.patientId,
+          orderingProviderId: provider.id,
+          orderingUserId: user.id,
+          careRequestId: context.appointment.careRequestId,
+          careAppointmentId: context.appointment.id,
+          clinicalRecordId: context.record.id,
+          type: ClinicalOrderType.PRESCRIPTION,
+          status: ClinicalOrderStatus.DRAFT,
+          clinicalNote: dto.clinicalNote ?? null,
+          issuedAt: null,
+          cancelledAt: null,
+          cancelledByUserId: null,
+          cancellationReason: null,
+        }),
+      );
+      const detail = await m
+        .getRepository(ClinicalPrescriptionDetail)
+        .save({ clinicalOrderId: order.id, notes: dto.notes ?? null });
+      await this.replaceItems(m, detail.id, dto.items);
+      await this.history(
+        m,
+        order.id,
+        null,
+        order.status,
+        user.id,
+        "PRESCRIPTION_DRAFT_CREATED",
+      );
+      return this.mapped(m, order.id);
+    });
+  }
+  async createDiagnostic(
+    user: User,
+    appointmentReference: string,
+    type: ClinicalOrderType,
+    dto: CreateDiagnosticOrderDto,
+  ) {
+    if (
+      ![ClinicalOrderType.LABORATORY, ClinicalOrderType.IMAGING].includes(type)
+    )
+      throw new ConflictException(
+        "Diagnostic Clinical Order type is not supported",
+      );
+    const provider = await this.currentProvider.resolveOperational(user);
+    return this.orders.manager.transaction(async (m) => {
+      const context = await this.context(
+        m,
+        appointmentReference,
+        provider.id,
+        true,
+      );
+      if (context.appointment.status !== CareAppointmentStatus.IN_PROGRESS)
+        throw new ConflictException(
+          "Diagnostic orders may only be drafted during an appointment in progress",
+        );
+      const repo = m.getRepository(ClinicalOrder);
+      const order = await repo.save(
+        repo.create({
+          reference: generateClinicalOrderReference(),
+          patientId: context.appointment.patientId,
+          orderingProviderId: provider.id,
+          orderingUserId: user.id,
+          careRequestId: context.appointment.careRequestId,
+          careAppointmentId: context.appointment.id,
+          clinicalRecordId: context.record.id,
+          type,
+          status: ClinicalOrderStatus.DRAFT,
+          clinicalNote: dto.clinicalNote ?? null,
+          issuedAt: null,
+          cancelledAt: null,
+          cancelledByUserId: null,
+          cancellationReason: null,
+        }),
+      );
+      await this.replaceDiagnosticItems(m, order.id, dto.items);
+      await this.history(
+        m,
+        order.id,
+        null,
+        order.status,
+        user.id,
+        type === ClinicalOrderType.LABORATORY
+          ? "LABORATORY_DRAFT_CREATED"
+          : "IMAGING_DRAFT_CREATED",
+      );
+      return this.mapped(m, order.id);
+    });
+  }
+  async updateDiagnostic(
+    user: User,
+    reference: string,
+    dto: CreateDiagnosticOrderDto,
+  ) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    return this.orders.manager.transaction(async (m) => {
+      const order = await this.lockOwned(m, reference, provider.id);
+      if (
+        ![ClinicalOrderType.LABORATORY, ClinicalOrderType.IMAGING].includes(
+          order.type,
+        )
+      )
+        throw new ConflictException(
+          "This Clinical Order is not a diagnostic order",
+        );
+      if (order.type !== ClinicalOrderType.PRESCRIPTION)
+        throw new ConflictException(
+          "Use the diagnostic order endpoint to edit laboratory or imaging orders",
+        );
+      if (order.status !== ClinicalOrderStatus.DRAFT)
+        throw new ConflictException(
+          "Issued or cancelled Clinical Orders are immutable",
+        );
+      const appointment = await m
+        .getRepository(CareAppointment)
+        .findOne({
+          where: { id: order.careAppointmentId },
+          lock: { mode: "pessimistic_read" },
+        });
+      if (appointment?.status !== CareAppointmentStatus.IN_PROGRESS)
+        throw new ConflictException("Diagnostic order can no longer be edited");
+      order.clinicalNote = dto.clinicalNote ?? null;
+      await m.getRepository(ClinicalOrder).save(order);
+      await this.replaceDiagnosticItems(m, order.id, dto.items);
+      return this.mapped(m, order.id);
+    });
+  }
+  async update(user: User, reference: string, dto: UpsertPrescriptionDto) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    return this.orders.manager.transaction(async (m) => {
+      const order = await this.lockOwned(m, reference, provider.id);
+      if (order.status !== ClinicalOrderStatus.DRAFT)
+        throw new ConflictException(
+          "Issued or cancelled Clinical Orders are immutable",
+        );
+      const appointment = await m
+        .getRepository(CareAppointment)
+        .findOne({
+          where: { id: order.careAppointmentId },
+          lock: { mode: "pessimistic_read" },
+        });
+      if (appointment?.status !== CareAppointmentStatus.IN_PROGRESS)
+        throw new ConflictException("Prescription can no longer be edited");
+      order.clinicalNote = dto.clinicalNote ?? null;
+      await m.getRepository(ClinicalOrder).save(order);
+      const detail = await m
+        .getRepository(ClinicalPrescriptionDetail)
+        .findOneOrFail({ where: { clinicalOrderId: order.id } });
+      detail.notes = dto.notes ?? null;
+      await m.getRepository(ClinicalPrescriptionDetail).save(detail);
+      await this.replaceItems(m, detail.id, dto.items);
+      return this.mapped(m, order.id);
+    });
+  }
+  async issue(user: User, reference: string) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    return this.orders.manager.transaction(async (m) => {
+      const order = await this.lockOwned(m, reference, provider.id);
+      if (order.status === ClinicalOrderStatus.ISSUED)
+        return this.mapped(m, order.id);
+      if (order.status !== ClinicalOrderStatus.DRAFT)
+        throw new ConflictException("Clinical Order cannot be issued");
+      const appointment = await m
+        .getRepository(CareAppointment)
+        .findOne({
+          where: { id: order.careAppointmentId },
+          lock: { mode: "pessimistic_read" },
+        });
+      if (appointment?.status !== CareAppointmentStatus.IN_PROGRESS)
+        throw new ConflictException(
+          "Clinical Order may only be issued during an appointment in progress",
+        );
+      if (order.type === ClinicalOrderType.PRESCRIPTION) {
+        const detail = await m
+          .getRepository(ClinicalPrescriptionDetail)
+          .findOne({ where: { clinicalOrderId: order.id } });
+        if (
+          !detail ||
+          (await m
+            .getRepository(ClinicalPrescriptionItem)
+            .count({ where: { prescriptionDetailId: detail.id } })) < 1
+        )
+          throw new ConflictException(
+            "Prescription must contain at least one item",
+          );
+      } else if (
+        [ClinicalOrderType.LABORATORY, ClinicalOrderType.IMAGING].includes(
+          order.type,
+        )
+      ) {
+        if (
+          (await m
+            .getRepository(ClinicalDiagnosticOrderItem)
+            .count({ where: { clinicalOrderId: order.id } })) < 1
+        )
+          throw new ConflictException(
+            "Diagnostic order must contain at least one item",
+          );
+      } else
+        throw new ConflictException(
+          "This Clinical Order type cannot be issued here",
+        );
+      order.status = ClinicalOrderStatus.ISSUED;
+      order.issuedAt = new Date();
+      await m.getRepository(ClinicalOrder).save(order);
+      await this.history(
+        m,
+        order.id,
+        ClinicalOrderStatus.DRAFT,
+        order.status,
+        user.id,
+        order.type === ClinicalOrderType.PRESCRIPTION
+          ? "PRESCRIPTION_ISSUED"
+          : order.type === ClinicalOrderType.LABORATORY
+            ? "LABORATORY_ISSUED"
+            : "IMAGING_ISSUED",
+      );
+      return this.mapped(m, order.id);
+    });
+  }
+  async cancel(user: User, reference: string, dto: CancelClinicalOrderDto) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    return this.orders.manager.transaction(async (m) => {
+      const order = await this.lockOwned(m, reference, provider.id);
+      if (order.status === ClinicalOrderStatus.CANCELLED)
+        return this.mapped(m, order.id);
+      const from = order.status;
+      order.status = ClinicalOrderStatus.CANCELLED;
+      order.cancelledAt = new Date();
+      order.cancelledByUserId = user.id;
+      order.cancellationReason = dto.reason ?? null;
+      await m.getRepository(ClinicalOrder).save(order);
+      await this.fulfillments?.cancelOpenForOrder(
+        m,
+        order.id,
+        user.id,
+        dto.reason ?? null,
+      );
+      await this.history(
+        m,
+        order.id,
+        from,
+        order.status,
+        user.id,
+        "ORDER_CANCELLED",
+        dto.reason ?? null,
+      );
+      return this.mapped(m, order.id);
+    });
+  }
+  async listProvider(
+    user: User,
+    appointmentReference: string,
+    q: ClinicalOrderListQueryDto,
+  ) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    const b = this.readBuilder()
+      .where("order.orderingProviderId=:providerId", {
+        providerId: provider.id,
+      })
+      .andWhere("appointment.reference=:appointmentReference", {
+        appointmentReference,
+      });
+    return this.page(b, q);
+  }
+  async getProvider(user: User, reference: string) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    const row = await this.readBuilder()
+      .where("order.reference=:reference", { reference })
+      .andWhere("order.orderingProviderId=:providerId", {
+        providerId: provider.id,
+      })
+      .getOne();
+    if (!row) this.notFound();
+    return this.map(row);
+  }
+  async listMine(user: User, q: ClinicalOrderListQueryDto) {
+    const patient = await this.patient(user.id);
+    const b = this.readBuilder()
+      .where("order.patientId=:patientId", { patientId: patient.id })
+      .andWhere(
+        `(order.status='ISSUED' OR (order.status='CANCELLED' AND order.issuedAt IS NOT NULL))`,
+      );
+    return this.page(b, q, true);
+  }
+  async getMine(user: User, reference: string) {
+    const patient = await this.patient(user.id);
+    const row = await this.readBuilder()
+      .where("order.reference=:reference", { reference })
+      .andWhere("order.patientId=:patientId", { patientId: patient.id })
+      .andWhere(
+        `(order.status='ISSUED' OR (order.status='CANCELLED' AND order.issuedAt IS NOT NULL))`,
+      )
+      .getOne();
+    if (!row) this.notFound();
+    const summaries = await this.fulfillments?.summaries([row.id]);
+    return this.map(row, summaries?.get(row.id) ?? null);
+  }
+  async requireNoDraftOrders(manager: EntityManager, appointmentId: string) {
+    if (
+      await manager
+        .getRepository(ClinicalOrder)
+        .exists({
+          where: {
+            careAppointmentId: appointmentId,
+            status: ClinicalOrderStatus.DRAFT,
+          },
+        })
+    )
+      throw new ConflictException(
+        "Draft Clinical Orders must be issued or cancelled before appointment completion",
+      );
+  }
+  private async context(
+    m: EntityManager,
+    reference: string,
+    providerId: string,
+    write = false,
+  ) {
+    const appointment = await m
+      .getRepository(CareAppointment)
+      .findOne({
+        where: { reference, providerId },
+        relations: { careRequest: true },
+        lock: {
+          mode: write ? "pessimistic_write" : "pessimistic_read",
+          tables: ["care_appointments"],
+        },
+      });
+    if (
+      !appointment ||
+      appointment.careRequest.assignedProviderId !== providerId
+    )
+      throw new NotFoundException("Care Appointment was not found");
+    const record = await m
+      .getRepository(ClinicalRecord)
+      .findOne({ where: { careAppointmentId: appointment.id, providerId } });
+    if (
+      !record ||
+      record.patientId !== appointment.patientId ||
+      record.careRequestId !== appointment.careRequestId
+    )
+      throw new ConflictException(
+        "Authoritative Clinical Record is required for this encounter",
+      );
+    return { appointment, record };
+  }
+  private async lockOwned(
+    m: EntityManager,
+    reference: string,
+    providerId: string,
+  ) {
+    const row = await m
+      .getRepository(ClinicalOrder)
+      .findOne({
+        where: { reference, orderingProviderId: providerId },
+        lock: { mode: "pessimistic_write" },
+      });
+    if (!row) this.notFound();
+    return row;
+  }
+  private async replaceItems(
+    m: EntityManager,
+    detailId: string,
+    items: UpsertPrescriptionDto["items"],
+  ) {
+    const repo = m.getRepository(ClinicalPrescriptionItem);
+    await repo.delete({ prescriptionDetailId: detailId });
+    await repo.save(
+      items.map((i, index) =>
+        repo.create({
+          prescriptionDetailId: detailId,
+          medicationName: i.medicationName,
+          strength: i.strength ?? null,
+          dosage: i.dosage,
+          frequency: i.frequency,
+          duration: i.duration ?? null,
+          quantity: i.quantity ?? null,
+          route: i.route ?? null,
+          instructions: i.instructions ?? null,
+          sortOrder: index,
+        }),
+      ),
+    );
+  }
+  private async replaceDiagnosticItems(
+    m: EntityManager,
+    orderId: string,
+    items: CreateDiagnosticOrderDto["items"],
+  ) {
+    const repo = m.getRepository(ClinicalDiagnosticOrderItem);
+    await repo.delete({ clinicalOrderId: orderId });
+    await repo.save(
+      items.map((i, index) =>
+        repo.create({
+          clinicalOrderId: orderId,
+          name: i.name,
+          code: i.code ?? null,
+          instructions: i.instructions ?? null,
+          sortOrder: index,
+        }),
+      ),
+    );
+  }
+  private readBuilder(m: EntityManager = this.orders.manager) {
+    return m
+      .getRepository(ClinicalOrder)
+      .createQueryBuilder("order")
+      .innerJoinAndSelect("order.orderingProvider", "provider")
+      .innerJoinAndSelect("order.careAppointment", "appointment")
+      .innerJoinAndSelect("order.careRequest", "careRequest")
+      .innerJoinAndSelect("order.clinicalRecord", "clinicalRecord")
+      .leftJoinAndSelect("order.prescription", "prescription")
+      .leftJoinAndSelect("prescription.items", "items")
+      .leftJoinAndMapMany(
+        "order.diagnosticItems",
+        ClinicalDiagnosticOrderItem,
+        "diagnosticItem",
+        "diagnosticItem.clinicalOrderId=order.id",
+      );
+  }
+  private async mapped(m: EntityManager, id: string) {
+    const row = await this.readBuilder(m)
+      .where("order.id=:id", { id })
+      .orderBy("items.sortOrder", "ASC")
+      .addOrderBy("diagnosticItem.sortOrder", "ASC")
+      .getOneOrFail();
+    return this.map(row);
+  }
+  private map(o: ClinicalOrder, fulfillment: unknown = undefined) {
+    return {
+      reference: o.reference,
+      type: o.type,
+      status: o.status,
+      clinicalNote: o.clinicalNote,
+      orderingProvider: {
+        providerReference: o.orderingProvider.providerReference,
+        displayName: o.orderingProvider.displayName,
+        providerType: o.orderingProvider.providerType,
+      },
+      careRequestReference: o.careRequest.reference,
+      careAppointmentReference: o.careAppointment.reference,
+      clinicalRecordReference: o.clinicalRecord?.reference ?? undefined,
+      issuedAt: o.issuedAt,
+      cancelledAt: o.cancelledAt,
+      cancellationReason: o.cancellationReason,
+      diagnosticItems: [...((o as any).diagnosticItems ?? [])]
+        .sort((a: any, b: any) => a.sortOrder - b.sortOrder)
+        .map((i: any) => ({
+          name: i.name,
+          code: i.code,
+          instructions: i.instructions,
+          sortOrder: i.sortOrder,
+        })),
+      prescription:
+        o.type === ClinicalOrderType.PRESCRIPTION && o.prescription
+          ? {
+              notes: o.prescription.notes,
+              items: [...(o.prescription.items ?? [])]
+                .sort((a, b) => a.sortOrder - b.sortOrder)
+                .map((i) => ({
+                  medicationName: i.medicationName,
+                  strength: i.strength,
+                  dosage: i.dosage,
+                  frequency: i.frequency,
+                  duration: i.duration,
+                  quantity: i.quantity,
+                  route: i.route,
+                  instructions: i.instructions,
+                  sortOrder: i.sortOrder,
+                })),
+            }
+          : null,
+      createdAt: o.createdAt,
+      updatedAt: o.updatedAt,
+      ...(fulfillment !== undefined ? { fulfillment } : {}),
+    };
+  }
+  private async page(
+    b: ReturnType<ClinicalOrdersService["readBuilder"]>,
+    q: ClinicalOrderListQueryDto,
+    includeFulfillment = false,
+  ) {
+    if (q.type) b.andWhere("order.type=:type", { type: q.type });
+    b.orderBy("order.createdAt", "DESC")
+      .addOrderBy("order.reference", "DESC")
+      .skip((q.page - 1) * q.limit)
+      .take(q.limit);
+    const [rows, total] = await b.getManyAndCount();
+    const summaries =
+      includeFulfillment && this.fulfillments
+        ? await this.fulfillments.summaries(rows.map((r) => r.id))
+        : new Map<string, unknown>();
+    return {
+      items: rows.map((r) =>
+        this.map(
+          r,
+          includeFulfillment ? (summaries.get(r.id) ?? null) : undefined,
+        ),
+      ),
+      page: q.page,
+      limit: q.limit,
+      total,
+      totalPages: total ? Math.ceil(total / q.limit) : 0,
+    };
+  }
+  private async patient(userId: string) {
+    const p = await this.patients.findOne({
+      where: { userId },
+      withDeleted: true,
+    });
+    if (!p || p.deletedAt || p.status !== PatientStatus.ACTIVE)
+      throw new NotFoundException("Patient profile was not found");
+    return p;
+  }
+  private async history(
+    m: EntityManager,
+    id: string,
+    from: ClinicalOrderStatus | null,
+    to: ClinicalOrderStatus,
+    actor: string,
+    code: string,
+    note: string | null = null,
+  ) {
+    await m
+      .getRepository(ClinicalOrderStatusHistory)
+      .save({
+        clinicalOrderId: id,
+        fromStatus: from,
+        toStatus: to,
+        actorUserId: actor,
+        reasonCode: code,
+        reasonNote: note,
+      });
+  }
+  private notFound(): never {
+    throw new NotFoundException("Clinical Order was not found");
+  }
+}
