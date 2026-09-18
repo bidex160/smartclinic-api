@@ -1,0 +1,2 @@
+import { Transform } from 'class-transformer';import { IsISO8601,IsInt,Matches,Min } from 'class-validator';
+export class UpsertDiagnosticQuoteDto{@Transform(({value})=>typeof value==='string'?value.toUpperCase():value)@Matches(/^[A-Z]{3}$/)currency!:string;@IsInt()@Min(0)totalMinor!:number;@IsISO8601()expiresAt!:string;}
