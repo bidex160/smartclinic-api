@@ -35,7 +35,7 @@ import { MeCareRequestFundingController } from './me-care-request-funding.contro
 import { PatientProviderConnection } from '../patient-provider-connections/entities/patient-provider-connection.entity';
 import { PatientProviderConnectionFunding } from '../patient-provider-connections/entities/patient-provider-connection-funding.entity';
 import { PatientProviderConnectionHistory } from '../patient-provider-connections/entities/patient-provider-connection-history.entity';
-import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy-fulfillment-funding.entity';import { PharmacyQuote } from '../clinical-orders/entities/pharmacy-quote.entity';import { ClinicalOrderFulfillment } from '../clinical-orders/entities/clinical-order-fulfillment.entity';import { PharmacyDispensing } from '../clinical-orders/entities/pharmacy-dispensing.entity';import { Patient } from '../patients/entities/patient.entity';import { MePharmacyFundingController } from './me-pharmacy-funding.controller'; import { GuidedSelfCheck } from '../guided-self-checks/entities/guided-self-check.entity'; import { GuidedSelfCheckHistory } from '../guided-self-checks/entities/guided-self-check-history.entity'; import { MeGuidedSelfCheckFundingController } from './me-guided-self-check-funding.controller';
+import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy-fulfillment-funding.entity';import { PharmacyQuote } from '../clinical-orders/entities/pharmacy-quote.entity';import { ClinicalOrderFulfillment } from '../clinical-orders/entities/clinical-order-fulfillment.entity';import { PharmacyDispensing } from '../clinical-orders/entities/pharmacy-dispensing.entity';import { Patient } from '../patients/entities/patient.entity';import { MePharmacyFundingController } from './me-pharmacy-funding.controller'; import { DiagnosticFulfillmentFunding } from '../clinical-orders/entities/diagnostic-fulfillment-funding.entity'; import { DiagnosticQuote } from '../clinical-orders/entities/diagnostic-quote.entity'; import { GuidedSelfCheck } from '../guided-self-checks/entities/guided-self-check.entity'; import { GuidedSelfCheckHistory } from '../guided-self-checks/entities/guided-self-check-history.entity'; import { MeGuidedSelfCheckFundingController } from './me-guided-self-check-funding.controller';
 @Module({
   imports: [
     AuthModule,
@@ -61,7 +61,7 @@ import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy
       ,PatientProviderConnection,
       PatientProviderConnectionFunding,
       PatientProviderConnectionHistory
-      ,PharmacyFulfillmentFunding,PharmacyQuote,ClinicalOrderFulfillment,PharmacyDispensing,Patient,GuidedSelfCheck,GuidedSelfCheckHistory
+      ,PharmacyFulfillmentFunding,PharmacyQuote,ClinicalOrderFulfillment,PharmacyDispensing,Patient,GuidedSelfCheck,GuidedSelfCheckHistory,DiagnosticFulfillmentFunding,DiagnosticQuote
     ]),
   ],
   controllers: [AdminPaymentFlowController, PaystackWebhookController, OpayWebhookController, MeCareRequestFundingController,MePharmacyFundingController,MeGuidedSelfCheckFundingController],
