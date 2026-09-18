@@ -4,3 +4,6 @@ export class UpsertPrescriptionDto{@ApiPropertyOptional()@IsOptional()@IsString(
 export class ClinicalOrderReferenceParamsDto{@ApiProperty()@Matches(CLINICAL_ORDER_REFERENCE_PATTERN)reference!:string;}
 export class ClinicalOrderListQueryDto{@ApiPropertyOptional({default:1})@Type(()=>Number)@IsInt()@Min(1)page=1;@ApiPropertyOptional({default:20,maximum:100})@Type(()=>Number)@IsInt()@Min(1)@Max(100)limit=20;@ApiPropertyOptional({enum:ClinicalOrderType})@IsOptional()@IsEnum(ClinicalOrderType)type?:ClinicalOrderType;}
 export class CancelClinicalOrderDto{@ApiPropertyOptional()@IsOptional()@IsString()@MaxLength(1000)reason?:string|null;}
+
+export class DiagnosticOrderItemDto{@ApiProperty()@Transform(({value})=>typeof value==='string'?value.trim():value)@IsString()@MinLength(1)@MaxLength(200)name!:string;@ApiPropertyOptional()@IsOptional()@IsString()@MaxLength(80)code?:string|null;@ApiPropertyOptional()@IsOptional()@IsString()@MaxLength(500)instructions?:string|null;}
+export class CreateDiagnosticOrderDto{@ApiPropertyOptional()@IsOptional()@IsString()@MaxLength(4000)clinicalNote?:string|null;@ApiProperty({type:[DiagnosticOrderItemDto]})@IsArray()@ArrayNotEmpty()@ValidateNested({each:true})@Type(()=>DiagnosticOrderItemDto)items!:DiagnosticOrderItemDto[];}
