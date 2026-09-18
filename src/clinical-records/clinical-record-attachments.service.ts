@@ -11,6 +11,8 @@ import { PRIVATE_ATTACHMENT_STORAGE, PrivateAttachmentStorage, StoredPrivateAtta
 import { generateClinicalAttachmentReference } from './clinical-attachment-reference';
 import { ClinicalRecordAttachment } from './entities/clinical-record-attachment.entity';
 import { ClinicalRecord } from './entities/clinical-record.entity';
+import { ClinicalOrderFulfillment } from '../clinical-orders/entities/clinical-order-fulfillment.entity';
+import { ClinicalOrder } from '../clinical-orders/entities/clinical-order.entity';
 import { ClinicalAttachmentResourceType } from './enums/clinical-attachment-resource-type.enum';
 import { ClinicalAttachmentStorageProvider } from './enums/clinical-attachment-storage-provider.enum';
 import { ClinicalRecordStatus } from './enums/clinical-record-status.enum';
@@ -47,6 +49,7 @@ export class ClinicalRecordAttachmentsService {
     }
   }
 
+  async uploadDiagnosticResult(user:User,fulfillmentReference:string,file?:UploadedClinicalFile){const provider=await this.currentProvider.resolveOperational(user);const checked=this.validateFile(file);let stored:StoredPrivateAttachment|null=null;try{return await this.attachments.manager.transaction(async manager=>{const fulfillment=await manager.getRepository(ClinicalOrderFulfillment).findOne({where:{reference:fulfillmentReference,fulfillmentProviderId:provider.id,status:import('../clinical-orders/enums/clinical-order-fulfillment-status.enum').ClinicalOrderFulfillmentStatus.ACCEPTED},relations:{clinicalOrder:true},lock:{mode:'pessimistic_read'}});if(!fulfillment||!fulfillment.clinicalOrder.clinicalRecordId)throw new NotFoundException('Diagnostic fulfillment was not found');const record=await manager.getRepository(ClinicalRecord).findOne({where:{id:fulfillment.clinicalOrder.clinicalRecordId},lock:{mode:'pessimistic_write'}});if(!record)throw new NotFoundException('Clinical Record was not found');const count=await manager.getRepository(ClinicalRecordAttachment).count({where:{clinicalRecordId:record.id}});if(count>=MAX_ATTACHMENTS)throw new ConflictException(`Clinical records support at most ${MAX_ATTACHMENTS} attachments`);stored=await this.storage.upload({buffer:checked.buffer,mimeType:checked.mimeType,resourceType:checked.resourceType,namespace:'clinical-records'});const repo=manager.getRepository(ClinicalRecordAttachment);const attachment=await repo.save(repo.create({reference:generateClinicalAttachmentReference(),clinicalRecordId:record.id,uploadedByUserId:user.id,originalName:checked.originalName,mimeType:checked.mimeType,sizeBytes:checked.size,resourceType:checked.resourceType as unknown as ClinicalAttachmentResourceType,storageProvider:ClinicalAttachmentStorageProvider.CLOUDINARY,storagePublicId:stored.publicId,storageResourceType:stored.storageResourceType,storageVersion:stored.version,storageFormat:stored.format}));return this.map(attachment);});}catch(error){if(stored)await Promise.resolve(this.storage.delete(stored)).catch(()=>undefined);throw error;}}
   async delete(user: User, recordReference: string, attachmentReference: string) {
     const provider = await this.currentProvider.resolveOperational(user);
     return this.attachments.manager.transaction(async (manager) => {
