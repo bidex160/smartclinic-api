@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { ClinicalRecordsModule } from '../clinical-records/clinical-records.module';
 import { AuthModule } from "../auth/auth.module";
 import { CareAppointment } from "../care-appointments/entities/care-appointment.entity";
 import { ClinicalRecord } from "../clinical-records/entities/clinical-record.entity";
@@ -31,6 +32,7 @@ import { PharmacyQuote } from './entities/pharmacy-quote.entity';import { Pharma
 @Module({
   imports: [
     AuthModule,
+    ClinicalRecordsModule,
     ProvidersModule,
     ProviderServiceUnitsModule,
     CommissionsModule,EarningsModule,
