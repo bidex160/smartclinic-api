@@ -331,6 +331,8 @@ export class ProviderEarningsService {
       });
     return earning;
   }
+  async createWalletFulfillmentEarning(manager:EntityManager,input:{providerId:string;fulfillmentReference:string;grossAmountMinor:string;currency:string;sourceType:ProviderEarningSourceType.PHARMACY_FULFILLMENT|ProviderEarningSourceType.DIAGNOSTIC_FULFILLMENT;}){const repository=manager.getRepository(ProviderEarning);const existing=await repository.findOne({where:{sourceType:input.sourceType,sourceReference:input.fulfillmentReference},lock:{mode:'pessimistic_write'}});if(existing)return existing;const resolution=await this.commissions.requireForProvider(input.providerId,manager);const calculation=calculateCommission(BigInt(input.grossAmountMinor),resolution.rateBasisPoints);const payableAt=new Date(Date.now()+24*60*60*1000);const earning=await repository.save(repository.create({providerId:input.providerId,paymentTransactionId:null,sourceType:input.sourceType,sourceReference:input.fulfillmentReference,currency:input.currency,grossAmountMinor:input.grossAmountMinor,commissionBps:resolution.rateBasisPoints,commissionSource:resolution.source,commissionAmountMinor:calculation.commissionAmountMinor.toString(),providerShareMinor:calculation.providerShareMinor.toString(),status:ProviderEarningStatus.HELD,payableAt,settledAt:null}));await manager.getRepository(ProviderEarningStatusHistory).save({providerEarningId:earning.id,fromStatus:null,toStatus:ProviderEarningStatus.HELD,actorUserId:null,reasonCode:'WALLET_HOSPITAL_PAYMENT_SETTLED',reasonNote:'Eligible for release after 24-hour hold'});return earning;}
+
   async markPharmacyFulfillmentPayable(
     manager: EntityManager,
     reference: string,
