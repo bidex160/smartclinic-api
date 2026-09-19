@@ -31,6 +31,7 @@ import { CohortContactModule } from './cohort/cohort-contact.module';
 import { ProviderRecruitmentInvitationsModule } from './provider-recruitment-invitations/provider-recruitment-invitations.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { WalletModule } from './wallet/wallet.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -60,6 +61,7 @@ const persistenceDomainModules = configuration.database.enabled
       ProviderRecruitmentInvitationsModule,
       WhatsAppModule,
       NotificationsModule,
+      WalletModule,
     ]
   : [];
 
