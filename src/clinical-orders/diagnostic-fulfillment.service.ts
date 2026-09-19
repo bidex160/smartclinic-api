@@ -33,6 +33,7 @@ import {
 import { ClinicalOrderType } from "./enums/clinical-order-type.enum";
 import { ClinicalRecord } from "src/clinical-records/entities/clinical-record.entity";
 import { ClinicalRecordAttachment } from "src/clinical-records/entities/clinical-record-attachment.entity";
+import { ProviderEarningsService } from "../earnings/provider-earnings.service";
 @Injectable()
 export class DiagnosticFulfillmentService {
   constructor(
@@ -40,6 +41,7 @@ export class DiagnosticFulfillmentService {
     private readonly quotes: Repository<DiagnosticQuote>,
     @InjectRepository(Patient) private readonly patients: Repository<Patient>,
     private readonly current: CurrentProviderService,
+    private readonly earnings: ProviderEarningsService,
   ) {}
   async attachResult(
     user: User,
@@ -109,6 +111,7 @@ export class DiagnosticFulfillmentService {
       x.resultUploadedByUserId = user.id;
       x.resultReadyAt = new Date();
       await repo.save(x);
+      await this.earnings.markWalletDiagnosticPayable(m,f.reference,user.id);
       return {
         fulfillmentReference: f.reference,
         status: x.status,
