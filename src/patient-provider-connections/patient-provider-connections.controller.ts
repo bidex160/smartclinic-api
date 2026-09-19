@@ -31,7 +31,7 @@ import {
   UpdateProviderConnectionConfigDto,
 } from "./dto/patient-provider-connection.dto";
 import { PatientProviderConnectionsService } from "./patient-provider-connections.service";
-import { HospitalCompanionService } from "./hospital-companion.service";
+import { HospitalCompanionService } from "./hospital-companion.service";\nimport { HospitalServicePassService } from './hospital-service-pass.service';
 
 @ApiTags("My Patient Provider Connections")
 @ApiBearerAuth()
@@ -158,6 +158,15 @@ export class ProviderPatientConnectionsController {
     @Param() p: ConnectionReferenceParamsDto,
   ) {
     return this.service.getProvider(r.user, p.reference);
+  }
+  @Post("service-passes/:reference/verify")
+  @HttpCode(HttpStatus.OK)
+  verifyServicePass(
+    @Req() r: { user: User },
+    @Param("reference") reference: string,
+    @Body() dto: { verificationToken: string },
+  ) {
+    return this.servicePasses.verifyForProvider(r.user, reference, dto.verificationToken);
   }
   @Post(":reference/confirm") confirm(
     @Req() r: { user: User },
