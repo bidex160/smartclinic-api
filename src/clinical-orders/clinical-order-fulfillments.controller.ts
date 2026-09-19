@@ -78,6 +78,12 @@ export class MeOrderFulfillmentsController {
   ) {
     return this.service.directory(r.user, q);
   }
+  @Get("clinical-orders/:reference/fulfillment") getForOrder(
+    @Req() r: { user: User },
+    @Param() p: ClinicalOrderReferenceParamsDto,
+  ) {
+    return this.service.getForPatientOrder(r.user, p.reference);
+  }
   @Post("clinical-orders/:reference/select-fulfillment") select(
     @Req() r: { user: User },
     @Param() p: ClinicalOrderReferenceParamsDto,
