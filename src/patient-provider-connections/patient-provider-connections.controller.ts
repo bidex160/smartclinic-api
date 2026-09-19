@@ -46,6 +46,7 @@ export class MePatientProviderConnectionsController {
     private readonly payments: PaymentFlowService,
     private readonly companion: HospitalCompanionService,
     private readonly walletSettlement: HospitalWalletSettlementService,
+    private readonly servicePasses: HospitalServicePassService,
   ) {}
   @Get("patient-provider-connection-providers") directory(
     @Req() r: { user: User },
@@ -90,6 +91,11 @@ export class MePatientProviderConnectionsController {
     @Param() p: ConnectionReferenceParamsDto,
   ) {
     return this.walletSettlement.payAll(r.user.id, p.reference);
+  }
+  @Post("patient-provider-connections/service-passes/:reference/verification-token")
+  @HttpCode(HttpStatus.OK)
+  servicePassVerificationToken(@Req() r:{user:User},@Param("reference") reference:string){
+    return this.servicePasses.issuePatientVerificationToken(r.user.id,reference);
   }
   @Post("patient-provider-connections/:reference/resubmit") resubmit(
     @Req() r: { user: User },
