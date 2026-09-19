@@ -31,7 +31,9 @@ import {
   UpdateProviderConnectionConfigDto,
 } from "./dto/patient-provider-connection.dto";
 import { PatientProviderConnectionsService } from "./patient-provider-connections.service";
-import { HospitalCompanionService } from "./hospital-companion.service";\nimport { HospitalServicePassService } from './hospital-service-pass.service';
+import { HospitalCompanionService } from "./hospital-companion.service";
+import { HospitalServicePassService } from './hospital-service-pass.service';
+import { HospitalWalletSettlementService } from './hospital-wallet-settlement.service';
 
 @ApiTags("My Patient Provider Connections")
 @ApiBearerAuth()
@@ -43,6 +45,7 @@ export class MePatientProviderConnectionsController {
     private readonly service: PatientProviderConnectionsService,
     private readonly payments: PaymentFlowService,
     private readonly companion: HospitalCompanionService,
+    private readonly walletSettlement: HospitalWalletSettlementService,
   ) {}
   @Get("patient-provider-connection-providers") directory(
     @Req() r: { user: User },
@@ -79,6 +82,14 @@ export class MePatientProviderConnectionsController {
     @Param() p: ConnectionReferenceParamsDto,
   ) {
     return this.companion.patientView(r.user, p.reference);
+  }
+  @Post("patient-provider-connections/:reference/settlements/wallet")
+  @HttpCode(HttpStatus.OK)
+  settleHospitalWallet(
+    @Req() r: { user: User },
+    @Param() p: ConnectionReferenceParamsDto,
+  ) {
+    return this.walletSettlement.payAll(r.user.id, p.reference);
   }
   @Post("patient-provider-connections/:reference/resubmit") resubmit(
     @Req() r: { user: User },
@@ -140,7 +151,7 @@ export class MePatientProviderConnectionsController {
 @Roles(UserRole.PROVIDER)
 @Controller("provider/patient-connections")
 export class ProviderPatientConnectionsController {
-  constructor(private readonly service: PatientProviderConnectionsService) {}
+  constructor(private readonly service: PatientProviderConnectionsService, private readonly servicePasses: HospitalServicePassService) {}
   @Get("configuration") config(@Req() r: { user: User }) {
     return this.service.getProviderConfig(r.user);
   }
