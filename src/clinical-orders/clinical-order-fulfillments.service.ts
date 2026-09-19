@@ -149,6 +149,24 @@ export class ClinicalOrderFulfillmentsService {
       return this.mapped(m, row.id);
     });
   }
+  async getForPatientOrder(user: User, orderReference: string) {
+    const patient = await this.patient(user.id);
+    const order = await this.fulfillments.manager.getRepository(ClinicalOrder).findOne({
+      where: { reference: orderReference, patientId: patient.id },
+    });
+    if (!order) this.notFound();
+    const row = await this.readBuilder()
+      .where("fulfillment.clinicalOrderId=:orderId", { orderId: order.id })
+      .andWhere("fulfillment.status IN (:...statuses)", { statuses: OPEN })
+      .orderBy("fulfillment.createdAt", "DESC")
+      .addOrderBy("items.sortOrder", "ASC")
+      .getOne();
+    if (!row) return null;
+    return {
+      ...this.map(row),
+      ...(await this.operationalState(this.fulfillments.manager, row.id)),
+    };
+  }
   async listAssigned(user: User, q: FulfillmentListQueryDto) {
     const p = await this.currentProvider.resolveOperational(user);
     return this.page(
