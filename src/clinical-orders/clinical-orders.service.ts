@@ -338,6 +338,10 @@ export class ClinicalOrdersService {
       .andWhere(
         `(order.status='ISSUED' OR (order.status='CANCELLED' AND order.issuedAt IS NOT NULL))`,
       );
+    if (q.careAppointmentReference)
+      b.andWhere("appointment.reference=:careAppointmentReference", {
+        careAppointmentReference: q.careAppointmentReference,
+      });
     return this.page(b, q, true);
   }
   async getMine(user: User, reference: string) {
