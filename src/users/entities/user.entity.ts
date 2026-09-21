@@ -10,6 +10,7 @@ import { ProviderAssignmentHistory } from '../../providers/entities/provider-ass
 import { UserStatus } from '../enums/user-status.enum';
 import { UserRole } from '../enums/user-role.enum';
 import { UserCredential } from './user-credential.entity';
+import { UserNetworkRole } from '../enums/user-network-role.enum';
 
 @Entity('users')
 @Index('UQ_users_email_normalized', ['emailNormalized'], {
@@ -41,6 +42,15 @@ export class User {
 
   @Column({ type: 'enum', enum: UserRole, enumName: 'user_role_enum', array: true, default: () => "ARRAY['USER']::user_role_enum[]" })
   roles!: UserRole[];
+
+  @Column({
+  name: 'network_role',
+  type: 'enum',
+  enum: UserNetworkRole,
+  enumName: 'user_network_role_enum',
+  nullable: true,
+})
+networkRole!: UserNetworkRole | null;
 
   @Column({ name: 'public_leaderboard', type: 'boolean', default: true })
   publicLeaderboard!: boolean;

@@ -32,6 +32,7 @@ import { ProviderRecruitmentInvitationsModule } from './provider-recruitment-inv
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { WalletModule } from './wallet/wallet.module';
+import { BuildersModule } from './builders/builders.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -62,6 +63,7 @@ const persistenceDomainModules = configuration.database.enabled
       WhatsAppModule,
       NotificationsModule,
       WalletModule,
+      BuildersModule,
     ]
   : [];
 

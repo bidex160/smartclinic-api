@@ -29,6 +29,7 @@ import { UserResponseDto } from "./dto/user-response.dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { ForgotPasswordDto, ResetPasswordDto } from "./dto/password-reset.dto";
 import { PasswordResetService } from "./password-reset.service";
+import { UserNetworkRole } from "src/users/enums/user-network-role.enum";
 
 @ApiTags("Authentication")
 @Controller("auth")
@@ -56,8 +57,25 @@ export class AuthController {
     description: "An account already exists for the email.",
   })
   register(@Body() dto: RegisterDto): Promise<UserResponseDto> {
-    return this.auth.register(dto);
+    return this.auth.registerStandardUser(dto, null);
   }
+
+@Post('register-builder')
+@ApiOperation({
+  summary: 'Register a SmartClinic Builder account',
+})
+@ApiCreatedResponse({
+  type: UserResponseDto,
+})
+@ApiConflictResponse({
+  description:
+    'An account already exists for the email or phone number.',
+})
+registerBuilder(
+  @Body() dto: RegisterDto,
+): Promise<UserResponseDto> {
+  return this.auth.registerStandardUser(dto,    UserNetworkRole.BUILDER,);
+}
   @Post("login")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

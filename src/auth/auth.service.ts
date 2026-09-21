@@ -29,6 +29,7 @@ import { ReferralsService } from "../rewards/referrals.service";
 import { isEmail } from "class-validator";
 import { normalizePhoneNumber } from "../users/phone-normalization";
 import { hashPassword } from './password-hashing';
+import { UserNetworkRole } from "src/users/enums/user-network-role.enum";
 
 @Injectable()
 export class AuthService {
@@ -41,97 +42,284 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly referrals: ReferralsService,
   ) {}
-  async register(dto: RegisterDto): Promise<UserResponseDto> {
-    const email = dto.email?.trim()?.toLowerCase() || null;
-    const phone = dto.phone ? normalizePhoneNumber(dto.phone) : null;
-    if (dto.phone && !phone)
-      throw new ConflictException("A valid phone number is required");
-    if (email && await this.users.exists({ where: { emailNormalized: email } }))
-      throw new ConflictException("An account already exists for this email");
-    if (
-      phone &&
-      (await this.users.exists({
-        where: { phoneNormalized: phone },
-        withDeleted: true,
-      }))
-    )
-      throw new ConflictException(
-        "An account already exists for this phone number",
-      );
-    const passwordHash = await hashPassword(dto.password);
-    for (
-      let attempt = 0;
-      attempt < MAX_PATIENT_REFERENCE_GENERATION_ATTEMPTS;
-      attempt += 1
-    ) {
-      try {
-        const user = await this.users.manager.transaction(async (manager) => {
-          const saved = await manager.getRepository(User).save(
-            manager.getRepository(User).create({
-              email,
-              emailNormalized: email,
-              phoneNormalized: phone,
-              displayName: `${dto.givenName.trim()} ${dto.familyName.trim()}`,
-              status: UserStatus.ACTIVE,
-              roles: [UserRole.USER],
-            }),
-          );
-          await manager
-            .getRepository(UserCredential)
-            .save(
-              manager
-                .getRepository(UserCredential)
-                .create({ userId: saved.id, passwordHash }),
-            );
-          const patient = await manager.getRepository(Patient).save(
-            manager.getRepository(Patient).create({
-              patientReference: generatePatientReference(),
-              userId: saved.id,
-              givenName: dto.givenName.trim(),
-              familyName: dto.familyName.trim(),
-              dateOfBirth: null,
-              phone,
-              email,
+  // async register(dto: RegisterDto): Promise<UserResponseDto> {
+  //   const email = dto.email?.trim()?.toLowerCase() || null;
+  //   const phone = dto.phone ? normalizePhoneNumber(dto.phone) : null;
+  //   if (dto.phone && !phone)
+  //     throw new ConflictException("A valid phone number is required");
+  //   if (email && await this.users.exists({ where: { emailNormalized: email } }))
+  //     throw new ConflictException("An account already exists for this email");
+  //   if (
+  //     phone &&
+  //     (await this.users.exists({
+  //       where: { phoneNormalized: phone },
+  //       withDeleted: true,
+  //     }))
+  //   )
+  //     throw new ConflictException(
+  //       "An account already exists for this phone number",
+  //     );
+  //   const passwordHash = await hashPassword(dto.password);
+  //   for (
+  //     let attempt = 0;
+  //     attempt < MAX_PATIENT_REFERENCE_GENERATION_ATTEMPTS;
+  //     attempt += 1
+  //   ) {
+  //     try {
+  //       const user = await this.users.manager.transaction(async (manager) => {
+  //         const saved = await manager.getRepository(User).save(
+  //           manager.getRepository(User).create({
+  //             email,
+  //             emailNormalized: email,
+  //             phoneNormalized: phone,
+  //             displayName: `${dto.givenName.trim()} ${dto.familyName.trim()}`,
+  //             status: UserStatus.ACTIVE,
+  //             roles: [UserRole.USER],
+  //           }),
+  //         );
+  //         await manager
+  //           .getRepository(UserCredential)
+  //           .save(
+  //             manager
+  //               .getRepository(UserCredential)
+  //               .create({ userId: saved.id, passwordHash }),
+  //           );
+  //         const patient = await manager.getRepository(Patient).save(
+  //           manager.getRepository(Patient).create({
+  //             patientReference: generatePatientReference(),
+  //             userId: saved.id,
+  //             givenName: dto.givenName.trim(),
+  //             familyName: dto.familyName.trim(),
+  //             dateOfBirth: null,
+  //             phone,
+  //             email,
 
-              countryCode: dto.countryCode,
-              stateOrRegion: dto.stateOrRegion.trim(),
-              city: dto.city.trim(),
+  //             countryCode: dto.countryCode,
+  //             stateOrRegion: dto.stateOrRegion.trim(),
+  //             city: dto.city.trim(),
 
-              status: PatientStatus.ACTIVE,
-            }),
-          );
-          await this.referrals.ensureReferralCode(saved.id, manager);
-          if (dto.referralCode)
-            await this.referrals.capturePatient(
-              manager,
-              dto.referralCode,
-              saved.id,
-              patient.id,
-            );
-          return saved;
-        });
-        return UserResponseDto.fromEntity(user);
-      } catch (error) {
-        if (
-          error instanceof QueryFailedError &&
-          ["UQ_users_email_normalized", "UQ_users_phone_normalized"].includes(
-            (error.driverError as { constraint?: string }).constraint ?? "",
-          )
-        )
-          throw new ConflictException(
-            "An account already exists for this email or phone number",
-          );
-        if (
-          !isPatientReferenceCollision(error) ||
-          attempt === MAX_PATIENT_REFERENCE_GENERATION_ATTEMPTS - 1
-        )
-          throw error;
-      }
-    }
+  //             status: PatientStatus.ACTIVE,
+  //           }),
+  //         );
+  //         await this.referrals.ensureReferralCode(saved.id, manager);
+  //         if (dto.referralCode)
+  //           await this.referrals.capturePatient(
+  //             manager,
+  //             dto.referralCode,
+  //             saved.id,
+  //             patient.id,
+  //           );
+  //         return saved;
+  //       });
+  //       return UserResponseDto.fromEntity(user);
+  //     } catch (error) {
+  //       if (
+  //         error instanceof QueryFailedError &&
+  //         ["UQ_users_email_normalized", "UQ_users_phone_normalized"].includes(
+  //           (error.driverError as { constraint?: string }).constraint ?? "",
+  //         )
+  //       )
+  //         throw new ConflictException(
+  //           "An account already exists for this email or phone number",
+  //         );
+  //       if (
+  //         !isPatientReferenceCollision(error) ||
+  //         attempt === MAX_PATIENT_REFERENCE_GENERATION_ATTEMPTS - 1
+  //       )
+  //         throw error;
+  //     }
+  //   }
+  //   throw new ConflictException(
+  //     "Unable to generate a unique patient reference",
+  //   );
+  // }
+
+   async registerStandardUser(
+  dto: RegisterDto,
+  networkRole: UserNetworkRole | null,
+): Promise<UserResponseDto> {
+  const email =
+    dto.email?.trim()?.toLowerCase() || null;
+
+  const phone = dto.phone
+    ? normalizePhoneNumber(dto.phone)
+    : null;
+
+  if (dto.phone && !phone) {
     throw new ConflictException(
-      "Unable to generate a unique patient reference",
+      'A valid phone number is required',
     );
   }
+
+  if (
+    email &&
+    (await this.users.exists({
+      where: {
+        emailNormalized: email,
+      },
+    }))
+  ) {
+    throw new ConflictException(
+      'An account already exists for this email',
+    );
+  }
+
+  if (
+    phone &&
+    (await this.users.exists({
+      where: {
+        phoneNormalized: phone,
+      },
+      withDeleted: true,
+    }))
+  ) {
+    throw new ConflictException(
+      'An account already exists for this phone number',
+    );
+  }
+
+  const passwordHash =
+    await hashPassword(dto.password);
+
+  for (
+    let attempt = 0;
+    attempt <
+    MAX_PATIENT_REFERENCE_GENERATION_ATTEMPTS;
+    attempt += 1
+  ) {
+    try {
+      const user =
+        await this.users.manager.transaction(
+          async (manager) => {
+            const userRepository =
+              manager.getRepository(User);
+
+            const credentialRepository =
+              manager.getRepository(
+                UserCredential,
+              );
+
+            const patientRepository =
+              manager.getRepository(Patient);
+
+            const saved =
+              await userRepository.save(
+                userRepository.create({
+                  email,
+                  emailNormalized: email,
+                  phoneNormalized: phone,
+
+                  displayName:
+                    `${dto.givenName.trim()} ${dto.familyName.trim()}`,
+
+                  status:
+                    UserStatus.ACTIVE,
+
+                  roles: [
+                    UserRole.USER,
+                  ],
+
+                  networkRole,
+                }),
+              );
+
+            await credentialRepository.save(
+              credentialRepository.create({
+                userId: saved.id,
+                passwordHash,
+              }),
+            );
+
+            const patient =
+              await patientRepository.save(
+                patientRepository.create({
+                  patientReference:
+                    generatePatientReference(),
+
+                  userId: saved.id,
+
+                  givenName:
+                    dto.givenName.trim(),
+
+                  familyName:
+                    dto.familyName.trim(),
+
+                  dateOfBirth: null,
+
+                  phone,
+                  email,
+
+                  countryCode:
+                    dto.countryCode,
+
+                  stateOrRegion:
+                    dto.stateOrRegion.trim(),
+
+                  city:
+                    dto.city.trim(),
+
+                  status:
+                    PatientStatus.ACTIVE,
+                }),
+              );
+
+            await this.referrals.ensureReferralCode(
+              saved.id,
+              manager,
+            );
+
+            if (dto.referralCode) {
+              await this.referrals.capturePatient(
+                manager,
+                dto.referralCode,
+                saved.id,
+                patient.id,
+              );
+            }
+
+            return saved;
+          },
+        );
+
+      return UserResponseDto.fromEntity(
+        user,
+      );
+    } catch (error) {
+      if (
+        error instanceof QueryFailedError &&
+        [
+          'UQ_users_email_normalized',
+          'UQ_users_phone_normalized',
+        ].includes(
+          (
+            error.driverError as {
+              constraint?: string;
+            }
+          ).constraint ?? '',
+        )
+      ) {
+        throw new ConflictException(
+          'An account already exists for this email or phone number',
+        );
+      }
+
+      if (
+        !isPatientReferenceCollision(
+          error,
+        ) ||
+        attempt ===
+          MAX_PATIENT_REFERENCE_GENERATION_ATTEMPTS -
+            1
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  throw new ConflictException(
+    'Unable to generate a unique patient reference',
+  );
+}
   async login(dto: LoginDto): Promise<LoginResponseDto> {
     if (
       dto.identifier &&
