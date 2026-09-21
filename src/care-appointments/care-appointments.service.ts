@@ -384,7 +384,10 @@ async schedule(
             deliveryMode:
               care.deliveryMode,
 
-            meetingUrl: null,
+            meetingUrl:
+              care.deliveryMode === CareDeliveryMode.VIRTUAL
+                ? `https://meet.jit.si/SmartClinic-${generateCareAppointmentReference()}-${generateCareAppointmentReference()}`
+                : null,
 
             status:
               CareAppointmentStatus.SCHEDULED,
