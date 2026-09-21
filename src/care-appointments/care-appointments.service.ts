@@ -353,10 +353,11 @@ async schedule(
         const repository =
           manager.getRepository(CareAppointment);
 
+        const appointmentReference = generateCareAppointmentReference();
         const appointment = await repository.save(
           repository.create({
             reference:
-              generateCareAppointmentReference(),
+              appointmentReference,
 
             careRequestId: care.id,
 
@@ -386,7 +387,7 @@ async schedule(
 
             meetingUrl:
               care.deliveryMode === CareDeliveryMode.VIRTUAL
-                ? `https://meet.jit.si/SmartClinic-${generateCareAppointmentReference()}-${generateCareAppointmentReference()}`
+                ? `https://meet.jit.si/SmartClinic-${appointmentReference.replace('SC-APT-', '')}`
                 : null,
 
             status:
