@@ -11,7 +11,7 @@ import { BuilderDashboardDto } from './dto/builder-dashboard.dto';
 @ApiTags('Builder dashboard')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.USER)
+@Roles(UserRole.USER, UserRole.PROVIDER)
 @Controller('me/builder')
 export class BuildersController {
   constructor(private readonly builders: BuildersService) {}
