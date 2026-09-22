@@ -47,6 +47,7 @@ describe('CareAppointmentsService', () => {
   it('atomically schedules accepted work with the exact offering and owned active location', async () => {
     await expect(subject.schedule(user, care.reference, dto)).resolves.toMatchObject({ appointmentReference: 'SC-APT-ABCDEF123456' });
     expect(appointmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ careRequestId: care.id, patientId: care.patientId, providerId: provider.id, providerCareServiceId: care.assignedProviderCareServiceId, providerLocationId: 'location-id', deliveryMode: CareDeliveryMode.IN_PERSON, meetingUrl: null, status: CareAppointmentStatus.SCHEDULED }));
+    expect((subject as any).jitsiMeetingUrl('SC-APT-ABCDEF123456')).toBe('https://meet.jit.si/SmartClinic-SCAPTABCDEF123456');
     expect(care.status).toBe(CareRequestStatus.SCHEDULED);
     expect(appointmentHistory.save).toHaveBeenCalledWith(expect.objectContaining({ fromStatus: null, toStatus: CareAppointmentStatus.SCHEDULED }));
     expect(requestHistory.save).toHaveBeenCalledWith(expect.objectContaining({ fromStatus: CareRequestStatus.PROVIDER_ACCEPTED, toStatus: CareRequestStatus.SCHEDULED }));
@@ -54,6 +55,15 @@ describe('CareAppointmentsService', () => {
   });
 
   it('gates paid scheduling on authoritative funding and permits explicit free satisfaction', async () => { fundingRepo.findOne.mockResolvedValueOnce({ status: CareRequestFundingStatus.PENDING }); await expect(subject.schedule(user, care.reference, dto)).rejects.toBeInstanceOf(ConflictException); care.servicePriceMinor = '0'; fundingRepo.findOne.mockResolvedValueOnce(null); await expect(subject.schedule(user, care.reference, dto)).resolves.toBeDefined(); expect(fundingRepo.save).toHaveBeenCalledWith(expect.objectContaining({ status: CareRequestFundingStatus.SATISFIED_FREE, amountMinor: '0' })); care.servicePriceMinor = '2000000'; });
+
+  it('automatically creates a Jitsi room for virtual appointments', async () => {
+    care.deliveryMode = CareDeliveryMode.VIRTUAL;
+    await expect(subject.schedule(user, care.reference, { ...dto, providerLocationReference: null })).resolves.toBeDefined();
+    expect(appointmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({
+      deliveryMode: CareDeliveryMode.VIRTUAL,
+      meetingUrl: 'https://meet.jit.si/SmartClinic-SCAPTABCDEF123456',
+    }));
+  });
 
   it.each([CareDeliveryMode.VIRTUAL, CareDeliveryMode.HOME_VISIT])('derives %s mode and rejects a provider location', async (deliveryMode) => {
     care.deliveryMode = deliveryMode;
