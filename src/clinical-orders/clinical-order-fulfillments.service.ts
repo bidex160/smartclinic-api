@@ -413,6 +413,8 @@ export class ClinicalOrderFulfillmentsService {
     switch (orderType) {
       case ClinicalOrderType.LABORATORY: return ProviderServiceUnitType.LABORATORY;
       case ClinicalOrderType.IMAGING: return ProviderServiceUnitType.RADIOLOGY;
+      case ClinicalOrderType.REFERRAL: return ProviderServiceUnitType.SPECIALIST;
+      case ClinicalOrderType.PROCEDURE: return ProviderServiceUnitType.PROCEDURE;
       case ClinicalOrderType.PRESCRIPTION:
       case undefined: return ProviderServiceUnitType.PHARMACY;
       default: throw new ConflictException("This Clinical Order type does not support patient fulfillment");
@@ -420,7 +422,7 @@ export class ClinicalOrderFulfillmentsService {
   }
   private requireFulfillable(order: ClinicalOrder) {
     if (order.status !== ClinicalOrderStatus.ISSUED) throw new ConflictException("Only issued Clinical Orders support fulfillment");
-    if (![ClinicalOrderType.PRESCRIPTION, ClinicalOrderType.LABORATORY, ClinicalOrderType.IMAGING].includes(order.type))
+    if (![ClinicalOrderType.PRESCRIPTION, ClinicalOrderType.LABORATORY, ClinicalOrderType.IMAGING, ClinicalOrderType.REFERRAL, ClinicalOrderType.PROCEDURE].includes(order.type))
       throw new ConflictException("This Clinical Order type does not support patient fulfillment");
   }
   private async lockOrder(m: EntityManager, reference: string) {
