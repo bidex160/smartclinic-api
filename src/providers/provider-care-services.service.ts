@@ -1,3 +1,4 @@
+import { assertCareDelivery } from './care-delivery-policy';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
@@ -60,6 +61,7 @@ export class ProviderCareServicesService {
     return this.services.manager.transaction(async (manager) => {
       const definition = await manager.getRepository(CareServiceDefinition).findOne({ where: { id: dto.careServiceDefinitionId, isActive: true }, lock: { mode: 'pessimistic_read' } });
       if (!definition) throw new ConflictException('Care service definition is not active');
+      dto.deliveryOptions.forEach(option => assertCareDelivery(definition, option.deliveryMode));
       if (await manager.getRepository(ProviderCareService).exists({ where: { providerId, careServiceDefinitionId: definition.id } })) throw new ConflictException('Provider already offers this care service');
       const services = manager.getRepository(ProviderCareService);
       const entity = await services.save(services.create({ providerId, careServiceDefinitionId: definition.id, descriptionOverride: dto.description ?? null, supportsAppointmentRequests: dto.supportsAppointmentRequests ?? true, supportsFastTrack: dto.supportsFastTrack ?? false, fastTrackFeeMinor: dto.supportsFastTrack ? String(dto.fastTrackFeeMinor) : null, fastTrackCurrency: dto.supportsFastTrack ? dto.fastTrackCurrency! : null, isActive: true }));
@@ -73,6 +75,11 @@ export class ProviderCareServicesService {
     return this.services.manager.transaction(async (manager) => {
       const service = await manager.getRepository(ProviderCareService).findOne({ where: { id, providerId }, lock: { mode: 'pessimistic_write' } });
       if (!service) throw new NotFoundException('Provider care service was not found');
+      if (dto.deliveryOptions !== undefined) {
+        const definition = await manager.getRepository(CareServiceDefinition).findOne({ where: { id: service.careServiceDefinitionId }, lock: { mode: 'pessimistic_read' } });
+        if (!definition) throw new NotFoundException('Care service definition was not found');
+        dto.deliveryOptions.forEach(option => assertCareDelivery(definition, option.deliveryMode));
+      }
       const nextFastTrack = dto.supportsFastTrack ?? service.supportsFastTrack;
       const nextFastTrackFee = nextFastTrack ? (dto.fastTrackFeeMinor !== undefined ? dto.fastTrackFeeMinor : service.fastTrackFeeMinor == null ? null : Number(service.fastTrackFeeMinor)) : null;
       const nextFastTrackCurrency = nextFastTrack ? (dto.fastTrackCurrency !== undefined ? dto.fastTrackCurrency : service.fastTrackCurrency) : null;

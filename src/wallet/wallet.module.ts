@@ -5,7 +5,7 @@ import { PatientWallet } from "./entities/patient-wallet.entity";
 import { PatientWalletEntry } from "./entities/patient-wallet-entry.entity";
 import { PatientWalletController } from "./patient-wallet.controller";
 import { PatientWalletService } from "./patient-wallet.service";
-import { User } from "src/users/entities/user.entity";
+import { User } from "../users/entities/user.entity";
 @Module({
   imports: [
     AuthModule,

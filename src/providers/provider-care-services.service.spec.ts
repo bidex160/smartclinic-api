@@ -27,6 +27,14 @@ describe('ProviderCareServicesService', () => {
     subject = new ProviderCareServicesService(definitions, services, providers, current);
   });
 
+  it('rejects virtual diagnostic options on both create and update', async () => {
+    manager.getRepository(CareServiceDefinition).findOne.mockResolvedValue({ ...definition, code: 'LAB_REQUEST', clinicalRecordType: ClinicalRecordType.LAB_RESULT });
+    const deliveryOptions = [{ deliveryMode: CareDeliveryMode.VIRTUAL, priceMinor: 1000, currency: 'NGN' }];
+    await expect(subject.createForProvider(provider.id, { careServiceDefinitionId: definition.id, deliveryOptions })).rejects.toThrow('require in-person');
+    await expect(subject.updateForProvider(provider.id, 'service-1', { deliveryOptions })).rejects.toThrow('require in-person');
+    expect(optionRepo.delete).not.toHaveBeenCalled();
+    expect(services.save).not.toHaveBeenCalled();
+  });
   it('creates one or multiple priced delivery options, including explicit free', async () => {
     const result = await subject.createMine({ id: 'user-1' } as any, { careServiceDefinitionId: definition.id, deliveryOptions: options });
     expect(result.deliveryOptions).toEqual([expect.objectContaining({ deliveryMode: CareDeliveryMode.IN_PERSON, priceMinor: '0', currency: 'NGN' })]);

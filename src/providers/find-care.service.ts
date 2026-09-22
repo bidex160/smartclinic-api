@@ -1,3 +1,4 @@
+import { supportsCareDelivery } from './care-delivery-policy';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
@@ -22,6 +23,7 @@ export class FindCareService {
       .innerJoin('service.provider', 'provider', 'provider.status = :active AND provider.onboardingStatus = :approved AND provider.deletedAt IS NULL', { active: ProviderStatus.ACTIVE, approved: ProviderOnboardingStatus.APPROVED })
       .select('definition.code', 'code').addSelect('definition.name', 'name').addSelect('definition.description', 'description').addSelect('COUNT(DISTINCT provider.id)', 'providerCount')
       .where('definition.isActive = true')
+      .andWhere("(deliveryOption.deliveryMode <> 'VIRTUAL' OR (definition.code NOT IN ('LAB_REQUEST', 'IMAGING_REQUEST') AND (definition.clinicalRecordType IS NULL OR definition.clinicalRecordType NOT IN ('LAB_RESULT', 'IMAGING_RESULT'))))")
       .groupBy('definition.id').addGroupBy('definition.code').addGroupBy('definition.name').addGroupBy('definition.description')
       .orderBy('definition.name', 'ASC').addOrderBy('definition.code', 'ASC')
       .getRawMany<{ code: string; name: string; description: string | null; providerCount: string }>();
@@ -35,7 +37,7 @@ export class FindCareService {
     if (query.serviceCode) builder.andWhere('definition.code = :serviceCode', { serviceCode: query.serviceCode });
     if (query.providerType) builder.andWhere('provider.providerType = :providerType', { providerType: query.providerType });
     if (query.fastTrackOnly) builder.andWhere('careService.supportsFastTrack = true').andWhere('careService.fastTrackFeeMinor IS NOT NULL').andWhere('careService.fastTrackCurrency IS NOT NULL');
-    if (query.deliveryMode) builder.andWhere('EXISTS (SELECT 1 FROM provider_care_service_delivery_options filtered_option WHERE filtered_option.provider_care_service_id = careService.id AND filtered_option.delivery_mode = :deliveryMode)', { deliveryMode: query.deliveryMode });
+    if (query.deliveryMode) builder.andWhere('deliveryOption.deliveryMode = :deliveryMode', { deliveryMode: query.deliveryMode }).andWhere('EXISTS (SELECT 1 FROM provider_care_service_delivery_options filtered_option WHERE filtered_option.provider_care_service_id = careService.id AND filtered_option.delivery_mode = :deliveryMode)', { deliveryMode: query.deliveryMode });
     if (query.deliveryMode !== CareDeliveryMode.VIRTUAL) this.applyPlace(builder, query);
     builder.orderBy('provider.displayName', 'ASC').addOrderBy('provider.providerReference', 'ASC').skip((query.page - 1) * query.limit).take(query.limit);
     const [providers, total] = await builder.getManyAndCount();
@@ -56,7 +58,8 @@ export class FindCareService {
       .leftJoinAndSelect('provider.locations', 'location', 'location.isActive = true')
       .where('provider.status = :active', { active: ProviderStatus.ACTIVE })
       .andWhere('provider.onboardingStatus = :approved', { approved: ProviderOnboardingStatus.APPROVED })
-      .andWhere('provider.deletedAt IS NULL');
+      .andWhere('provider.deletedAt IS NULL')
+      .andWhere("(deliveryOption.deliveryMode <> 'VIRTUAL' OR (definition.code NOT IN ('LAB_REQUEST', 'IMAGING_REQUEST') AND (definition.clinicalRecordType IS NULL OR definition.clinicalRecordType NOT IN ('LAB_RESULT', 'IMAGING_RESULT'))))");
   }
 
   private applyPlace(builder: SelectQueryBuilder<Provider>, query: FindCareQueryDto) {
@@ -71,10 +74,11 @@ export class FindCareService {
     return {
       providerReference: provider.providerReference,
       displayName: provider.displayName,
+      profileImageUrl: provider.profileImageUrl ?? null,
       providerType: provider.providerType,
       location: { city: provider.city, stateOrRegion: provider.stateOrRegion, countryCode: provider.countryCode },
       locations: (provider.locations ?? []).filter((location) => location.isActive).map((location) => ({ locationReference: location.locationReference, name: location.name, addressLine1: location.addressLine1, addressLine2: location.addressLine2, city: location.city, stateOrRegion: location.state, postalCode: location.postalCode, countryCode: location.countryCode })),
-      services: (provider.careServices ?? []).filter((service) => service.isActive && service.definition?.isActive).map((service) => ({ code: service.definition.code, name: service.definition.name, description: service.descriptionOverride ?? service.definition.description, deliveryOptions: [...(service.deliveryOptions ?? [])].sort((a, b) => a.deliveryMode.localeCompare(b.deliveryMode)).map((option) => ({ deliveryMode: option.deliveryMode, priceMinor: Number(option.priceMinor), currency: option.currency })), supportsAppointmentRequests: service.supportsAppointmentRequests, supportsFastTrack: service.supportsFastTrack, fastTrackFeeMinor: service.supportsFastTrack && service.fastTrackFeeMinor != null ? Number(service.fastTrackFeeMinor) : null, fastTrackCurrency: service.supportsFastTrack ? service.fastTrackCurrency : null })),
+      services: (provider.careServices ?? []).filter((service) => service.isActive && service.definition?.isActive).map((service) => ({ code: service.definition.code, name: service.definition.name, description: service.descriptionOverride ?? service.definition.description, deliveryOptions: [...(service.deliveryOptions ?? [])].filter(option => supportsCareDelivery(service.definition, option.deliveryMode)).sort((a, b) => a.deliveryMode.localeCompare(b.deliveryMode)).map((option) => ({ deliveryMode: option.deliveryMode, priceMinor: Number(option.priceMinor), currency: option.currency })), supportsAppointmentRequests: service.supportsAppointmentRequests, supportsFastTrack: service.supportsFastTrack, fastTrackFeeMinor: service.supportsFastTrack && service.fastTrackFeeMinor != null ? Number(service.fastTrackFeeMinor) : null, fastTrackCurrency: service.supportsFastTrack ? service.fastTrackCurrency : null })),
     };
   }
 }

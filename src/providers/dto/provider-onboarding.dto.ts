@@ -86,6 +86,7 @@ export class UpdateProviderProfileDto extends PartialType(
 ) {}
 
 export class ProviderOnboardingProfileResponseDto {
+  @ApiPropertyOptional({ nullable: true }) profileImageUrl?: string | null;
   @ApiProperty() displayName!: string;
   @ApiProperty() email!: string;
   @ApiPropertyOptional({ nullable: true }) phone!: string | null;

@@ -809,7 +809,7 @@ private addMinutesToTime(
   }
 
   async expireStaleOffers(
-    actorUserId: string,
+    actorUserId: string | null,
     now = new Date(),
   ): Promise<{
     expiredCount: number;
@@ -818,14 +818,25 @@ private addMinutesToTime(
     const expired = await this.assignments.manager.transaction(
       async (manager) => {
         const repository = manager.getRepository(ProviderAssignment);
-        const stale = await repository.find({
-          where: {
-            status: ProviderAssignmentStatus.OFFERED,
-            expiresAt: LessThanOrEqual(now),
-          },
-          relations: { booking: true },
+        const candidates = await repository.find({
+          where: { status: ProviderAssignmentStatus.OFFERED, expiresAt: LessThanOrEqual(now) },
+          order: { expiresAt: 'ASC', id: 'ASC' },
+          take: 100,
         });
-        for (const assignment of stale) {
+        const stale: ProviderAssignment[] = [];
+        for (const candidate of candidates) {
+          // Recheck under a row lock: an acceptance or another worker may have won.
+          const assignment = await repository.findOne({
+            where: { id: candidate.id }, lock: { mode: 'pessimistic_write' },
+          });
+          if (!assignment || assignment.status !== ProviderAssignmentStatus.OFFERED ||
+              !assignment.expiresAt || assignment.expiresAt > now) continue;
+          const booking = await manager.getRepository(Booking).findOne({
+            where: { id: assignment.bookingId }, lock: { mode: 'pessimistic_write' },
+          });
+          if (!booking) continue;
+          assignment.booking = booking;
+          stale.push(assignment);
           assignment.status = ProviderAssignmentStatus.EXPIRED;
           assignment.respondedAt = now;
           assignment.reasonCode = "OFFER_TTL_EXPIRED";

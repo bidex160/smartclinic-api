@@ -1,3 +1,4 @@
+import { assertCareDelivery } from '../providers/care-delivery-policy';
 import {
   BadRequestException,
   ConflictException,
@@ -95,6 +96,7 @@ export class CareRequestsService {
           if (!definition)
             throw new ConflictException("Selected care service is not active");
           const deliveryMode = dto.deliveryMode ?? CareDeliveryMode.IN_PERSON;
+          assertCareDelivery(definition, deliveryMode);
           this.validateGeography(deliveryMode, dto);
           const geography =
             deliveryMode === CareDeliveryMode.VIRTUAL

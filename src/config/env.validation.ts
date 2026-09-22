@@ -52,6 +52,12 @@ class EnvironmentVariables {
   @Min(1)
   PROVIDER_OFFER_TTL_MINUTES = 30;
 
+  @IsOptional() @IsIn(['true', 'false'])
+  PROVIDER_OFFER_EXPIRY_ENABLED?: string;
+
+  @Type(() => Number) @IsInt() @Min(1000)
+  PROVIDER_OFFER_EXPIRY_INTERVAL_MS = 60000;
+
   @Type(() => Number) @IsInt() @Min(300)
   PROVIDER_INVITATION_TTL = 604800;
 

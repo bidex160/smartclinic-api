@@ -1,3 +1,7 @@
+import { ProviderProfileImageStorage } from './provider-profile-image.storage';
+import { ProviderProfileImageService } from './provider-profile-image.service';
+import { ProviderProfileImageController } from './provider-profile-image.controller';
+import { ProviderOfferExpiryService } from './provider-offer-expiry.service';
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
@@ -111,6 +115,7 @@ import { HealthCheckPackageAddon } from '../health-checks/entities/health-check-
     ]),
   ],
   controllers: [
+    ProviderProfileImageController,
     AdminProvidersController,
     AdminProviderInvitationsController,
     PublicProviderInvitationsController,
@@ -131,6 +136,9 @@ import { HealthCheckPackageAddon } from '../health-checks/entities/health-check-
     AdminCareServicesController,
   ],
   providers: [
+    ProviderProfileImageStorage,
+    ProviderProfileImageService,
+    ProviderOfferExpiryService,
     ProviderCapabilitiesService,
     ProviderServiceAreasService,
     ProviderAvailabilityService,

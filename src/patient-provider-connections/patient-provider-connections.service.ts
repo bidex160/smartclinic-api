@@ -819,6 +819,7 @@ private async lockProvider(
     return {
       providerReference: p.providerReference,
       displayName: p.displayName,
+      profileImageUrl: p.profileImageUrl ?? null,
       providerType: p.providerType,
       location: {
         city: p.city,

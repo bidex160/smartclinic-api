@@ -14,7 +14,7 @@ import { NotificationDispatcherService } from './notification-dispatcher.service
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import { NotificationRealtimeService } from './notification-realtime.service';
-import { AuthModule } from 'src/auth/auth.module';
+import { AuthModule } from '../auth/auth.module';
 import { PushDevicesController } from './push/push-devices.controller';
 import { PushDevicesService } from './push/push-devices.service';
 import { PUSH_PROVIDER } from './push/push-provider';

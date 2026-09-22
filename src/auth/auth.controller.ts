@@ -29,7 +29,7 @@ import { UserResponseDto } from "./dto/user-response.dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { ForgotPasswordDto, ResetPasswordDto } from "./dto/password-reset.dto";
 import { PasswordResetService } from "./password-reset.service";
-import { UserNetworkRole } from "src/users/enums/user-network-role.enum";
+import { UserNetworkRole } from "../users/enums/user-network-role.enum";
 
 @ApiTags("Authentication")
 @Controller("auth")

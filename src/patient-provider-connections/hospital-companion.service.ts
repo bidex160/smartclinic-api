@@ -58,12 +58,15 @@ export class HospitalCompanionService {
       ? await this.fulfillments.createQueryBuilder('fulfillment')
           .leftJoinAndSelect('fulfillment.fulfillmentServiceUnit', 'serviceUnit')
           .where('fulfillment.clinicalOrderId IN (:...orderIds)', { orderIds })
-          .andWhere("fulfillment.status <> 'CANCELLED'")
-          .orderBy('fulfillment.createdAt', 'DESC')
+          .orderBy('fulfillment.createdAt', 'DESC').addOrderBy('fulfillment.id', 'DESC')
           .getMany()
       : [];
 
-    const fulfillmentIds = fulfillments.map(item => item.id);
+    // Select the latest attempt first; a cancellation must not resurrect an older attempt.
+    const latestByOrder = new Map<string, ClinicalOrderFulfillment>();
+    for (const item of fulfillments) if (!latestByOrder.has(item.clinicalOrderId)) latestByOrder.set(item.clinicalOrderId, item);
+    const activeFulfillments = [...latestByOrder.values()].filter(item => item.status !== 'CANCELLED');
+    const fulfillmentIds = activeFulfillments.map(item => item.id);
     const [diagnosticFunding, pharmacyFunding, diagnosticExecutions, pharmacyDispensings] =
       fulfillmentIds.length
         ? await Promise.all([
@@ -75,7 +78,7 @@ export class HospitalCompanionService {
         : [[], [], [], []];
 
     const fulfillmentByOrder = new Map<string, ClinicalOrderFulfillment>();
-    for (const fulfillment of fulfillments) if (!fulfillmentByOrder.has(fulfillment.clinicalOrderId)) fulfillmentByOrder.set(fulfillment.clinicalOrderId, fulfillment);
+    for (const fulfillment of activeFulfillments) if (!fulfillmentByOrder.has(fulfillment.clinicalOrderId)) fulfillmentByOrder.set(fulfillment.clinicalOrderId, fulfillment);
     const diagnosticFundingByFulfillment = new Map(diagnosticFunding.map(item => [item.fulfillmentId, item]));
     const pharmacyFundingByFulfillment = new Map(pharmacyFunding.map(item => [item.fulfillmentId, item]));
     const executionByFulfillment = new Map(diagnosticExecutions.map(item => [item.fulfillmentId, item]));
@@ -108,7 +111,7 @@ export class HospitalCompanionService {
       };
     });
 
-    const payable = requests.filter(item => item.amountMinor != null && item.paymentStatus !== 'PAID');
+    const payable = requests.filter(item => item.amountMinor != null && item.amountMinor > 0 && item.paymentStatus === 'PENDING');
     const currencies = [...new Set(payable.map(item => item.currency).filter(Boolean))];
     const consolidatedPayment = {
       available: false, // Existing funding flows remain authoritative until grouped settlement is implemented.

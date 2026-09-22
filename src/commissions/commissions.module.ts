@@ -10,7 +10,7 @@ import { AdminCommissionService } from "./admin-commission.service";
 import { CommissionResolutionService } from "./commission-resolution.service";
 import { CommissionConfigHistory } from "./entities/commission-config-history.entity";
 import { PlatformCommissionSetting } from "./entities/platform-commission-setting.entity";
-import { User } from "src/users/entities/user.entity";
+import { User } from "../users/entities/user.entity";
 
 @Module({
   imports: [
