@@ -20,9 +20,11 @@ import {
   FulfillmentDirectoryQueryDto,
   FulfillmentListQueryDto,
 } from "./dto/clinical-order-fulfillment.dto";
+import { SubmitDiagnosticResultsDto } from "./dto/clinical-order.dto";
 import { ClinicalOrderFulfillmentHistory } from "./entities/clinical-order-fulfillment-history.entity";
 import { ClinicalOrderFulfillment } from "./entities/clinical-order-fulfillment.entity";
 import { ClinicalOrder } from "./entities/clinical-order.entity";
+import { ClinicalDiagnosticOrderItem } from "./entities/clinical-diagnostic-order-item.entity";
 import { ClinicalOrderFulfillmentStatus } from "./enums/clinical-order-fulfillment-status.enum";
 import { ClinicalOrderStatus } from "./enums/clinical-order-status.enum";
 import { ClinicalOrderType } from "./enums/clinical-order-type.enum";
@@ -151,13 +153,12 @@ export class ClinicalOrderFulfillmentsService {
   }
   async listAssigned(user: User, q: FulfillmentListQueryDto) {
     const p = await this.currentProvider.resolveOperational(user);
-    return this.page(
-      this.readBuilder().where(
+    const b = this.readBuilder().where(
         "fulfillment.fulfillmentProviderId=:providerId",
         { providerId: p.id },
-      ),
-      q,
-    );
+      );
+    if (q.orderType) b.andWhere("order.type=:orderType",{orderType:q.orderType});
+    return this.page(b,q);
   }
   async getAssigned(user: User, reference: string) {
     const p = await this.currentProvider.resolveOperational(user);
@@ -213,6 +214,7 @@ export class ClinicalOrderFulfillmentsService {
       return this.mapped(m, row.id);
     });
   }
+  async submitDiagnosticResults(user:User,reference:string,dto:SubmitDiagnosticResultsDto){const p=await this.currentProvider.resolveOperational(user);return this.fulfillments.manager.transaction(async m=>{const row=await m.getRepository(ClinicalOrderFulfillment).findOne({where:{reference,fulfillmentProviderId:p.id},relations:{clinicalOrder:true},lock:{mode:'pessimistic_write'}});if(!row)this.notFound();if(row.status!==ClinicalOrderFulfillmentStatus.ACCEPTED)throw new ConflictException('Accept this diagnostic handoff before submitting results');if(![ClinicalOrderType.LABORATORY,ClinicalOrderType.IMAGING].includes(row.clinicalOrder.type))throw new ConflictException('Results can only be submitted for laboratory or imaging orders');const items=await m.getRepository(ClinicalDiagnosticOrderItem).find({where:{clinicalOrderId:row.clinicalOrderId},order:{sortOrder:'ASC'},lock:{mode:'pessimistic_write'}});if(!items.length)throw new ConflictException('This diagnostic order has no structured test items');for(const result of dto.items){const item=items.find(i=>i.sortOrder===result.sortOrder);if(!item)throw new ConflictException('A submitted result does not match this diagnostic order');item.resultText=result.resultText??null;item.resultValue=result.resultValue??null;item.resultUnit=result.resultUnit??null;item.referenceRange=result.referenceRange??null;item.resultFlag=result.resultFlag??null;item.resultedAt=new Date();await m.save(item);}return this.mapped(m,row.id);});}
   async directory(user: User, q: FulfillmentDirectoryQueryDto) {
     await this.patient(user.id);
     return this.eligibleDirectory(q);
@@ -491,7 +493,8 @@ export class ClinicalOrderFulfillmentsService {
         "recommendedUnit",
       )
       .leftJoinAndSelect("order.prescription", "prescription")
-      .leftJoinAndSelect("prescription.items", "items");
+      .leftJoinAndSelect("prescription.items", "items")
+      .leftJoinAndMapMany("order.diagnosticItems",ClinicalDiagnosticOrderItem,"diagnosticItem","diagnosticItem.clinicalOrderId=order.id");
   }
   private async mapped(m: EntityManager, id: string) {
     const row = await this.readBuilder(m)
@@ -513,6 +516,7 @@ export class ClinicalOrderFulfillmentsService {
           providerReference: f.clinicalOrder.orderingProvider.providerReference,
           displayName: f.clinicalOrder.orderingProvider.displayName,
         },
+        diagnosticItems: [...(((f.clinicalOrder as any).diagnosticItems) ?? [])].sort((a:any,b:any)=>a.sortOrder-b.sortOrder).map((i:any)=>({name:i.name,code:i.code,instructions:i.instructions,resultText:i.resultText,resultValue:i.resultValue,resultUnit:i.resultUnit,referenceRange:i.referenceRange,resultFlag:i.resultFlag,resultedAt:i.resultedAt,sortOrder:i.sortOrder})),
         prescription: f.clinicalOrder.prescription
           ? {
               notes: f.clinicalOrder.prescription.notes,
