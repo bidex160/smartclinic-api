@@ -18,7 +18,7 @@ describe('Care handoff acceptance matrix',()=>{
   [ClinicalOrderType.PROCEDURE,ProviderServiceUnitType.PROCEDURE,'physical/procedure follow-up'],
  ] as const;
  it.each(cases)('%s routes only to %s (%s)',(orderType,expected)=>{
-   expect(subject.unitType(orderType)).toBe(expected);
+   expect(subject.unitTypeForOrder(orderType)).toBe(expected);
    expect(subject.assertUnit(unit(expected))).toBeDefined();
    const wrong=cases.find(x=>x[1]!==expected)![1];
    expect(()=>subject.assertUnit(unit(wrong),expected)).toThrow(ConflictException);
