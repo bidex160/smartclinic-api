@@ -14,14 +14,6 @@ import {
 import { ClinicalOrderStatusHistory } from "./entities/clinical-order-status-history.entity";
 import { ClinicalOrder } from "./entities/clinical-order.entity";
 import { ClinicalDiagnosticOrderItem } from "./entities/clinical-diagnostic-order-item.entity";
-import { DiagnosticQuote } from "./entities/diagnostic-quote.entity";
-import { DiagnosticFulfillmentFunding } from "./entities/diagnostic-fulfillment-funding.entity";
-import { DiagnosticExecution } from "./entities/diagnostic-execution.entity";
-import { DiagnosticFulfillmentService } from "./diagnostic-fulfillment.service";
-import {
-  MeDiagnosticFulfillmentController,
-  ProviderDiagnosticFulfillmentController,
-} from "./diagnostic-fulfillment.controller";
 import { ClinicalPrescriptionDetail } from "./entities/clinical-prescription-detail.entity";
 import { ClinicalPrescriptionItem } from "./entities/clinical-prescription-item.entity";
 import { User } from "src/users/entities/user.entity";
@@ -59,9 +51,6 @@ import { ClinicalRecordAttachmentsService } from "src/clinical-records/clinical-
       ClinicalOrder,
       ClinicalOrderStatusHistory,
       ClinicalDiagnosticOrderItem,
-      DiagnosticQuote,
-      DiagnosticFulfillmentFunding,
-      DiagnosticExecution,
       ClinicalPrescriptionDetail,
       ClinicalPrescriptionItem,
       CareAppointment,

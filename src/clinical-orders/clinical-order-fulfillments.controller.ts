@@ -21,7 +21,7 @@ import {
   FulfillmentReferenceParamsDto,
   FulfillmentUnitDto,
 } from "./dto/clinical-order-fulfillment.dto";
-import { ClinicalOrderReferenceParamsDto } from "./dto/clinical-order.dto";
+import { ClinicalOrderReferenceParamsDto, SubmitDiagnosticResultsDto } from "./dto/clinical-order.dto";
 @ApiTags("Provider Order Fulfillments")
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -58,6 +58,7 @@ export class ProviderOrderFulfillmentsController {
   ) {
     return this.service.getAssigned(r.user, p.reference);
   }
+  @Post("order-fulfillments/:reference/results") results(@Req() r:{user:User},@Param() p:FulfillmentReferenceParamsDto,@Body() d:SubmitDiagnosticResultsDto){return this.service.submitDiagnosticResults(r.user,p.reference,d);}
   @Post("order-fulfillments/:reference/accept") accept(
     @Req() r: { user: User },
     @Param() p: FulfillmentReferenceParamsDto,

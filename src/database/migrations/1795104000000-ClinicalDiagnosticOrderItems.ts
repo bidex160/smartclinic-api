@@ -1,13 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
-
-export class ClinicalDiagnosticOrderItems1795104000000 implements MigrationInterface {
-  name = 'ClinicalDiagnosticOrderItems1795104000000';
-
-  async up(q: QueryRunner): Promise<void> {
-    await q.query(`CREATE TABLE "clinical_diagnostic_order_items" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "clinical_order_id" uuid NOT NULL, "name" varchar(200) NOT NULL, "code" varchar(80), "instructions" text, "sort_order" smallint NOT NULL, CONSTRAINT "PK_clinical_diagnostic_order_items" PRIMARY KEY ("id"), CONSTRAINT "UQ_clinical_diagnostic_order_items_order" UNIQUE ("clinical_order_id", "sort_order"), CONSTRAINT "CHK_clinical_diagnostic_order_items_sort" CHECK ("sort_order">=0), CONSTRAINT "FK_clinical_diagnostic_order_items_order" FOREIGN KEY ("clinical_order_id") REFERENCES "clinical_orders"("id") ON DELETE CASCADE)`);
-  }
-
-  async down(q: QueryRunner): Promise<void> {
-    await q.query(`DROP TABLE "clinical_diagnostic_order_items"`);
-  }
+export class ClinicalDiagnosticOrderItems1795104000000 implements MigrationInterface { name='ClinicalDiagnosticOrderItems1795104000000';
+ async up(q:QueryRunner):Promise<void>{await q.query(`CREATE TABLE "clinical_diagnostic_order_items" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "clinical_order_id" uuid NOT NULL, "name" varchar(200) NOT NULL, "code" varchar(80), "instructions" text, "result_text" text, "result_value" varchar(120), "result_unit" varchar(80), "reference_range" varchar(160), "result_flag" varchar(40), "resulted_at" timestamptz, "sort_order" smallint NOT NULL, CONSTRAINT "PK_clinical_diagnostic_order_items" PRIMARY KEY ("id"), CONSTRAINT "UQ_clinical_diagnostic_order_items_order" UNIQUE ("clinical_order_id","sort_order"), CONSTRAINT "CHK_clinical_diagnostic_order_items_sort" CHECK ("sort_order">=0), CONSTRAINT "FK_clinical_diagnostic_order_items_order" FOREIGN KEY ("clinical_order_id") REFERENCES "clinical_orders"("id") ON DELETE CASCADE)`);}
+ async down(q:QueryRunner):Promise<void>{await q.query(`DROP TABLE "clinical_diagnostic_order_items"`);}
 }
