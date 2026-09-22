@@ -80,6 +80,26 @@ export class AddBasicHealthCheckTier1792512000000 implements MigrationInterface 
       WHERE "health_check_package_id" = (SELECT "id" FROM "health_check_packages" WHERE "code" = 'COMPLETE')
         AND "code" IN ('CLINICIAN_REVIEW','EXPANDED_INTERPRETATION')
     `);
+    // Seed editable starting prices at the midpoint of the approved planning ranges.
+    // Managers/admins can modify these through the existing provider-service pricing flow.
+    await queryRunner.query(`
+      UPDATE "provider_services" service
+      SET
+        "price_minor" = CASE package."code"
+          WHEN 'ESSENTIAL' THEN CASE mode."code" WHEN 'HOME_VISIT' THEN '550000' ELSE '350000' END
+          WHEN 'BASIC' THEN CASE mode."code" WHEN 'HOME_VISIT' THEN '1000000' ELSE '700000' END
+          WHEN 'COMPLETE' THEN CASE mode."code" WHEN 'HOME_VISIT' THEN '1750000' ELSE '1350000' END
+          ELSE service."price_minor"
+        END,
+        "fulfilment_fee_minor" = '0',
+        "currency" = 'NGN',
+        "updated_at" = now()
+      FROM "health_check_packages" package, "fulfilment_modes" mode
+      WHERE service."health_check_package_id" = package."id"
+        AND service."fulfilment_mode_id" = mode."id"
+        AND package."code" IN ('ESSENTIAL','BASIC','COMPLETE')
+        AND mode."code" IN ('PROVIDER_LOCATION','HOME_VISIT')
+    `);
   }
 
   async down(queryRunner: QueryRunner): Promise<void> {
