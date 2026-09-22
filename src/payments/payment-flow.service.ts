@@ -79,6 +79,7 @@ import { GuidedSelfCheckHistory } from "../guided-self-checks/entities/guided-se
 import { GuidedSelfCheckFundingStatus } from "../guided-self-checks/enums/guided-self-check.enum";
 import { DiagnosticQuote } from '../clinical-orders/entities/diagnostic-quote.entity';
 import { DiagnosticFulfillmentFunding,DiagnosticFundingStatus } from '../clinical-orders/entities/diagnostic-fulfillment-funding.entity';
+import { CareAppointmentsService } from '../care-appointments/care-appointments.service';
 
 @Injectable()
 export class PaymentFlowService {
@@ -100,6 +101,8 @@ export class PaymentFlowService {
     private readonly earnings?: ProviderEarningsService,
     @Optional()
     private readonly commissions?: CommissionResolutionService,
+    @Optional()
+    private readonly careAppointments?: CareAppointmentsService,
     @Optional()
     private readonly providerRegistry?: PaymentProviderRegistry,
   ) {}
@@ -2579,6 +2582,9 @@ async initializePatientProviderConnectionFunding(
       funding.status = CareRequestFundingStatus.PAID;
       funding.paidAt = verified.occurredAt;
       await fundingRepo.save(funding);
+      if (this.careAppointments && care.status === CareRequestStatus.PROVIDER_ACCEPTED && care.preferredDate && care.preferredTime) {
+        await this.careAppointments.confirmAgreedSlotAfterPayment(manager, care);
+      }
       return this.careFundingResponse(care, funding, attempt);
     });
   }
