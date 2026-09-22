@@ -7,26 +7,18 @@ import {
 } from './catalogue.seed';
 
 describe('seedCatalogue', () => {
-  it('defines the approved V1 benefits and durations without any package prices', () => {
+  it('defines the approved package tiers and durations without hardcoded prices', () => {
     expect(HEALTH_CHECK_PACKAGE_SEEDS).toEqual([
+      expect.objectContaining({ code: 'ESSENTIAL', estimatedDurationMinutes: 15 }),
       expect.objectContaining({
-        code: 'ESSENTIAL',
-        benefits: ['Blood pressure', 'Blood glucose', 'BMI', 'Temperature', 'Oxygen saturation', 'Pulse'],
-        estimatedDurationMinutes: 15,
+        code: 'BASIC',
+        estimatedDurationMinutes: 30,
+        benefits: expect.arrayContaining(['Malaria rapid test', 'Urine health screening', 'Clinician consultation and interpretation']),
       }),
       expect.objectContaining({
         code: 'COMPLETE',
-        benefits: [
-          'Blood pressure',
-          'Blood glucose',
-          'BMI',
-          'Temperature',
-          'Oxygen saturation',
-          'Pulse',
-          'Additional clinician review',
-          'Expanded interpretation of recorded measurements',
-        ],
-        estimatedDurationMinutes: 30,
+        estimatedDurationMinutes: 60,
+        benefits: expect.arrayContaining(['Hemoglobin/PCV check', 'Full lipid profile', 'Hepatitis B rapid test']),
       }),
     ]);
   });
