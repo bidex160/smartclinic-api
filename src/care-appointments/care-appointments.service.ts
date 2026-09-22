@@ -502,6 +502,36 @@ async schedule(
   );
 }
 
+  async confirmAgreedSlotAfterPayment(manager: EntityManager, care: CareRequest): Promise<CareAppointment | null> {
+    if (!care.preferredDate || !care.preferredTime || !care.assignedProviderId || !care.assignedProviderCareServiceId) return null;
+    const existing = await manager.getRepository(CareAppointment).findOne({ where: { careRequestId: care.id, status: In(ACTIVE) } });
+    if (existing) return existing;
+    const appointmentReference = generateCareAppointmentReference();
+    const parts = care.preferredTime.split(':').map(Number);
+    const endMinutes = parts[0] * 60 + parts[1] + 30;
+    const timeTo = String(Math.floor(endMinutes / 60) % 24).padStart(2, '0') + ':' + String(endMinutes % 60).padStart(2, '0');
+    const repository = manager.getRepository(CareAppointment);
+    const appointment = await repository.save(repository.create({
+      reference: appointmentReference, careRequestId: care.id, patientId: care.patientId,
+      providerId: care.assignedProviderId, providerCareServiceId: care.assignedProviderCareServiceId,
+      providerLocationId: null, scheduledDate: care.preferredDate, scheduledTimeFrom: care.preferredTime,
+      scheduledTimeTo: timeTo, timezone: 'Africa/Lagos', deliveryMode: care.deliveryMode,
+      meetingUrl: care.deliveryMode === CareDeliveryMode.VIRTUAL ? 'https://meet.jit.si/SmartClinic-' + appointmentReference.replace('SC-APT-', '') : null,
+      status: CareAppointmentStatus.SCHEDULED, notes: care.notes ?? null,
+    }));
+    await this.appointmentHistory(manager, appointment.id, null, appointment.status, null, 'PAYMENT_CONFIRMED_AGREED_SLOT', null);
+    const from = care.status; care.status = CareRequestStatus.SCHEDULED; await manager.getRepository(CareRequest).save(care);
+    await this.requestHistory(manager, care.id, from, care.status, null, 'PAYMENT_CONFIRMED_AGREED_SLOT', null);
+    await this.notifications?.createTransactionalNotification(manager, {
+      userId: care.userId, type: NotificationType.CARE_APPOINTMENT_SCHEDULED, title: 'Consultation confirmed',
+      message: 'Payment confirmed. Your consultation is booked.', entityType: NotificationEntityType.CARE_APPOINTMENT,
+      entityReference: appointment.reference, actionType: NotificationActionType.VIEW,
+      metadata: { careRequestReference: care.reference, appointmentStatus: appointment.status },
+      idempotencyKey: 'care-appointment:' + appointment.reference + ':payment-confirmed', email: { enabled: true },
+    });
+    return appointment;
+  }
+
   async listProvider(user: User, query: CareAppointmentListQueryDto) {
     const provider = await this.operationalProvider(user);
     const builder = this.readBuilder().where(
