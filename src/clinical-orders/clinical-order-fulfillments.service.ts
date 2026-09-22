@@ -51,8 +51,8 @@ export class ClinicalOrderFulfillmentsService {
     return this.fulfillments.manager.transaction(async (m) => {
       const order = await this.lockOrder(m, orderReference);
       if (order.orderingProviderId !== provider.id) this.notFound();
-      this.requirePrescription(order);
-      const unit = await this.eligibleUnit(m, unitReference);
+      this.requireFulfillable(order);
+      const unit = await this.eligibleUnit(m, unitReference, order.type);
       const active = await this.active(m, order.id);
       if (
         active?.status === ClinicalOrderFulfillmentStatus.ACCEPTED ||
@@ -93,8 +93,8 @@ export class ClinicalOrderFulfillmentsService {
     return this.fulfillments.manager.transaction(async (m) => {
       const order = await this.lockOrder(m, orderReference);
       if (order.patientId !== patient.id) this.notFound();
-      this.requirePrescription(order);
-      const unit = await this.eligibleUnit(m, unitReference);
+      this.requireFulfillable(order);
+      const unit = await this.eligibleUnit(m, unitReference, order.type);
       const active = await this.active(m, order.id);
       if (active?.status === ClinicalOrderFulfillmentStatus.ACCEPTED)
         throw new ConflictException("Accepted fulfillment cannot be changed");
@@ -197,7 +197,7 @@ export class ClinicalOrderFulfillmentsService {
         });
       if (!order || order.status !== ClinicalOrderStatus.ISSUED)
         throw new ConflictException("Clinical Order is no longer actionable");
-      const unit = await this.eligibleUnitById(m, row.fulfillmentServiceUnitId);
+      const unit = await this.eligibleUnitById(m, row.fulfillmentServiceUnitId, order.type);
       if (unit.providerId !== p.id) this.notFound();
       row.status = ClinicalOrderFulfillmentStatus.ACCEPTED;
       row.acceptedAt = new Date();
@@ -256,7 +256,7 @@ export class ClinicalOrderFulfillmentsService {
         {
           reference: r.reference,
           status: r.status,
-          pharmacy: {
+          serviceUnit: {
             providerReference: r.providerReference,
             displayName: r.displayName,
             serviceUnitReference: r.serviceUnitReference,
@@ -277,6 +277,7 @@ export class ClinicalOrderFulfillmentsService {
     );
   }
   private async eligibleDirectory(q: FulfillmentDirectoryQueryDto) {
+    const unitType = this.unitTypeForOrder(q.orderType);
     const b = this.fulfillments.manager
       .getRepository(ProviderServiceUnit)
       .createQueryBuilder("unit")
@@ -285,7 +286,7 @@ export class ClinicalOrderFulfillmentsService {
       .where(
         "unit.type=:type AND unit.status=:unitStatus AND unit.deletedAt IS NULL",
         {
-          type: ProviderServiceUnitType.PHARMACY,
+          type: unitType,
           unitStatus: ProviderServiceUnitStatus.ACTIVE,
         },
       )
@@ -388,14 +389,19 @@ export class ClinicalOrderFulfillmentsService {
       await this.cancelRow(m, row, actorId, "ORDER_CANCELLED", reason);
     }
   }
-  private requirePrescription(order: ClinicalOrder) {
-    if (
-      order.type !== ClinicalOrderType.PRESCRIPTION ||
-      order.status !== ClinicalOrderStatus.ISSUED
-    )
-      throw new ConflictException(
-        "Only issued prescriptions support pharmacy fulfillment",
-      );
+  private unitTypeForOrder(orderType?: ClinicalOrderType) {
+    switch (orderType) {
+      case ClinicalOrderType.LABORATORY: return ProviderServiceUnitType.LABORATORY;
+      case ClinicalOrderType.IMAGING: return ProviderServiceUnitType.RADIOLOGY;
+      case ClinicalOrderType.PRESCRIPTION:
+      case undefined: return ProviderServiceUnitType.PHARMACY;
+      default: throw new ConflictException("This Clinical Order type does not support patient fulfillment");
+    }
+  }
+  private requireFulfillable(order: ClinicalOrder) {
+    if (order.status !== ClinicalOrderStatus.ISSUED) throw new ConflictException("Only issued Clinical Orders support fulfillment");
+    if (![ClinicalOrderType.PRESCRIPTION, ClinicalOrderType.LABORATORY, ClinicalOrderType.IMAGING].includes(order.type))
+      throw new ConflictException("This Clinical Order type does not support patient fulfillment");
   }
   private async lockOrder(m: EntityManager, reference: string) {
     const row = await m
@@ -413,45 +419,19 @@ export class ClinicalOrderFulfillmentsService {
         lock: { mode: "pessimistic_write" },
       });
   }
-  private async eligibleUnit(m: EntityManager, ref: string) {
-    const unit = await m
-      .getRepository(ProviderServiceUnit)
-      .findOne({
-        where: {
-          reference: ref,
-          status: ProviderServiceUnitStatus.ACTIVE,
-          type: ProviderServiceUnitType.PHARMACY,
-        },
-        relations: { provider: true },
-      });
-    return this.assertUnit(unit);
+  private async eligibleUnit(m: EntityManager, ref: string, orderType: ClinicalOrderType) {
+    const expectedType = this.unitTypeForOrder(orderType);
+    const unit = await m.getRepository(ProviderServiceUnit).findOne({ where: { reference: ref, status: ProviderServiceUnitStatus.ACTIVE, type: expectedType }, relations: { provider: true } });
+    return this.assertUnit(unit, expectedType);
   }
-  private async eligibleUnitById(m: EntityManager, id: string) {
-    const unit = await m
-      .getRepository(ProviderServiceUnit)
-      .findOne({
-        where: {
-          id,
-          status: ProviderServiceUnitStatus.ACTIVE,
-          type: ProviderServiceUnitType.PHARMACY,
-        },
-        relations: { provider: true },
-      });
-    return this.assertUnit(unit);
+  private async eligibleUnitById(m: EntityManager, id: string, orderType: ClinicalOrderType) {
+    const expectedType = this.unitTypeForOrder(orderType);
+    const unit = await m.getRepository(ProviderServiceUnit).findOne({ where: { id, status: ProviderServiceUnitStatus.ACTIVE, type: expectedType }, relations: { provider: true } });
+    return this.assertUnit(unit, expectedType);
   }
-  private assertUnit(unit: ProviderServiceUnit | null) {
-    if (
-      !unit ||
-      unit.deletedAt ||
-      unit.status !== ProviderServiceUnitStatus.ACTIVE ||
-      unit.type !== ProviderServiceUnitType.PHARMACY ||
-      unit.provider.deletedAt ||
-      unit.provider.status !== ProviderStatus.ACTIVE ||
-      unit.provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED
-    )
-      throw new ConflictException(
-        "Eligible pharmacy service unit was not found",
-      );
+  private assertUnit(unit: ProviderServiceUnit | null, expectedType: ProviderServiceUnitType) {
+    if (!unit || unit.deletedAt || unit.status !== ProviderServiceUnitStatus.ACTIVE || unit.type !== expectedType || unit.provider.deletedAt || unit.provider.status !== ProviderStatus.ACTIVE || unit.provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED)
+      throw new ConflictException("Eligible service unit was not found");
     return unit;
   }
   private async patient(uid: string) {
