@@ -503,7 +503,7 @@ async schedule(
 }
 
   async confirmAgreedSlotAfterPayment(manager: EntityManager, care: CareRequest): Promise<CareAppointment | null> {
-    if (!care.preferredDate || !care.preferredTime || !care.assignedProviderId || !care.assignedProviderCareServiceId) return null;
+    if (care.deliveryMode !== CareDeliveryMode.VIRTUAL || !care.preferredDate || !care.preferredTime || !care.assignedProviderId || !care.assignedProviderCareServiceId) return null;
     const existing = await manager.getRepository(CareAppointment).findOne({ where: { careRequestId: care.id, status: In(ACTIVE) } });
     if (existing) return existing;
     const appointmentReference = generateCareAppointmentReference();
