@@ -1,3 +1,4 @@
+import { ProviderOfferExpiryService } from './provider-offer-expiry.service';
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
@@ -131,6 +132,7 @@ import { HealthCheckPackageAddon } from '../health-checks/entities/health-check-
     AdminCareServicesController,
   ],
   providers: [
+    ProviderOfferExpiryService,
     ProviderCapabilitiesService,
     ProviderServiceAreasService,
     ProviderAvailabilityService,

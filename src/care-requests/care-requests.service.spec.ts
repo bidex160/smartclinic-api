@@ -34,6 +34,12 @@ describe('CareRequestsService', () => {
     (subject as any).getMapped = jest.fn(async (_manager: any, id: string) => ({ reference: rows.find((row) => row.id === id)?.reference, status: rows.find((row) => row.id === id)?.status }));
   });
 
+  it.each(['LAB_REQUEST', 'IMAGING_REQUEST'])('rejects virtual %s before matching or saving', async code => {
+    manager.getRepository(CareServiceDefinition).findOne.mockResolvedValue({ ...definition, code });
+    await expect(subject.create(user, { ...dto, serviceCode: code, deliveryMode: CareDeliveryMode.VIRTUAL })).rejects.toBeInstanceOf(BadRequestException);
+    expect(rows).toHaveLength(0);
+    expect(eligibility.findEligibleCareProvider).not.toHaveBeenCalled();
+  });
   it('creates no-preference requests atomically in MATCHING', async () => {
     const result: any = await subject.create(user, dto);
     expect(result.status).toBe(CareRequestStatus.MATCHING); expect(rows[0].assignedProviderId).toBeNull(); expect(eligibility.requireEligible).not.toHaveBeenCalled();

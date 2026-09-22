@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { User } from '../../users/entities/user.entity';
 import { UserRole } from '../../users/enums/user-role.enum';
 import { UserStatus } from '../../users/enums/user-status.enum';
-import { UserNetworkRole } from 'src/users/enums/user-network-role.enum';
+import { UserNetworkRole } from '../../users/enums/user-network-role.enum';
 
 export class UserResponseDto {
   @ApiProperty({ format: 'uuid' }) id!: string;

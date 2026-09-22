@@ -1,3 +1,4 @@
+import { supportsCareDelivery } from './care-delivery-policy';
 import { ConflictException, Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { EntityManager, In, Repository } from "typeorm";
@@ -171,7 +172,8 @@ async requireEligible(
     provider.status !== ProviderStatus.ACTIVE ||
     provider.onboardingStatus !==
       ProviderOnboardingStatus.APPROVED ||
-    !definition?.isActive
+    !definition?.isActive ||
+    !supportsCareDelivery(definition, input.deliveryMode)
   ) {
     return this.ineligible();
   }

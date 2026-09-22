@@ -24,7 +24,7 @@ import {
 } from "./diagnostic-fulfillment.controller";
 import { ClinicalPrescriptionDetail } from "./entities/clinical-prescription-detail.entity";
 import { ClinicalPrescriptionItem } from "./entities/clinical-prescription-item.entity";
-import { User } from "src/users/entities/user.entity";
+import { User } from "../users/entities/user.entity";
 import { ProviderServiceUnitsModule } from "../provider-service-units/provider-service-units.module";
 import { RewardsModule } from "../rewards/rewards.module";
 import { ClinicalOrderFulfillment } from "./entities/clinical-order-fulfillment.entity";
@@ -45,7 +45,7 @@ import {
 } from "./pharmacy-fulfillment.controller";
 import { CommissionsModule } from "../commissions/commissions.module";
 import { EarningsModule } from "../earnings/earnings.module";
-import { ClinicalRecordAttachmentsService } from "src/clinical-records/clinical-record-attachments.service";
+import { ClinicalRecordAttachmentsService } from "../clinical-records/clinical-record-attachments.service";
 @Module({
   imports: [
     AuthModule,

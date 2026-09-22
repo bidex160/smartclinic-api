@@ -14,7 +14,7 @@ export interface AppConfiguration {
     cookieDomain?: string;
     passwordResetTokenTtlMinutes: number;
   };
-  providerMatching: { offerTtlMinutes: number };
+  providerMatching: { offerTtlMinutes: number; expiryWorkerEnabled?: boolean; expiryIntervalMs?: number };
   providerInvitations: { ttlSeconds: number; frontendUrl: string };
   healthResults: { guestAccessTtlSeconds: number };
   guidedSelfCheckAi: {
@@ -143,6 +143,8 @@ export function createAppConfiguration(
     },
     providerMatching: {
       offerTtlMinutes: getNumber(environment.PROVIDER_OFFER_TTL_MINUTES, 30),
+      expiryWorkerEnabled: environment.PROVIDER_OFFER_EXPIRY_ENABLED !== 'false' && environmentName !== 'test',
+      expiryIntervalMs: Math.max(1000, getNumber(environment.PROVIDER_OFFER_EXPIRY_INTERVAL_MS, 60_000)),
     },
     providerInvitations: {
       ttlSeconds: getNumber(
