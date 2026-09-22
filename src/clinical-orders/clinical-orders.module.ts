@@ -12,6 +12,7 @@ import {
 } from "./clinical-orders.controller";
 import { ClinicalOrderStatusHistory } from "./entities/clinical-order-status-history.entity";
 import { ClinicalOrder } from "./entities/clinical-order.entity";
+import { ClinicalDiagnosticOrderItem } from "./entities/clinical-diagnostic-order-item.entity";
 import { ClinicalPrescriptionDetail } from "./entities/clinical-prescription-detail.entity";
 import { ClinicalPrescriptionItem } from "./entities/clinical-prescription-item.entity";
 import { User } from "src/users/entities/user.entity";
@@ -32,6 +33,7 @@ import { PharmacyQuote } from './entities/pharmacy-quote.entity';import { Pharma
     TypeOrmModule.forFeature([
       ClinicalOrder,
       ClinicalOrderStatusHistory,
+      ClinicalDiagnosticOrderItem,
       ClinicalPrescriptionDetail,
       ClinicalPrescriptionItem,
       CareAppointment,
