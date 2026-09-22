@@ -353,10 +353,11 @@ async schedule(
         const repository =
           manager.getRepository(CareAppointment);
 
+        const appointmentReference = generateCareAppointmentReference();
         const appointment = await repository.save(
           repository.create({
             reference:
-              generateCareAppointmentReference(),
+              appointmentReference,
 
             careRequestId: care.id,
 
@@ -384,7 +385,10 @@ async schedule(
             deliveryMode:
               care.deliveryMode,
 
-            meetingUrl: null,
+            meetingUrl:
+              care.deliveryMode === CareDeliveryMode.VIRTUAL
+                ? this.jitsiMeetingUrl(appointmentReference)
+                : null,
 
             status:
               CareAppointmentStatus.SCHEDULED,
@@ -947,6 +951,12 @@ async schedule(
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
+  }
+  private jitsiMeetingUrl(reference: string) {
+    // Jitsi room names are derived from the server-generated appointment reference.
+    // The opaque suffix prevents patients/providers from having to exchange or type links.
+    const room = `SmartClinic-${reference.replace(/[^A-Za-z0-9]/g, '')}`;
+    return `https://meet.jit.si/${room}`;
   }
   private isHttpsUrl(value: string) {
     try {
