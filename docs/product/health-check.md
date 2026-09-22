@@ -123,7 +123,7 @@ Pricing remains configurable provider/service business data and must not be hard
 | Basic | NGN 6,000-8,000 | NGN 9,000-11,000 |
 | Complete | NGN 12,000-15,000 | NGN 16,000-19,000 |
 
-These are planning ranges, not seeded operational prices. Procurement/consumable costs must be validated before Operations publishes provider prices. Home-service pricing includes the provider's configured fulfilment/logistics fee.
+The initial display defaults use the midpoint of each planning range: Essential NGN 3,500 provider / NGN 5,500 home; Basic NGN 7,000 provider / NGN 10,000 home; Complete NGN 13,500 provider / NGN 17,500 home. These are editable starting prices, not fixed national tariffs. Managers/admins can modify provider pricing through the existing provider-service configuration flow. Procurement/consumable costs should still be validated as the network matures.
 
 ## Target patient journey
 
