@@ -8,7 +8,7 @@ The initial check records blood pressure, blood glucose, BMI, temperature, oxyge
 
 The approved package ladder is Essential, Basic, and Complete. The initial fulfilment modes are `PROVIDER_LOCATION` and `HOME_VISIT`; Home Visit is not a package. Package benefits, estimated duration, eligibility, fulfilment modes, and pricing are configurable business data. The final price may depend on both package and fulfilment mode and its effective date. Additional values can be introduced later, and prices must not be hardcoded.
 
-The approved v1 package definitions below distinguish Essential and Complete and define their estimated durations. The catalogue seed reflects these approved package benefits and durations only. Commercial prices are operational, effective-dated data in `package_prices`; they are never hardcoded or seeded. The pricing table below still requires final amounts and an effective date.
+The approved v1 package definitions below distinguish Essential and Complete and define their estimated durations. The catalogue seed reflects these approved package benefits and durations only. Commercial prices are operational, effective-dated data in `package_prices`; they are never hardcoded or seeded. Operational prices remain provider-configured. The planning ranges later in this document are not operational price rows and require procurement validation before publication.
 ## Server-side booking quotes
 
 At booking creation, the API resolves the selected package and fulfilment mode against the active, effective catalogue price. A price is eligible only when it is active, its `effectiveFrom` date has started, and its `effectiveTo` is absent or still in the future. Clients do not submit or determine a booking amount or currency.
