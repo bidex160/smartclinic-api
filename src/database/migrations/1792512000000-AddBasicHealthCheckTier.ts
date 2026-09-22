@@ -62,7 +62,6 @@ export class AddBasicHealthCheckTier1792512000000 implements MigrationInterface 
       JOIN (VALUES
         ('MALARIA_RDT','Malaria rapid test','SCREENING',7),
         ('URINE_SCREEN','Urine health screening','SCREENING',8),
-        ('CLINICIAN_REVIEW','Clinician consultation and interpretation','REVIEW',9),
         ('HEMOGLOBIN_PCV','Hemoglobin/PCV check','SCREENING',10),
         ('LIPID_PROFILE','Full lipid profile','SCREENING',11),
         ('HEPATITIS_B_RDT','Hepatitis B rapid test','SCREENING',12)
