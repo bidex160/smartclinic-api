@@ -29,6 +29,7 @@ import { FastTrackRequest } from '../fasttrack/entities/fasttrack-request.entity
 import { FastTrackRequestStatusHistory } from '../fasttrack/entities/fasttrack-request-status-history.entity';
 import { EarningsModule } from '../earnings/earnings.module';
 import { CommissionsModule } from '../commissions/commissions.module';
+import { CareAppointmentsModule } from '../care-appointments/care-appointments.module';
 import { CareRequest } from '../care-requests/entities/care-request.entity';
 import { CareRequestFunding } from '../care-requests/entities/care-request-funding.entity';
 import { MeCareRequestFundingController } from './me-care-request-funding.controller';
@@ -43,6 +44,7 @@ import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy
     RewardsModule,
     EarningsModule,
     CommissionsModule,
+    CareAppointmentsModule,
     TypeOrmModule.forFeature([
       PaymentAttempt,
       PaymentTransaction,
