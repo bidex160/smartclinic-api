@@ -409,21 +409,15 @@ export class ClinicalOrderFulfillmentsService {
   }
   private unitTypeForOrder(orderType?: ClinicalOrderType) {
     switch (orderType) {
-      case ClinicalOrderType.LABORATORY:
-        return ProviderServiceUnitType.LABORATORY;
-      case ClinicalOrderType.IMAGING:
-        return ProviderServiceUnitType.RADIOLOGY;
+      case ClinicalOrderType.LABORATORY: return ProviderServiceUnitType.LABORATORY;
+      case ClinicalOrderType.IMAGING: return ProviderServiceUnitType.RADIOLOGY;
       case ClinicalOrderType.PRESCRIPTION:
-      case undefined:
-        return ProviderServiceUnitType.PHARMACY;
-      default:
-        throw new ConflictException("This Clinical Order type does not support patient fulfillment");
+      case undefined: return ProviderServiceUnitType.PHARMACY;
+      default: throw new ConflictException("This Clinical Order type does not support patient fulfillment");
     }
   }
-
   private requireFulfillable(order: ClinicalOrder) {
-    if (order.status !== ClinicalOrderStatus.ISSUED)
-      throw new ConflictException("Only issued Clinical Orders support fulfillment");
+    if (order.status !== ClinicalOrderStatus.ISSUED) throw new ConflictException("Only issued Clinical Orders support fulfillment");
     if (![ClinicalOrderType.PRESCRIPTION, ClinicalOrderType.LABORATORY, ClinicalOrderType.IMAGING].includes(order.type))
       throw new ConflictException("This Clinical Order type does not support patient fulfillment");
   }
@@ -445,25 +439,16 @@ export class ClinicalOrderFulfillmentsService {
   }
   private async eligibleUnit(m: EntityManager, ref: string, orderType: ClinicalOrderType) {
     const expectedType = this.unitTypeForOrder(orderType);
-    const unit = await m.getRepository(ProviderServiceUnit).findOne({
-      where: { reference: ref, status: ProviderServiceUnitStatus.ACTIVE, type: expectedType },
-      relations: { provider: true },
-    });
+    const unit = await m.getRepository(ProviderServiceUnit).findOne({ where: { reference: ref, status: ProviderServiceUnitStatus.ACTIVE, type: expectedType }, relations: { provider: true } });
     return this.assertUnit(unit, expectedType);
   }
   private async eligibleUnitById(m: EntityManager, id: string, orderType: ClinicalOrderType) {
     const expectedType = this.unitTypeForOrder(orderType);
-    const unit = await m.getRepository(ProviderServiceUnit).findOne({
-      where: { id, status: ProviderServiceUnitStatus.ACTIVE, type: expectedType },
-      relations: { provider: true },
-    });
+    const unit = await m.getRepository(ProviderServiceUnit).findOne({ where: { id, status: ProviderServiceUnitStatus.ACTIVE, type: expectedType }, relations: { provider: true } });
     return this.assertUnit(unit, expectedType);
   }
   private assertUnit(unit: ProviderServiceUnit | null, expectedType: ProviderServiceUnitType) {
-    if (!unit || unit.deletedAt || unit.status !== ProviderServiceUnitStatus.ACTIVE ||
-        unit.type !== expectedType || unit.provider.deletedAt ||
-        unit.provider.status !== ProviderStatus.ACTIVE ||
-        unit.provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED)
+    if (!unit || unit.deletedAt || unit.status !== ProviderServiceUnitStatus.ACTIVE || unit.type !== expectedType || unit.provider.deletedAt || unit.provider.status !== ProviderStatus.ACTIVE || unit.provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED)
       throw new ConflictException("Eligible service unit was not found");
     return unit;
   }
