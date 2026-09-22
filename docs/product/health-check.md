@@ -6,7 +6,7 @@ The Smart Health Check is SmartClinic's primary service and the subject of the p
 
 The initial check records blood pressure, blood glucose, BMI, temperature, oxygen saturation, and pulse. The first capture foundation stores these as explicit measurement codes on a HealthCheckEncounter; it does not define reference ranges, diagnosis, alerts, or interpretation.
 
-Initial packages are Essential and Complete. The initial fulfilment modes are `PROVIDER_LOCATION` and `HOME_VISIT`; Home Visit is not a package. Package benefits, estimated duration, eligibility, fulfilment modes, and pricing are configurable business data. The final price may depend on both package and fulfilment mode and its effective date. Additional values can be introduced later, and prices must not be hardcoded.
+The approved package ladder is Essential, Basic, and Complete. The initial fulfilment modes are `PROVIDER_LOCATION` and `HOME_VISIT`; Home Visit is not a package. Package benefits, estimated duration, eligibility, fulfilment modes, and pricing are configurable business data. The final price may depend on both package and fulfilment mode and its effective date. Additional values can be introduced later, and prices must not be hardcoded.
 
 The approved v1 package definitions below distinguish Essential and Complete and define their estimated durations. The catalogue seed reflects these approved package benefits and durations only. Commercial prices are operational, effective-dated data in `package_prices`; they are never hardcoded or seeded. The pricing table below still requires final amounts and an effective date.
 ## Server-side booking quotes
@@ -93,51 +93,40 @@ The Smart Health Check encounter has its own lifecycle and audit trail because c
 - What access controls apply separately to health data, booking data, payment data, provider data, and organisation data?
 - Which party may view booking details, payment details, and health-check results?
 
-## Approved v1 package definitions
+## Approved package definitions
 
 ### Essential
+Includes blood pressure, random blood glucose, BMI, temperature, oxygen saturation, and pulse/heart rate.
+Estimated duration: about 15 minutes.
+Positioning: **Know your vital numbers.**
 
-Includes:
-- Blood pressure
-- Blood glucose
-- BMI
-- Temperature
-- Oxygen saturation
-- Pulse
-
-Estimated duration:
-- 15 minutes
-
-Positioning:
-- Routine health screening
-- Suitable for recurring checks
+### Basic
+Includes everything in Essential, plus malaria rapid testing, urine dipstick screening (protein, blood and glucose), and clinician consultation with interpretation.
+Estimated duration: about 30 minutes.
+Patient-facing terminology should use **Urine health screening** rather than imply a comprehensive renal-function assessment.
+Positioning: **Vitals + common screening + doctor review.**
 
 ### Complete
+Includes everything in Basic, plus hemoglobin/PCV, fingerstick lipid profile (cholesterol, HDL, LDL and triglycerides), and Hepatitis B rapid testing.
+Estimated duration: about 45-60 minutes; catalogue metadata uses 60 minutes as the scheduling ceiling.
+Positioning: **Our most comprehensive portable health check.**
 
-Includes:
-- Blood pressure
-- Blood glucose
-- BMI
-- Temperature
-- Oxygen saturation
-- Pulse
-- Additional clinician review
-- Expanded interpretation of recorded measurements
+All test outputs are screening results, not diagnoses. Abnormal or concerning results should lead to an appropriate follow-up action rather than a diagnostic claim.
 
-Estimated duration:
-- 30 minutes
+## Commercial pricing guidance
 
-Positioning:
-- More comprehensive Smart Health Check
-- Includes additional review/interpretation
+Pricing remains configurable provider/service business data and must not be hardcoded in application clients. The product planning ranges are:
 
-## Approved v1 pricing
+| Package | Provider location | Home service |
+| --- | ---: | ---: |
+| Essential | NGN 3,000-4,000 | NGN 5,000-6,000 |
+| Basic | NGN 6,000-8,000 | NGN 9,000-11,000 |
+| Complete | NGN 12,000-15,000 | NGN 16,000-19,000 |
 
-| Package | Fulfilment mode | Price | Currency |
-| --- | --- | ---: | --- |
-| Essential | Provider location | TBD | NGN |
-| Essential | Home visit | TBD | NGN |
-| Complete | Provider location | TBD | NGN |
-| Complete | Home visit | TBD | NGN |
+These are planning ranges, not seeded operational prices. Procurement/consumable costs must be validated before Operations publishes provider prices. Home-service pricing includes the provider's configured fulfilment/logistics fee.
 
-Effective from: TBD
+## Target patient journey
+
+Health Check -> choose package -> choose provider location or home service -> choose appointment -> provider discovery -> optional add-ons -> authoritative server quote -> payment -> check completed -> screening results + clinician interpretation -> next recommended action.
+
+After completion, the product should retain the check in the patient's longitudinal SmartClinic record and offer appropriate follow-up actions such as consultation, repeat check, or hospital connection.
