@@ -28,6 +28,22 @@ describe('ClinicalOrderFulfillmentsService eligibility',()=>{
     expect(()=>subject.requirePrescription({type:ClinicalOrderType.LABORATORY,status:ClinicalOrderStatus.ISSUED})).toThrow(ConflictException);
     expect(()=>subject.requirePrescription({type:ClinicalOrderType.PRESCRIPTION,status:ClinicalOrderStatus.CANCELLED})).toThrow(ConflictException);
   });
+  it.each([
+    [ClinicalOrderType.LABORATORY,ProviderServiceUnitType.LABORATORY],
+    [ClinicalOrderType.IMAGING,ProviderServiceUnitType.RADIOLOGY],
+    [ClinicalOrderType.REFERRAL,ProviderServiceUnitType.SPECIALIST],
+    [ClinicalOrderType.PROCEDURE,ProviderServiceUnitType.PROCEDURE],
+  ])('maps %s orders to the correct connected service unit', (orderType,unitType)=>{
+    expect(subject.unitType(orderType)).toBe(unitType);
+  });
+  it.each([
+    [ClinicalOrderType.LABORATORY,ProviderServiceUnitType.LABORATORY],
+    [ClinicalOrderType.IMAGING,ProviderServiceUnitType.RADIOLOGY],
+    [ClinicalOrderType.REFERRAL,ProviderServiceUnitType.SPECIALIST],
+    [ClinicalOrderType.PROCEDURE,ProviderServiceUnitType.PROCEDURE],
+  ])('accepts operational %s capability units', (_orderType,unitType)=>{
+    expect(subject.assertUnit(unit('CLINIC',unitType))).toBeDefined();
+  });
   it('returns provider-safe authoritative funding and dispensing state',async()=>{
     const fundingRepo={findOne:jest.fn().mockResolvedValue({status:PharmacyFundingStatus.PAID,grossAmountMinor:'250000',currency:'NGN'})};
     const dispensingRepo={findOne:jest.fn().mockResolvedValue({status:PharmacyDispensingStatus.READY_TO_DISPENSE,fulfillmentMethod:'PICKUP',startedAt:null,readyAt:null,completedAt:null})};
