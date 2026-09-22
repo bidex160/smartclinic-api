@@ -74,6 +74,7 @@ export class FindCareService {
     return {
       providerReference: provider.providerReference,
       displayName: provider.displayName,
+      profileImageUrl: provider.profileImageUrl ?? null,
       providerType: provider.providerType,
       location: { city: provider.city, stateOrRegion: provider.stateOrRegion, countryCode: provider.countryCode },
       locations: (provider.locations ?? []).filter((location) => location.isActive).map((location) => ({ locationReference: location.locationReference, name: location.name, addressLine1: location.addressLine1, addressLine2: location.addressLine2, city: location.city, stateOrRegion: location.state, postalCode: location.postalCode, countryCode: location.countryCode })),

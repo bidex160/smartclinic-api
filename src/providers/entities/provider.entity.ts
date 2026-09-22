@@ -47,6 +47,12 @@ export class Provider {
   @Column({ type: 'varchar', nullable: true })
   phone!: string | null;
 
+  @Column({ name: 'profile_image_url', type: 'varchar', length: 1000, nullable: true })
+  profileImageUrl!: string | null;
+
+  @Column({ name: 'profile_image_public_id', type: 'varchar', length: 255, nullable: true })
+  profileImagePublicId!: string | null;
+
   @Column({ name: 'professional_reference', type: 'varchar', nullable: true })
   professionalReference!: string | null;
 
