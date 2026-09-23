@@ -24,25 +24,144 @@ export class AddBasicHealthCheckTier1792512000000 implements MigrationInterface 
         "updated_at" = now()
     `);
 
-    await queryRunner.query(`
-      INSERT INTO "health_check_package_contents"
-        ("health_check_package_id","code","name","category","sort_order")
-      SELECT p.id, v.code, v.name, v.category, v.ord
-      FROM "health_check_packages" p
-      JOIN (VALUES
-        ('BLOOD_PRESSURE','Blood pressure','MEASUREMENT',1),
-        ('BLOOD_GLUCOSE','Blood glucose','MEASUREMENT',2),
-        ('BMI','BMI','MEASUREMENT',3),
-        ('TEMPERATURE','Temperature','MEASUREMENT',4),
-        ('OXYGEN_SATURATION','Oxygen saturation','MEASUREMENT',5),
-        ('PULSE','Pulse','MEASUREMENT',6),
-        ('MALARIA_RDT','Malaria rapid test','SCREENING',7),
-        ('URINE_SCREEN','Urine health screening','SCREENING',8),
-        ('CLINICIAN_REVIEW','Clinician consultation and interpretation','REVIEW',9)
-      ) AS v(code,name,category,ord) ON true
-      WHERE p.code = 'BASIC'
-      ON CONFLICT ("health_check_package_id","code") DO NOTHING
-    `);
+    // This migration was introduced after some environments had already applied the
+    // canonical clinical-content migration. Support both the legacy catalogue shape
+    // (code/name/category on package contents) and the canonical shape
+    // (clinical_content_id on package contents).
+    const canonicalCatalogue = await queryRunner.hasColumn(
+      'health_check_package_contents',
+      'clinical_content_id',
+    );
+
+    if (canonicalCatalogue) {
+      await queryRunner.query(`
+        INSERT INTO "health_check_clinical_contents"
+          ("reference","code","name","category","display_order","result_type","unit","is_active")
+        SELECT
+          'SC-HCC-' || UPPER(SUBSTRING(REPLACE(uuid_generate_v4()::text, '-', ''), 1, 16)),
+          v.code, v.name, v.category, v.ord,
+          CASE
+            WHEN v.code = 'BLOOD_PRESSURE' THEN 'BLOOD_PRESSURE'::health_check_clinical_result_type_enum
+            WHEN v.code IN ('BLOOD_GLUCOSE','BMI','TEMPERATURE','OXYGEN_SATURATION','PULSE')
+              THEN 'SINGLE_NUMERIC'::health_check_clinical_result_type_enum
+            ELSE 'NONE'::health_check_clinical_result_type_enum
+          END,
+          CASE v.code
+            WHEN 'BLOOD_PRESSURE' THEN 'mmHg'
+            WHEN 'BLOOD_GLUCOSE' THEN 'mg/dL'
+            WHEN 'BMI' THEN 'kg/m²'
+            WHEN 'TEMPERATURE' THEN '°C'
+            WHEN 'OXYGEN_SATURATION' THEN '%'
+            WHEN 'PULSE' THEN 'bpm'
+            ELSE NULL
+          END,
+          true
+        FROM (VALUES
+          ('BLOOD_PRESSURE','Blood pressure','MEASUREMENT',1),
+          ('BLOOD_GLUCOSE','Blood glucose','MEASUREMENT',2),
+          ('BMI','BMI','MEASUREMENT',3),
+          ('TEMPERATURE','Temperature','MEASUREMENT',4),
+          ('OXYGEN_SATURATION','Oxygen saturation','MEASUREMENT',5),
+          ('PULSE','Pulse','MEASUREMENT',6),
+          ('MALARIA_RDT','Malaria rapid test','SCREENING',7),
+          ('URINE_SCREEN','Urine health screening','SCREENING',8),
+          ('CLINICIAN_REVIEW','Clinician consultation and interpretation','REVIEW',9),
+          ('HEMOGLOBIN_PCV','Hemoglobin/PCV check','SCREENING',10),
+          ('LIPID_PROFILE','Full lipid profile','SCREENING',11),
+          ('HEPATITIS_B_RDT','Hepatitis B rapid test','SCREENING',12)
+        ) AS v(code,name,category,ord)
+        ON CONFLICT ("code") DO NOTHING
+      `);
+
+      await queryRunner.query(`
+        INSERT INTO "health_check_package_contents"
+          ("health_check_package_id","clinical_content_id","sort_order")
+        SELECT p.id, c.id, v.ord
+        FROM "health_check_packages" p
+        JOIN (VALUES
+          ('BLOOD_PRESSURE',1),('BLOOD_GLUCOSE',2),('BMI',3),('TEMPERATURE',4),
+          ('OXYGEN_SATURATION',5),('PULSE',6),('MALARIA_RDT',7),('URINE_SCREEN',8),
+          ('CLINICIAN_REVIEW',9)
+        ) AS v(code,ord) ON true
+        JOIN "health_check_clinical_contents" c ON c.code = v.code
+        WHERE p.code = 'BASIC'
+        ON CONFLICT ("health_check_package_id","clinical_content_id") DO NOTHING
+      `);
+
+      await queryRunner.query(`
+        INSERT INTO "health_check_package_contents"
+          ("health_check_package_id","clinical_content_id","sort_order")
+        SELECT p.id, c.id, v.ord
+        FROM "health_check_packages" p
+        JOIN (VALUES
+          ('MALARIA_RDT',7),('URINE_SCREEN',8),('HEMOGLOBIN_PCV',10),
+          ('LIPID_PROFILE',11),('HEPATITIS_B_RDT',12)
+        ) AS v(code,ord) ON true
+        JOIN "health_check_clinical_contents" c ON c.code = v.code
+        WHERE p.code = 'COMPLETE'
+        ON CONFLICT ("health_check_package_id","clinical_content_id") DO NOTHING
+      `);
+
+      await queryRunner.query(`
+        UPDATE "health_check_package_contents" composition
+        SET "sort_order" = CASE content.code
+          WHEN 'CLINICIAN_REVIEW' THEN 9
+          WHEN 'EXPANDED_INTERPRETATION' THEN 13
+          ELSE composition."sort_order"
+        END
+        FROM "health_check_clinical_contents" content
+        WHERE composition."clinical_content_id" = content.id
+          AND composition."health_check_package_id" = (SELECT "id" FROM "health_check_packages" WHERE "code" = 'COMPLETE')
+          AND content.code IN ('CLINICIAN_REVIEW','EXPANDED_INTERPRETATION')
+      `);
+    } else {
+      await queryRunner.query(`
+        INSERT INTO "health_check_package_contents"
+          ("health_check_package_id","code","name","category","sort_order")
+        SELECT p.id, v.code, v.name, v.category, v.ord
+        FROM "health_check_packages" p
+        JOIN (VALUES
+          ('BLOOD_PRESSURE','Blood pressure','MEASUREMENT',1),
+          ('BLOOD_GLUCOSE','Blood glucose','MEASUREMENT',2),
+          ('BMI','BMI','MEASUREMENT',3),
+          ('TEMPERATURE','Temperature','MEASUREMENT',4),
+          ('OXYGEN_SATURATION','Oxygen saturation','MEASUREMENT',5),
+          ('PULSE','Pulse','MEASUREMENT',6),
+          ('MALARIA_RDT','Malaria rapid test','SCREENING',7),
+          ('URINE_SCREEN','Urine health screening','SCREENING',8),
+          ('CLINICIAN_REVIEW','Clinician consultation and interpretation','REVIEW',9)
+        ) AS v(code,name,category,ord) ON true
+        WHERE p.code = 'BASIC'
+        ON CONFLICT ("health_check_package_id","code") DO NOTHING
+      `);
+
+      await queryRunner.query(`
+        INSERT INTO "health_check_package_contents"
+          ("health_check_package_id","code","name","category","sort_order")
+        SELECT p.id, v.code, v.name, v.category, v.ord
+        FROM "health_check_packages" p
+        JOIN (VALUES
+          ('MALARIA_RDT','Malaria rapid test','SCREENING',7),
+          ('URINE_SCREEN','Urine health screening','SCREENING',8),
+          ('HEMOGLOBIN_PCV','Hemoglobin/PCV check','SCREENING',10),
+          ('LIPID_PROFILE','Full lipid profile','SCREENING',11),
+          ('HEPATITIS_B_RDT','Hepatitis B rapid test','SCREENING',12)
+        ) AS v(code,name,category,ord) ON true
+        WHERE p.code = 'COMPLETE'
+        ON CONFLICT ("health_check_package_id","code") DO NOTHING
+      `);
+
+      await queryRunner.query(`
+        UPDATE "health_check_package_contents"
+        SET "sort_order" = CASE "code"
+          WHEN 'CLINICIAN_REVIEW' THEN 9
+          WHEN 'EXPANDED_INTERPRETATION' THEN 13
+          ELSE "sort_order"
+        END
+        WHERE "health_check_package_id" = (SELECT "id" FROM "health_check_packages" WHERE "code" = 'COMPLETE')
+          AND "code" IN ('CLINICIAN_REVIEW','EXPANDED_INTERPRETATION')
+      `);
+    }
 
     await queryRunner.query(`
       UPDATE "health_check_packages"
@@ -54,32 +173,6 @@ export class AddBasicHealthCheckTier1792512000000 implements MigrationInterface 
       WHERE "code" = 'COMPLETE'
     `);
 
-    await queryRunner.query(`
-      INSERT INTO "health_check_package_contents"
-        ("health_check_package_id","code","name","category","sort_order")
-      SELECT p.id, v.code, v.name, v.category, v.ord
-      FROM "health_check_packages" p
-      JOIN (VALUES
-        ('MALARIA_RDT','Malaria rapid test','SCREENING',7),
-        ('URINE_SCREEN','Urine health screening','SCREENING',8),
-        ('HEMOGLOBIN_PCV','Hemoglobin/PCV check','SCREENING',10),
-        ('LIPID_PROFILE','Full lipid profile','SCREENING',11),
-        ('HEPATITIS_B_RDT','Hepatitis B rapid test','SCREENING',12)
-      ) AS v(code,name,category,ord) ON true
-      WHERE p.code = 'COMPLETE'
-      ON CONFLICT ("health_check_package_id","code") DO NOTHING
-    `);
-
-    await queryRunner.query(`
-      UPDATE "health_check_package_contents"
-      SET "sort_order" = CASE "code"
-        WHEN 'CLINICIAN_REVIEW' THEN 9
-        WHEN 'EXPANDED_INTERPRETATION' THEN 13
-        ELSE "sort_order"
-      END
-      WHERE "health_check_package_id" = (SELECT "id" FROM "health_check_packages" WHERE "code" = 'COMPLETE')
-        AND "code" IN ('CLINICIAN_REVIEW','EXPANDED_INTERPRETATION')
-    `);
     // Seed editable starting prices at the midpoint of the approved planning ranges.
     // Managers/admins can modify these through the existing provider-service pricing flow.
     await queryRunner.query(`
