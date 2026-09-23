@@ -98,6 +98,6 @@ export class HealthCheckPackagesService {
           ],
         } as HealthCheckPackageResponseDto;
       })
-      .filter((item) => item.fromPriceMinor);
+      ;
   }
 }
