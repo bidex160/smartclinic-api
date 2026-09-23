@@ -88,18 +88,54 @@ export class AddBasicHealthCheckTier1792512000000 implements MigrationInterface 
         ON CONFLICT ("health_check_package_id","clinical_content_id") DO NOTHING
       `);
 
+      // COMPLETE already contains some of these clinical contents in canonical
+      // environments. Reconcile existing rows first, then insert only missing
+      // contents so both unique constraints (content and sort order) are respected.
+      await queryRunner.query(`
+        UPDATE "health_check_package_contents" composition
+        SET "sort_order" = desired.ord
+        FROM "health_check_clinical_contents" content,
+          (VALUES
+            ('MALARIA_RDT',7),('URINE_SCREEN',8),('HEMOGLOBIN_PCV',10),
+            ('LIPID_PROFILE',11),('HEPATITIS_B_RDT',12)
+          ) AS desired(code,ord)
+        WHERE composition."clinical_content_id" = content.id
+          AND content.code = desired.code
+          AND composition."health_check_package_id" =
+            (SELECT "id" FROM "health_check_packages" WHERE "code" = 'COMPLETE')
+          AND composition."sort_order" <> desired.ord
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "health_check_package_contents" occupied
+            WHERE occupied."health_check_package_id" = composition."health_check_package_id"
+              AND occupied."sort_order" = desired.ord
+              AND occupied."id" <> composition."id"
+          )
+      `);
+
       await queryRunner.query(`
         INSERT INTO "health_check_package_contents"
           ("health_check_package_id","clinical_content_id","sort_order")
-        SELECT p.id, c.id, v.ord
+        SELECT p.id, content.id, desired.ord
         FROM "health_check_packages" p
         JOIN (VALUES
           ('MALARIA_RDT',7),('URINE_SCREEN',8),('HEMOGLOBIN_PCV',10),
           ('LIPID_PROFILE',11),('HEPATITIS_B_RDT',12)
-        ) AS v(code,ord) ON true
-        JOIN "health_check_clinical_contents" c ON c.code = v.code
+        ) AS desired(code,ord) ON true
+        JOIN "health_check_clinical_contents" content ON content.code = desired.code
         WHERE p.code = 'COMPLETE'
-        ON CONFLICT ("health_check_package_id","clinical_content_id") DO NOTHING
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "health_check_package_contents" existing
+            WHERE existing."health_check_package_id" = p.id
+              AND existing."clinical_content_id" = content.id
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "health_check_package_contents" occupied
+            WHERE occupied."health_check_package_id" = p.id
+              AND occupied."sort_order" = desired.ord
+          )
       `);
 
       await queryRunner.query(`
