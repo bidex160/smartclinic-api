@@ -169,8 +169,12 @@ export class PaymentFlowService {
   async verifyLatestWalletTopUp(userId: string, reference: string) {
     const topUp = await this.bookings.manager.getRepository(WalletTopUp).findOne({ where: { reference, userId } });
     if (!topUp) throw new NotFoundException('Wallet top-up was not found');
-    if (topUp.status === WalletTopUpStatus.PAID) return this.getWalletTopUp(userId, reference);
     const attempt = await this.attempts.findOne({ where: { walletTopUpId: topUp.id }, order: { createdAt: 'DESC' } });
+    if (topUp.status === WalletTopUpStatus.PAID) {
+      if (this.patientWallet)
+        await this.patientWallet.creditConfirmedTopUp(userId, Number(topUp.amountMinor), topUp.currency, attempt?.providerReference ?? topUp.reference);
+      return this.getWalletTopUp(userId, reference);
+    }
     if (!attempt?.providerReference) throw new ConflictException('No wallet payment is available to verify');
     if (attempt.status !== PaymentAttemptStatus.SUCCEEDED) {
       const result = await this.applyWalletTopUpVerification(attempt.id, userId, await this.resolvePaymentProvider(attempt.providerCode as PaymentProvider | undefined).verifyPayment(attempt.providerReference)) as any;
@@ -938,6 +942,12 @@ async initiatePatientPayment(
         await this.patientWallet.creditConfirmedTopUp(result.userId, result.amountMinor, result.currency, result.providerReference ?? result.reference);
       return result as never;
     }
+    if (attempt.diagnosticFulfillmentFundingId)
+      return this.applyDiagnosticVerification(
+        attempt.id,
+        null,
+        verified,
+      ) as never;
     if (attempt.guidedSelfCheckId)
       return this.applyGuidedSelfCheckVerification(
         attempt.id,
