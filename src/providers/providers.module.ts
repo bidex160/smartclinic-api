@@ -76,6 +76,8 @@ import { ProviderPracticeAffiliation } from './entities/provider-practice-affili
 import { ProviderGrowthInvite } from './entities/provider-growth-invite.entity';
 import { ProviderGrowthInvitesService } from './provider-growth-invites.service';
 import { ProviderGrowthInvitesController } from './provider-growth-invites.controller';
+import { InstitutionalVirtualCareService } from './institutional-virtual-care.service';
+import { InstitutionalVirtualCareController } from './institutional-virtual-care.controller';
 @Module({
   imports: [
     AuthModule,
@@ -116,7 +118,7 @@ import { ProviderGrowthInvitesController } from './provider-growth-invites.contr
       HealthCheckPackageAddon,
     ]),
   ],
-  controllers: [ProviderGrowthInvitesController, 
+  controllers: [InstitutionalVirtualCareController, ProviderGrowthInvitesController, 
     AdminProvidersController,
     AdminProviderInvitationsController,
     PublicProviderInvitationsController,
@@ -136,7 +138,7 @@ import { ProviderGrowthInvitesController } from './provider-growth-invites.contr
     ProviderCareServicesController,
     AdminCareServicesController,
   ],
-  providers: [ProviderGrowthInvitesService, 
+  providers: [InstitutionalVirtualCareService, ProviderGrowthInvitesService, 
     ProviderCapabilitiesService,
     ProviderServiceAreasService,
     ProviderAvailabilityService,
