@@ -19,7 +19,7 @@ export class CreateServiceCatalogueItemDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) description?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) unitLabel?: string | null;
   @ApiProperty({ description: 'Reference average cost in minor currency units.' }) @Type(()=>Number) @IsInt() @Min(0) averageCostMinor!: number;
-  @ApiPropertyOptional({ default: 2000, description: 'Markup in basis points. 2000 = 20%.' }) @IsOptional() @Type(()=>Number) @IsInt() @Min(0) @Max(10000) markupBps = 2000;
+  @ApiPropertyOptional({ default: 2000, description: 'Markup in basis points. 2000 = 20%.' }) @IsOptional() @Type(()=>Number) @IsInt() @Min(0) @Max(50000) markupBps = 2000;
   @ApiPropertyOptional({ default: 'NGN' }) @IsOptional() @IsString() @Matches(/^[A-Z]{3}$/) currency = 'NGN';
   @ApiPropertyOptional({ default: false }) @IsOptional() @IsBoolean() requiresPrescription = false;
   @ApiPropertyOptional({ default: true }) @IsOptional() @IsBoolean() patientVisible = true;
