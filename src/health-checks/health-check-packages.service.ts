@@ -4,6 +4,7 @@ import { In, Repository } from "typeorm";
 
 import { HealthCheckPackageResponseDto } from "./dto/health-check-package-response.dto";
 import { HealthCheckPackage } from "./entities/health-check-package.entity";
+import { FulfilmentMode } from "./entities/fulfilment-mode.entity";
 import { ProviderService } from "../providers/entities/provider-service.entity";
 import { ProviderStatus } from "../providers/enums/provider-status.enum";
 import { ProviderOnboardingStatus } from "../providers/enums/provider-onboarding-status.enum";
@@ -15,6 +16,8 @@ export class HealthCheckPackagesService {
     private readonly healthCheckPackageRepository: Repository<HealthCheckPackage>,
     @InjectRepository(ProviderService)
     private readonly providerServices: Repository<ProviderService>,
+    @InjectRepository(FulfilmentMode)
+    private readonly fulfilmentModesRepository: Repository<FulfilmentMode>,
   ) {}
 
   async findActive(): Promise<HealthCheckPackageResponseDto[]> {
@@ -26,7 +29,8 @@ export class HealthCheckPackagesService {
       },
       order: { code: "ASC" },
     });
-    const prices = await this.providerServices.find({
+    const [prices, activeModes] = await Promise.all([
+      this.providerServices.find({
       where: {
         isActive: true,
         healthCheckPackageId: In(healthCheckPackages.map((x) => x.id)),
@@ -36,7 +40,9 @@ export class HealthCheckPackagesService {
         },
       },
       relations: { provider: true, fulfilmentMode: true },
-    });
+      }),
+      this.fulfilmentModesRepository.find({ where: { isActive: true }, order: { name: "ASC" } }),
+    ]);
     return healthCheckPackages
       .map((item) => {
         const active = prices.filter(
@@ -87,13 +93,12 @@ export class HealthCheckPackagesService {
           currency: fromPriceMinor === null ? null : currencies[0],
           fulfilmentModes: [
             ...new Map(
-              active.map((price) => [
-                price.fulfilmentMode.code,
-                {
-                  code: price.fulfilmentMode.code,
-                  name: price.fulfilmentMode.name,
-                },
-              ]),
+              (active.length ? active.map((price) => price.fulfilmentMode) : activeModes)
+                .filter((mode) => mode.code === "PROVIDER_LOCATION" || mode.code === "HOME_VISIT")
+                .map((mode) => [
+                  mode.code,
+                  { code: mode.code, name: mode.name },
+                ]),
             ).values(),
           ],
         } as HealthCheckPackageResponseDto;
