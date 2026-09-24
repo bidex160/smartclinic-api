@@ -52,6 +52,7 @@ export class CareRequest {
   @Column({ type: 'text', nullable: true }) notes!: string | null;
   @Column({ name: 'preferred_date', type: 'date', nullable: true }) preferredDate!: string | null;
   @Column({ name: 'preferred_time', type: 'time', nullable: true }) preferredTime!: string | null;
+  @Column({ name: 'preferred_timezone', type: 'varchar', length: 80, nullable: true }) preferredTimezone!: string | null;
   @Column({ name: 'contact_method', type: 'enum', enum: CareRequestContactMethod, enumName: 'care_request_contact_method_enum' }) contactMethod!: CareRequestContactMethod;
   @Column({ type: 'enum', enum: CareRequestStatus, enumName: 'care_request_status_enum' }) status!: CareRequestStatus;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
