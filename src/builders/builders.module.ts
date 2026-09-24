@@ -5,7 +5,7 @@ import { RewardLevelDefinition } from '../rewards/entities/reward-level-definiti
 import { RewardsModule } from '../rewards/rewards.module';
 import { BuildersController } from './builders.controller';
 import { BuildersService } from './builders.service';
-import { User } from 'src/users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [AuthModule, RewardsModule, TypeOrmModule.forFeature([RewardLevelDefinition, User])],
