@@ -31,5 +31,6 @@ jobs:
         run: |
           dupes="$(find src/database/migrations -maxdepth 1 -type f -printf '%f\n' | sed -n 's/^\([0-9][0-9]*\)-.*/\1/p' | sort | uniq -d)"
           if [ -n "$dupes" ]; then
-            echo "::warning::Duplicate migration timestamps found: $dupes"
+            echo "::error::Duplicate migration timestamps found: $dupes"
+            exit 1
           fi
