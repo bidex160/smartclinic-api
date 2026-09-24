@@ -20,6 +20,9 @@ import { SmartClinicServiceCatalogueItem } from './entities/smartclinic-service-
 import { SmartClinicServiceCatalogueService } from './smartclinic-service-catalogue.service';
 import { SmartClinicServiceCatalogueController } from './smartclinic-service-catalogue.controller';
 import { ProviderCatalogueOffering } from './entities/provider-catalogue-offering.entity';
+import { ClinicalDecisionSupportRule } from './entities/clinical-decision-support-rule.entity';
+import { ClinicalDecisionSupportService } from './clinical-decision-support.service';
+import { ClinicalDecisionSupportController } from './clinical-decision-support.controller';
 import { ProviderServiceUnitsModule } from '../provider-service-units/provider-service-units.module';
 import { RewardsModule } from '../rewards/rewards.module';
 import { ClinicalOrderFulfillment } from './entities/clinical-order-fulfillment.entity';
@@ -47,11 +50,11 @@ import { PharmacyQuote } from './entities/pharmacy-quote.entity';import { Pharma
       ClinicalOrderFulfillment,
       ClinicalOrderFulfillmentHistory,
       PharmacyQuote,PharmacyQuoteItem,PharmacyFulfillmentFunding,PharmacyDispensing,
-      SmartClinicServiceCatalogueItem,ProviderCatalogueOffering,
+      SmartClinicServiceCatalogueItem,ProviderCatalogueOffering,ClinicalDecisionSupportRule,
     ]),
   ],
-  controllers: [ProviderClinicalOrdersController, MeClinicalOrdersController, ProviderOrderFulfillmentsController, MeOrderFulfillmentsController,ProviderPharmacyFulfillmentController,MePharmacyFulfillmentController,SmartClinicServiceCatalogueController],
-  providers: [ClinicalOrdersService, ClinicalOrderFulfillmentsService,PharmacyFulfillmentService,SmartClinicServiceCatalogueService],
+  controllers: [ProviderClinicalOrdersController, MeClinicalOrdersController, ProviderOrderFulfillmentsController, MeOrderFulfillmentsController,ProviderPharmacyFulfillmentController,MePharmacyFulfillmentController,SmartClinicServiceCatalogueController,ClinicalDecisionSupportController],
+  providers: [ClinicalOrdersService, ClinicalOrderFulfillmentsService,PharmacyFulfillmentService,SmartClinicServiceCatalogueService,ClinicalDecisionSupportService],
   exports: [ClinicalOrdersService],
 })
 export class ClinicalOrdersModule {}
