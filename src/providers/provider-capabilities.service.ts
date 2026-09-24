@@ -386,12 +386,12 @@ export class ProviderCapabilitiesService {
     ? `
       location.isActive = true
       AND location.countryCode = :locationCountry
-      AND LOWER(location.state) = LOWER(:locationState)
-      AND LOWER(location.city) = LOWER(:locationCity)
+      AND LOWER(TRIM(location.state)) = LOWER(TRIM(:locationState))
+      AND LOWER(TRIM(location.city)) = LOWER(TRIM(:locationCity))
       AND (
         :locationPostal = ''
         OR location.postalCode IS NULL
-        OR LOWER(location.postalCode) = LOWER(:locationPostal)
+        OR LOWER(TRIM(location.postalCode)) = LOWER(TRIM(:locationPostal))
       )
       ${locationAvailability}
     `
@@ -479,13 +479,13 @@ export class ProviderCapabilitiesService {
     const scopedLocationGeography = window.visitAddress
       ? `
         AND scoped_location.country_code = :locationCountry
-        AND LOWER(scoped_location.state) = LOWER(:locationState)
-        AND LOWER(scoped_location.city) = LOWER(:locationCity)
+        AND LOWER(TRIM(scoped_location.state)) = LOWER(TRIM(:locationState))
+        AND LOWER(TRIM(scoped_location.city)) = LOWER(TRIM(:locationCity))
         AND (
           :locationPostal = ''
           OR scoped_location.postal_code IS NULL
-          OR LOWER(scoped_location.postal_code) =
-            LOWER(:locationPostal)
+          OR LOWER(TRIM(scoped_location.postal_code)) =
+            LOWER(TRIM(:locationPostal))
         )
       `
       : '';
@@ -635,19 +635,19 @@ export class ProviderCapabilitiesService {
 
               AND area.country_code = :visitCountry
 
-              AND LOWER(area.state_or_region) =
-                LOWER(:visitState)
+              AND LOWER(TRIM(area.state_or_region)) =
+                LOWER(TRIM(:visitState))
 
               AND (
                 area.city IS NULL
-                OR LOWER(area.city) =
-                  LOWER(:visitCity)
+                OR LOWER(TRIM(area.city)) =
+                  LOWER(TRIM(:visitCity))
               )
 
               AND (
                 area.postal_code IS NULL
-                OR LOWER(area.postal_code) =
-                  LOWER(:visitPostal)
+                OR LOWER(TRIM(area.postal_code)) =
+                  LOWER(TRIM(:visitPostal))
               )
           )
         )
