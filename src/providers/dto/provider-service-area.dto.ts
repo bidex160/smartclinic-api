@@ -1,6 +1,6 @@
 import { PartialType } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, IsUUID, Length, Matches, MaxLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, MaxLength, Min } from 'class-validator';
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
 export class CreateProviderServiceAreaDto {
   @IsUUID() providerServiceId!: string;
@@ -8,5 +8,7 @@ export class CreateProviderServiceAreaDto {
   @Transform(trim) @IsString() @Length(1, 120) stateOrRegion!: string;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(120) city?: string | null;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(30) postalCode?: string | null;
+  @IsOptional() @IsInt() @Min(0) travelFeeMinor?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(999) priority?: number;
 }
 export class UpdateProviderServiceAreaDto extends PartialType(CreateProviderServiceAreaDto) {}
