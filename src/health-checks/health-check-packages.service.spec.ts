@@ -83,7 +83,7 @@ describe('HealthCheckPackagesService', () => {
     const executive = { id: 'executive', code: 'EXECUTIVE', name: 'Executive', description: null, benefits: [], estimatedDurationMinutes: 45, isActive: true, contents: [], addonAvailability: [] } as any;
     const packages = { find: jest.fn().mockResolvedValue([executive]) };
     const offerings = { find: jest.fn().mockResolvedValue([{ healthCheckPackageId: executive.id, priceMinor: '2500000', currency: 'NGN', fulfilmentMode: { code: 'PROVIDER_LOCATION', name: 'Provider location' } }]) };
-    await expect(new HealthCheckPackagesService(packages as never, offerings as never, { find: jest.fn().mockResolvedValue([]) } as never, { find: jest.fn().mockResolvedValue([]) } as never).findActive()).resolves.toEqual([expect.objectContaining({ code: 'EXECUTIVE', fromPriceMinor: 2500000 })]);
+    await expect(new HealthCheckPackagesService(packages as never, offerings as never, { find: jest.fn().mockResolvedValue([]) } as never, { find: jest.fn().mockResolvedValue([{ healthCheckPackageId: executive.id, amount: '25000.00', currency: 'NGN', isActive: true, effectiveFrom: '2020-01-01', effectiveTo: null, fulfilmentMode: { code: 'PROVIDER_LOCATION', name: 'Provider location' } }]) } as never).findActive()).resolves.toEqual([expect.objectContaining({ code: 'EXECUTIVE', fromPriceMinor: 2500000 })]);
     expect(packages.find).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
   });
 
