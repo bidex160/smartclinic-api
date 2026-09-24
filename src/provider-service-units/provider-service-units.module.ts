@@ -8,7 +8,7 @@ import {
   ProviderServiceUnitsController,
 } from "./provider-service-units.controller";
 import { ProviderServiceUnitsService } from "./provider-service-units.service";
-import { AuthModule } from "src/auth/auth.module";
+import { AuthModule } from "../auth/auth.module";
 import { User } from "src/users/entities/user.entity";
 
 @Module({
