@@ -11,7 +11,7 @@ import { CareDeliveryMode } from "./enums/care-delivery-mode.enum";
 import { ProviderCareServiceDeliveryOption } from "./entities/provider-care-service-delivery-option.entity";
 import { CareRequest } from "../care-requests/entities/care-request.entity";
 import { CareRequestStatus } from "../care-requests/enums/care-request-status.enum";
-import { ProviderPracticeAffiliation } from "./entities/provider-practice-affiliation.entity";
+import { ProviderPracticeAffiliation, ProviderPracticeAffiliationStatus } from "./entities/provider-practice-affiliation.entity";
 
 export type EligibleProviderCareService = ProviderCareService & {
   selectedDeliveryOption: ProviderCareServiceDeliveryOption;
@@ -198,6 +198,7 @@ async requireEligible(
           hostProviderId: input.hostProviderId,
           isActive: true,
           allowsVirtualCare: true,
+          status: ProviderPracticeAffiliationStatus.APPROVED,
         },
         lock: { mode: "pessimistic_read" },
       });
@@ -344,6 +345,7 @@ async findEligibleCareProvider(
         WHERE affiliation.doctor_provider_id = provider.id
           AND affiliation.host_provider_id = :hostProviderId
           AND affiliation.is_active = true
+          AND affiliation.status = 'APPROVED'
           AND affiliation.allows_virtual_care = true
       )`, { hostProviderId: input.hostProviderId });
     }
