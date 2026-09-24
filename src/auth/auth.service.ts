@@ -29,7 +29,7 @@ import { ReferralsService } from "../rewards/referrals.service";
 import { isEmail } from "class-validator";
 import { normalizePhoneNumber } from "../users/phone-normalization";
 import { hashPassword } from './password-hashing';
-import { UserNetworkRole } from "src/users/enums/user-network-role.enum";
+import { UserNetworkRole } from "../users/enums/user-network-role.enum";
 
 @Injectable()
 export class AuthService {
