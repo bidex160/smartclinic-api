@@ -180,9 +180,10 @@ export class PaymentFlowService {
       const result = await this.applyWalletTopUpVerification(attempt.id, userId, await this.resolvePaymentProvider(attempt.providerCode as PaymentProvider | undefined).verifyPayment(attempt.providerReference)) as any;
       if (result?.paid && this.patientWallet)
         await this.patientWallet.creditConfirmedTopUp(userId, result.amountMinor, result.currency, result.providerReference ?? result.reference);
-    } else if (topUp.status === WalletTopUpStatus.PAID && this.patientWallet) {
-      await this.patientWallet.creditConfirmedTopUp(userId, Number(topUp.amountMinor), topUp.currency, attempt.providerReference ?? topUp.reference);
-    }
+    } 
+    // else if (topUp.status === WalletTopUpStatus.PAID && this.patientWallet) {
+    //   await this.patientWallet.creditConfirmedTopUp(userId, Number(topUp.amountMinor), topUp.currency, attempt.providerReference ?? topUp.reference);
+    // }
     return this.getWalletTopUp(userId, reference);
   }
 

@@ -1,4 +1,9 @@
-import { ApiProperty, ApiPropertyOptional, OmitType, PartialType } from "@nestjs/swagger";
+import {
+  ApiProperty,
+  ApiPropertyOptional,
+  OmitType,
+  PartialType,
+} from "@nestjs/swagger";
 import { Transform, Type } from "class-transformer";
 import {
   IsEnum,
@@ -30,7 +35,9 @@ export class CreateAdminProviderDto {
   @MaxLength(200)
   displayName!: string;
   @ApiProperty()
-  @Transform(({ value }) => (typeof value === "string" ? value.trim().toLowerCase() : value))
+  @Transform(({ value }) =>
+    typeof value === "string" ? value.trim().toLowerCase() : value,
+  )
   @IsEmail()
   @MaxLength(254)
   email!: string;
@@ -47,9 +54,13 @@ export class CreateAdminProviderDto {
   @IsString()
   @MaxLength(200)
   professionalReference?: string | null;
-  @ApiProperty({ enum: ProviderType }) @IsEnum(ProviderType) providerType!: ProviderType;
+  @ApiProperty({ enum: ProviderType })
+  @IsEnum(ProviderType)
+  providerType!: ProviderType;
   @ApiProperty({ example: "NG" })
-  @Transform(({ value }) => (typeof value === "string" ? value.trim().toUpperCase() : value))
+  @Transform(({ value }) =>
+    typeof value === "string" ? value.trim().toUpperCase() : value,
+  )
   @Matches(/^[A-Z]{2}$/)
   countryCode!: string;
   @ApiProperty()
@@ -65,13 +76,23 @@ export class CreateAdminProviderDto {
   @MaxLength(120)
   city!: string;
 }
-export class UpdateAdminProviderDto extends PartialType(OmitType(CreateAdminProviderDto, ["email"] as const)) {
-  @ApiPropertyOptional({ description: 'Prioritize this provider as a SmartClinic-managed default option.' })
+export class UpdateAdminProviderDto extends PartialType(
+  OmitType(CreateAdminProviderDto, ["email"] as const),
+) {
+  @ApiPropertyOptional({
+    description:
+      "Prioritize this provider as a SmartClinic-managed default option.",
+  })
   @IsOptional()
   @IsBoolean()
   isPlatformDefault?: boolean;
 
-  @ApiPropertyOptional({ nullable: true, minimum: 0, description: 'Lower values appear first among SmartClinic-managed defaults.' })
+  @ApiPropertyOptional({
+    nullable: true,
+    minimum: 0,
+    description:
+      "Lower values appear first among SmartClinic-managed defaults.",
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -131,9 +152,12 @@ export class AdminProviderListItemResponseDto {
   @ApiPropertyOptional({ nullable: true }) countryCode!: string | null;
   @ApiPropertyOptional({ nullable: true }) stateOrRegion!: string | null;
   @ApiPropertyOptional({ nullable: true }) city!: string | null;
-  @ApiProperty({ enum: ProviderOnboardingStatus }) onboardingStatus!: ProviderOnboardingStatus;
+  @ApiProperty({ enum: ProviderOnboardingStatus })
+  onboardingStatus!: ProviderOnboardingStatus;
   @ApiProperty() isPlatformDefault!: boolean;
-  @ApiPropertyOptional({ nullable: true }) platformDefaultPriority!: number | null;
+  @ApiPropertyOptional({ nullable: true }) platformDefaultPriority!:
+    | number
+    | null;
   @ApiPropertyOptional({ nullable: true }) submittedAt!: Date | null;
   @ApiPropertyOptional({ nullable: true }) reviewedAt!: Date | null;
   @ApiPropertyOptional({ nullable: true }) reviewNote!: string | null;
@@ -145,7 +169,8 @@ export class AdminProviderListItemResponseDto {
 export class AdminProviderDetailResponseDto extends AdminProviderListItemResponseDto {
   @ApiProperty() capabilityCount!: number;
   @ApiProperty() locationCount!: number;
-  @ApiProperty({ type: ProviderOnboardingReadinessDto }) readiness!: ProviderOnboardingReadinessDto;
+  @ApiProperty({ type: ProviderOnboardingReadinessDto })
+  readiness!: ProviderOnboardingReadinessDto;
 }
 export class AdminProviderListResponseDto {
   @ApiProperty({ type: AdminProviderListItemResponseDto, isArray: true })
@@ -156,8 +181,10 @@ export class AdminProviderListResponseDto {
   @ApiProperty() totalPages!: number;
 }
 export class AdminCreatedProviderResponseDto {
-  @ApiProperty({ type: AdminProviderDetailResponseDto }) provider!: AdminProviderDetailResponseDto;
-  @ApiProperty({ type: CreatedProviderInvitationResponseDto }) invitation!: CreatedProviderInvitationResponseDto;
+  @ApiProperty({ type: AdminProviderDetailResponseDto })
+  provider!: AdminProviderDetailResponseDto;
+  @ApiProperty({ type: CreatedProviderInvitationResponseDto })
+  invitation!: CreatedProviderInvitationResponseDto;
 }
 
 export class RejectProviderDto {

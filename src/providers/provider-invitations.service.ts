@@ -134,7 +134,10 @@ export class ProviderInvitationsService {
     }
     const invitation = await this.requireAdminInvitation(result.invitation.id);
     return {
-      provider: this.createdProvider(result.provider),
+      provider: { ...this.createdProvider(result.provider),
+              isPlatformDefault: false,
+      platformDefaultPriority: 0,
+      },
       invitation: await this.deliver(invitation, rawToken),
     };
   }
