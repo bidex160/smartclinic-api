@@ -18,6 +18,8 @@ export class CreateServiceCatalogueItemDto {
   @ApiProperty() @Transform(({value})=>typeof value==='string'?value.trim():value) @IsString() @MinLength(1) @MaxLength(200) name!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) description?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) unitLabel?: string | null;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(80) groupName?: string | null;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(100) subcategory?: string | null;
   @ApiProperty({ description: 'Reference average cost in minor currency units.' }) @Type(()=>Number) @IsInt() @Min(0) averageCostMinor!: number;
   @ApiPropertyOptional({ default: 2000, description: 'Markup in basis points. 2000 = 20%.' }) @IsOptional() @Type(()=>Number) @IsInt() @Min(0) @Max(50000) markupBps = 2000;
   @ApiPropertyOptional({ default: 'NGN' }) @IsOptional() @IsString() @Matches(/^[A-Z]{3}$/) currency = 'NGN';
