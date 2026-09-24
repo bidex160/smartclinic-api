@@ -15,6 +15,8 @@ import { ProviderPracticeAffiliation } from "./entities/provider-practice-affili
 
 export type EligibleProviderCareService = ProviderCareService & {
   selectedDeliveryOption: ProviderCareServiceDeliveryOption;
+  institutionalPriceMinor?: string | null;
+  institutionalCurrency?: string | null;
 };
 
 export type ProviderCareEligibilityInput = {
@@ -25,6 +27,7 @@ export type ProviderCareEligibilityInput = {
   providerReference?: string;
   providerId?: string;
   deliveryMode: CareDeliveryMode;
+  hostProviderId?: string | null;
 };
 
 const ACTIVE_CARE_REQUEST_WORKLOAD_STATUSES = [
@@ -186,11 +189,28 @@ async requireEligible(
    * sufficient from a location perspective.
    */
   if (input.deliveryMode === CareDeliveryMode.VIRTUAL) {
+    let institutionalPriceMinor: string | null = null;
+    let institutionalCurrency: string | null = null;
+    if (input.hostProviderId) {
+      const affiliation = await manager.getRepository(ProviderPracticeAffiliation).findOne({
+        where: {
+          doctorProviderId: provider.id,
+          hostProviderId: input.hostProviderId,
+          isActive: true,
+          allowsVirtualCare: true,
+        },
+        lock: { mode: "pessimistic_read" },
+      });
+      if (!affiliation) return this.ineligible();
+      institutionalPriceMinor = affiliation.virtualCarePriceMinor;
+      institutionalCurrency = affiliation.virtualCareCurrency;
+    }
     service.provider = provider;
     service.definition = definition;
-
     return Object.assign(service, {
       selectedDeliveryOption,
+      institutionalPriceMinor,
+      institutionalCurrency,
     });
   }
 
@@ -318,6 +338,15 @@ async findEligibleCareProvider(
    * that this ProviderCareService supports VIRTUAL.
    */
   if (input.deliveryMode === CareDeliveryMode.VIRTUAL) {
+    if (input.hostProviderId) {
+      query.andWhere(`EXISTS (
+        SELECT 1 FROM provider_practice_affiliations affiliation
+        WHERE affiliation.doctor_provider_id = provider.id
+          AND affiliation.host_provider_id = :hostProviderId
+          AND affiliation.is_active = true
+          AND affiliation.allows_virtual_care = true
+      )`, { hostProviderId: input.hostProviderId });
+    }
     return this.rankAndValidateAutomaticCandidates(
       query.orderBy("service.id", "ASC"),
       input,
