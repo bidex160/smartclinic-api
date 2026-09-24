@@ -33,6 +33,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { WalletModule } from './wallet/wallet.module';
 import { BuildersModule } from './builders/builders.module';
+import { AssistedMatchingModule } from './assisted-matching/assisted-matching.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -64,6 +65,7 @@ const persistenceDomainModules = configuration.database.enabled
       NotificationsModule,
       WalletModule,
       BuildersModule,
+      AssistedMatchingModule,
     ]
   : [];
 
