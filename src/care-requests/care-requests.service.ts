@@ -533,6 +533,7 @@ export class CareRequestsService {
       .createQueryBuilder("request")
       .innerJoinAndSelect("request.patient", "patient")
       .innerJoinAndSelect("request.careServiceDefinition", "definition")
+      .leftJoinAndSelect("request.hostProvider", "hostProvider")
       .leftJoinAndSelect("request.preferredProvider", "preferredProvider")
       .leftJoinAndSelect("request.assignedProvider", "assignedProvider");
   }
