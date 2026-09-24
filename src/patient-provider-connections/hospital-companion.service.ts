@@ -111,7 +111,7 @@ export class HospitalCompanionService {
     const payable = requests.filter(item => item.amountMinor != null && item.paymentStatus !== 'PAID');
     const currencies = [...new Set(payable.map(item => item.currency).filter(Boolean))];
     const consolidatedPayment = {
-      available: false, // Existing funding flows remain authoritative until grouped settlement is implemented.
+      available: currencies.length === 1 && payable.length > 0,
       itemCount: payable.length,
       amountMinor: currencies.length === 1 ? payable.reduce((sum, item) => sum + (item.amountMinor ?? 0), 0) : null,
       currency: currencies.length === 1 ? currencies[0] : null,
