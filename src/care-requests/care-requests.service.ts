@@ -154,6 +154,7 @@ export class CareRequestsService {
               notes: dto.notes ?? null,
               preferredDate: dto.preferredDate ?? null,
               preferredTime: dto.preferredTime ?? null,
+              preferredTimezone: dto.preferredTimezone ?? (dto.preferredDate && dto.preferredTime ? "Africa/Lagos" : null),
               contactMethod: dto.contactMethod,
               status,
             }),
@@ -688,6 +689,7 @@ export class CareRequestsService {
       assignedProvider: provider(request.assignedProvider),
       preferredDate: request.preferredDate,
       preferredTime: request.preferredTime,
+      preferredTimezone: request.preferredTimezone,
       contactMethod: request.contactMethod,
       notes: request.notes,
       funding: request.funding
