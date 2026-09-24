@@ -16,6 +16,9 @@ import { ClinicalDiagnosticOrderItem } from "./entities/clinical-diagnostic-orde
 import { ClinicalPrescriptionDetail } from "./entities/clinical-prescription-detail.entity";
 import { ClinicalPrescriptionItem } from "./entities/clinical-prescription-item.entity";
 import { User } from "src/users/entities/user.entity";
+import { SmartClinicServiceCatalogueItem } from './entities/smartclinic-service-catalogue-item.entity';
+import { SmartClinicServiceCatalogueService } from './smartclinic-service-catalogue.service';
+import { SmartClinicServiceCatalogueController } from './smartclinic-service-catalogue.controller';
 import { ProviderServiceUnitsModule } from '../provider-service-units/provider-service-units.module';
 import { RewardsModule } from '../rewards/rewards.module';
 import { ClinicalOrderFulfillment } from './entities/clinical-order-fulfillment.entity';
@@ -43,10 +46,11 @@ import { PharmacyQuote } from './entities/pharmacy-quote.entity';import { Pharma
       ClinicalOrderFulfillment,
       ClinicalOrderFulfillmentHistory,
       PharmacyQuote,PharmacyQuoteItem,PharmacyFulfillmentFunding,PharmacyDispensing,
+      SmartClinicServiceCatalogueItem,
     ]),
   ],
-  controllers: [ProviderClinicalOrdersController, MeClinicalOrdersController, ProviderOrderFulfillmentsController, MeOrderFulfillmentsController,ProviderPharmacyFulfillmentController,MePharmacyFulfillmentController],
-  providers: [ClinicalOrdersService, ClinicalOrderFulfillmentsService,PharmacyFulfillmentService],
+  controllers: [ProviderClinicalOrdersController, MeClinicalOrdersController, ProviderOrderFulfillmentsController, MeOrderFulfillmentsController,ProviderPharmacyFulfillmentController,MePharmacyFulfillmentController,SmartClinicServiceCatalogueController],
+  providers: [ClinicalOrdersService, ClinicalOrderFulfillmentsService,PharmacyFulfillmentService,SmartClinicServiceCatalogueService],
   exports: [ClinicalOrdersService],
 })
 export class ClinicalOrdersModule {}
