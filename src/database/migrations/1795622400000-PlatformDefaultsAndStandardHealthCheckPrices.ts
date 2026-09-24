@@ -26,7 +26,22 @@ export class PlatformDefaultsAndStandardHealthCheckPrices1795622400000 implement
     await queryRunner.query(`
       INSERT INTO "package_prices"
         ("health_check_package_id","fulfilment_mode_id","amount","currency","effective_from","effective_to","is_active")
-      SELECT p.id, m.id, v.amount, 'NGN', DATE '2026-01-01', NULL, true
+      SELECT
+        p.id,
+        m.id,
+        v.amount,
+        'NGN',
+        CURRENT_DATE,
+        (
+          SELECT MIN(future.effective_from)
+          FROM "package_prices" future
+          WHERE future.health_check_package_id = p.id
+            AND future.fulfilment_mode_id = m.id
+            AND future.currency = 'NGN'
+            AND future.is_active = true
+            AND future.effective_from > CURRENT_DATE
+        ),
+        true
       FROM (VALUES
         ('BASIC', 5000.00::numeric),
         ('ESSENTIAL', 8000.00::numeric),
