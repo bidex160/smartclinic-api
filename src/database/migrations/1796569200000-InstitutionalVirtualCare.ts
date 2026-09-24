@@ -1,0 +1,4 @@
+import { MigrationInterface,QueryRunner } from 'typeorm';
+export class InstitutionalVirtualCare1796569200000 implements MigrationInterface{name='InstitutionalVirtualCare1796569200000';
+async up(q:QueryRunner){await q.query(`ALTER TABLE "care_requests" ADD "host_provider_id" uuid`);await q.query(`ALTER TABLE "care_requests" ADD CONSTRAINT "FK_care_requests_host_provider" FOREIGN KEY ("host_provider_id") REFERENCES "providers"("id") ON DELETE RESTRICT`);await q.query(`CREATE INDEX "IDX_care_requests_host_provider_status" ON "care_requests" ("host_provider_id","status")`);}
+async down(q:QueryRunner){await q.query(`DROP INDEX "IDX_care_requests_host_provider_status"`);await q.query(`ALTER TABLE "care_requests" DROP CONSTRAINT "FK_care_requests_host_provider"`);await q.query(`ALTER TABLE "care_requests" DROP COLUMN "host_provider_id"`);}}
