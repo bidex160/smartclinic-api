@@ -9,7 +9,7 @@ export enum SmartClinicCatalogueCategory {
 @Index('UQ_smartclinic_service_catalogue_code', ['code'], { unique: true })
 @Index('IDX_smartclinic_service_catalogue_category_active', ['category', 'isActive'])
 @Check('CHK_smartclinic_service_catalogue_cost', '"average_cost_minor" >= 0')
-@Check('CHK_smartclinic_service_catalogue_markup', '"markup_bps" BETWEEN 0 AND 10000')
+@Check('CHK_smartclinic_service_catalogue_markup', '"markup_bps" BETWEEN 0 AND 50000')
 export class SmartClinicServiceCatalogueItem {
   @PrimaryGeneratedColumn('uuid') id!: string;
   @Column({ type: 'varchar', length: 80 }) code!: string;
