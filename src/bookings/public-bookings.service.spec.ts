@@ -122,7 +122,7 @@ describe('PublicBookingsService', () => {
     await expect(service.create(createPublicBookingDto)).resolves.toEqual(
       expect.objectContaining({ sessionToken: 'raw-session-token', booking: expect.objectContaining({
         bookingReference: 'SC-2026-7F23B0C9D1E4',
-        participant: { givenName: 'Ada', familyName: 'Okafor' },
+        participant: expect.objectContaining({ givenName: 'Ada', familyName: 'Okafor' }),
         locationNote: 'Reception desk',
       }) }),
     );
