@@ -36,6 +36,10 @@ export class FindCareService {
     if (query.providerType) builder.andWhere('provider.providerType = :providerType', { providerType: query.providerType });
     if (query.fastTrackOnly) builder.andWhere('careService.supportsFastTrack = true').andWhere('careService.fastTrackFeeMinor IS NOT NULL').andWhere('careService.fastTrackCurrency IS NOT NULL');
     if (query.deliveryMode) builder.andWhere('EXISTS (SELECT 1 FROM provider_care_service_delivery_options filtered_option WHERE filtered_option.provider_care_service_id = careService.id AND filtered_option.delivery_mode = :deliveryMode)', { deliveryMode: query.deliveryMode });
+    if (query.hostProviderReference) {
+      if (query.deliveryMode !== CareDeliveryMode.VIRTUAL) throw new BadRequestException('Institution-scoped discovery currently supports VIRTUAL care');
+      builder.andWhere(`EXISTS (SELECT 1 FROM provider_practice_affiliations affiliation INNER JOIN providers host ON host.id = affiliation.host_provider_id WHERE affiliation.doctor_provider_id = provider.id AND affiliation.is_active = true AND affiliation.status = 'APPROVED' AND affiliation.allows_virtual_care = true AND host.provider_reference = :hostProviderReference AND host.status = :active AND host.onboarding_status = :approved AND host.deleted_at IS NULL)`, { hostProviderReference: query.hostProviderReference, active: ProviderStatus.ACTIVE, approved: ProviderOnboardingStatus.APPROVED });
+    }
     if (query.deliveryMode !== CareDeliveryMode.VIRTUAL) this.applyPlace(builder, query);
     builder.orderBy('provider.isPlatformDefault', 'DESC').addOrderBy('provider.platformDefaultPriority', 'ASC', 'NULLS LAST').addOrderBy('provider.displayName', 'ASC').addOrderBy('provider.providerReference', 'ASC').skip((query.page - 1) * query.limit).take(query.limit);
     const [providers, total] = await builder.getManyAndCount();
