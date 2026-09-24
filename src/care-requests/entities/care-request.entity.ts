@@ -35,6 +35,8 @@ export class CareRequest {
   @ManyToOne(() => Patient, { onDelete: 'RESTRICT' }) @JoinColumn({ name: 'patient_id' }) patient!: Patient;
   @Column({ name: 'care_service_definition_id', type: 'uuid' }) careServiceDefinitionId!: string;
   @ManyToOne(() => CareServiceDefinition, { onDelete: 'RESTRICT' }) @JoinColumn({ name: 'care_service_definition_id' }) careServiceDefinition!: CareServiceDefinition;
+  @Column({ name: 'host_provider_id', type: 'uuid', nullable: true }) hostProviderId!: string | null;
+  @ManyToOne(() => Provider, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'host_provider_id' }) hostProvider!: Provider | null;
   @Column({ name: 'preferred_provider_id', type: 'uuid', nullable: true }) preferredProviderId!: string | null;
   @ManyToOne(() => Provider, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'preferred_provider_id' }) preferredProvider!: Provider | null;
   @Column({ name: 'preferred_provider_care_service_id', type: 'uuid', nullable: true }) preferredProviderCareServiceId!: string | null;
