@@ -104,6 +104,12 @@ export class CareRequestsService {
                   stateOrRegion: dto.stateOrRegion!,
                   city: dto.city!,
                 };
+          let hostProvider: Provider | null = null;
+          if (dto.hostProviderReference) {
+            hostProvider = await manager.getRepository(Provider).findOne({ where: { providerReference: dto.hostProviderReference, isActive: true } });
+            if (!hostProvider) throw new ConflictException("Selected hospital or clinic is not active");
+            if (deliveryMode !== CareDeliveryMode.VIRTUAL) throw new ConflictException("Institutional virtual clinic requests must use VIRTUAL delivery");
+          }
           const eligibilityInput: ProviderCareEligibilityInput = {
             careServiceDefinitionId: definition.id,
             deliveryMode,
@@ -134,6 +140,7 @@ export class CareRequestsService {
               userId: user.id,
               patientId: patient.id,
               careServiceDefinitionId: definition.id,
+              hostProviderId: hostProvider?.id ?? null,
               preferredProviderId: patientSelectedProvider
                 ? offering.providerId
                 : null,
