@@ -72,6 +72,7 @@ import { ProviderCareEligibilityService } from './provider-care-eligibility.serv
 import { ProviderServiceAddon } from './entities/provider-service-addon.entity';
 import { HealthCheckClinicalContent } from '../health-checks/entities/health-check-clinical-content.entity';
 import { HealthCheckPackageAddon } from '../health-checks/entities/health-check-package-addon.entity';
+import { ProviderPracticeAffiliation } from './entities/provider-practice-affiliation.entity';
 @Module({
   imports: [
     AuthModule,
@@ -85,6 +86,7 @@ import { HealthCheckPackageAddon } from '../health-checks/entities/health-check-
       ProviderService,
       ProviderServiceArea,
       ProviderLocation,
+      ProviderPracticeAffiliation,
       ProviderServiceLocation,
       ProviderAvailability,
       ProviderAvailabilityException,
