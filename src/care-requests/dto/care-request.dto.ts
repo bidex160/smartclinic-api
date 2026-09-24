@@ -74,6 +74,11 @@ export class CreateCareRequestDto {
   @IsOptional()
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/)
   preferredTime?: string | null;
+  @ApiPropertyOptional({ example: "Africa/Lagos", nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  preferredTimezone?: string | null;
   @ApiProperty({ enum: CareRequestContactMethod })
   @IsEnum(CareRequestContactMethod)
   contactMethod!: CareRequestContactMethod;
