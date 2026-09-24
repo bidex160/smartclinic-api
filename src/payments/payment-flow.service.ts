@@ -173,7 +173,11 @@ export class PaymentFlowService {
     const attempt = await this.attempts.findOne({ where: { walletTopUpId: topUp.id }, order: { createdAt: 'DESC' } });
     if (!attempt?.providerReference) throw new ConflictException('No wallet payment is available to verify');
     if (attempt.status !== PaymentAttemptStatus.SUCCEEDED) {
-      await this.applyWalletTopUpVerification(attempt.id, userId, await this.resolvePaymentProvider(attempt.providerCode as PaymentProvider | undefined).verifyPayment(attempt.providerReference));
+      const result = await this.applyWalletTopUpVerification(attempt.id, userId, await this.resolvePaymentProvider(attempt.providerCode as PaymentProvider | undefined).verifyPayment(attempt.providerReference)) as any;
+      if (result?.paid && this.patientWallet)
+        await this.patientWallet.creditConfirmedTopUp(userId, result.amountMinor, result.currency, result.providerReference ?? result.reference);
+    } else if (topUp.status === WalletTopUpStatus.PAID && this.patientWallet) {
+      await this.patientWallet.creditConfirmedTopUp(userId, Number(topUp.amountMinor), topUp.currency, attempt.providerReference ?? topUp.reference);
     }
     return this.getWalletTopUp(userId, reference);
   }
@@ -211,7 +215,6 @@ export class PaymentFlowService {
         providerReference: attempt.providerReference,
         occurredAt: verified.occurredAt,
       });
-      await this.patientWallet!.creditConfirmedTopUp(topUp.userId, Number(topUp.amountMinor), topUp.currency, attempt.providerReference ?? topUp.reference);
       topUp.status = WalletTopUpStatus.PAID;
       topUp.paidAt = verified.occurredAt;
       await manager.save(topUp);
@@ -231,6 +234,8 @@ export class PaymentFlowService {
       checkoutUrl: attempt?.checkoutUrl ?? null,
       accessCode: attempt?.accessCode ?? null,
       provider: attempt?.providerCode ?? null,
+      providerReference: attempt?.providerReference ?? null,
+      userId: topUp.userId,
     };
   }
 
@@ -927,12 +932,12 @@ async initiatePatientPayment(
         null,
         verified,
       ) as never;
-    if (attempt.walletTopUpId)
-      return this.applyWalletTopUpVerification(
-        attempt.id,
-        null,
-        verified,
-      ) as never;
+    if (attempt.walletTopUpId) {
+      const result = await this.applyWalletTopUpVerification(attempt.id, null, verified) as any;
+      if (result?.paid && this.patientWallet)
+        await this.patientWallet.creditConfirmedTopUp(result.userId, result.amountMinor, result.currency, result.providerReference ?? result.reference);
+      return result as never;
+    }
     if (attempt.guidedSelfCheckId)
       return this.applyGuidedSelfCheckVerification(
         attempt.id,
