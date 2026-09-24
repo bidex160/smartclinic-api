@@ -37,7 +37,7 @@ export class FindCareService {
     if (query.fastTrackOnly) builder.andWhere('careService.supportsFastTrack = true').andWhere('careService.fastTrackFeeMinor IS NOT NULL').andWhere('careService.fastTrackCurrency IS NOT NULL');
     if (query.deliveryMode) builder.andWhere('EXISTS (SELECT 1 FROM provider_care_service_delivery_options filtered_option WHERE filtered_option.provider_care_service_id = careService.id AND filtered_option.delivery_mode = :deliveryMode)', { deliveryMode: query.deliveryMode });
     if (query.deliveryMode !== CareDeliveryMode.VIRTUAL) this.applyPlace(builder, query);
-    builder.orderBy('provider.displayName', 'ASC').addOrderBy('provider.providerReference', 'ASC').skip((query.page - 1) * query.limit).take(query.limit);
+    builder.orderBy('provider.isPlatformDefault', 'DESC').addOrderBy('provider.platformDefaultPriority', 'ASC', 'NULLS LAST').addOrderBy('provider.displayName', 'ASC').addOrderBy('provider.providerReference', 'ASC').skip((query.page - 1) * query.limit).take(query.limit);
     const [providers, total] = await builder.getManyAndCount();
     return { items: providers.map((provider) => this.mapProvider(provider)), page: query.page, limit: query.limit, total, totalPages: total ? Math.ceil(total / query.limit) : 0 };
   }
