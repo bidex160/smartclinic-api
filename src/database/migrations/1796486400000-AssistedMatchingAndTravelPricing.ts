@@ -5,6 +5,9 @@ export class AssistedMatchingAndTravelPricing1796486400000 implements MigrationI
   async up(q:QueryRunner):Promise<void>{
     await q.query(`ALTER TABLE "provider_service_areas" ADD "travel_fee_minor" bigint NOT NULL DEFAULT 0`);
     await q.query(`ALTER TABLE "provider_service_areas" ADD "priority" integer NOT NULL DEFAULT 100`);
+    await q.query(`ALTER TABLE "provider_service_areas" ADD "origin_latitude" decimal(9,6)`);
+    await q.query(`ALTER TABLE "provider_service_areas" ADD "origin_longitude" decimal(9,6)`);
+    await q.query(`ALTER TABLE "provider_service_areas" ADD "max_radius_km" decimal(8,2)`);
     await q.query(`ALTER TABLE "provider_service_areas" ADD CONSTRAINT "CHK_provider_service_area_travel_fee" CHECK ("travel_fee_minor" >= 0)`);
     await q.query(`CREATE TYPE "assisted_match_status_enum" AS ENUM ('SEARCHING','AGENT_REVIEW','MATCHED','CANCELLED','EXPIRED')`);
     await q.query(`CREATE TYPE "assisted_match_contact_enum" AS ENUM ('NOTIFY','CALL','WHATSAPP')`);
@@ -45,6 +48,9 @@ export class AssistedMatchingAndTravelPricing1796486400000 implements MigrationI
     await q.query(`DROP TYPE "assisted_match_contact_enum"`);
     await q.query(`DROP TYPE "assisted_match_status_enum"`);
     await q.query(`ALTER TABLE "provider_service_areas" DROP CONSTRAINT "CHK_provider_service_area_travel_fee"`);
+    await q.query(`ALTER TABLE "provider_service_areas" DROP COLUMN "max_radius_km"`);
+    await q.query(`ALTER TABLE "provider_service_areas" DROP COLUMN "origin_longitude"`);
+    await q.query(`ALTER TABLE "provider_service_areas" DROP COLUMN "origin_latitude"`);
     await q.query(`ALTER TABLE "provider_service_areas" DROP COLUMN "priority"`);
     await q.query(`ALTER TABLE "provider_service_areas" DROP COLUMN "travel_fee_minor"`);
   }
