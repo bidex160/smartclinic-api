@@ -73,6 +73,9 @@ import { ProviderServiceAddon } from './entities/provider-service-addon.entity';
 import { HealthCheckClinicalContent } from '../health-checks/entities/health-check-clinical-content.entity';
 import { HealthCheckPackageAddon } from '../health-checks/entities/health-check-package-addon.entity';
 import { ProviderPracticeAffiliation } from './entities/provider-practice-affiliation.entity';
+import { ProviderGrowthInvite } from './entities/provider-growth-invite.entity';
+import { ProviderGrowthInvitesService } from './provider-growth-invites.service';
+import { ProviderGrowthInvitesController } from './provider-growth-invites.controller';
 @Module({
   imports: [
     AuthModule,
@@ -87,6 +90,7 @@ import { ProviderPracticeAffiliation } from './entities/provider-practice-affili
       ProviderServiceArea,
       ProviderLocation,
       ProviderPracticeAffiliation,
+      ProviderGrowthInvite,
       ProviderServiceLocation,
       ProviderAvailability,
       ProviderAvailabilityException,
@@ -112,7 +116,7 @@ import { ProviderPracticeAffiliation } from './entities/provider-practice-affili
       HealthCheckPackageAddon,
     ]),
   ],
-  controllers: [
+  controllers: [ProviderGrowthInvitesController, 
     AdminProvidersController,
     AdminProviderInvitationsController,
     PublicProviderInvitationsController,
@@ -132,7 +136,7 @@ import { ProviderPracticeAffiliation } from './entities/provider-practice-affili
     ProviderCareServicesController,
     AdminCareServicesController,
   ],
-  providers: [
+  providers: [ProviderGrowthInvitesService, 
     ProviderCapabilitiesService,
     ProviderServiceAreasService,
     ProviderAvailabilityService,
