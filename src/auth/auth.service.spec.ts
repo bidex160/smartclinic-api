@@ -27,7 +27,7 @@ describe('AuthService', () => {
   }
   it('registers a normalized USER with a bcrypt credential and safe response', async () => {
     const { service, savedUser, patientTransactions, credentialTransactions } = setup();
-    const result = await service.register(dto);
+    const result = await service.registerStandardUser(dto, null);
     expect(result).toEqual({ id: 'a1', email: 'ada@example.com', displayName: 'Ada', status: UserStatus.ACTIVE, roles: [UserRole.USER] });
     expect(savedUser).not.toHaveProperty('passwordHash');
     expect(patientTransactions.create).toHaveBeenCalledWith(expect.objectContaining({ userId: 'a1', givenName: 'Ada', familyName: 'Okafor', patientReference: expect.stringMatching(/^SCP-[A-Z0-9]{4}-[A-Z0-9]{4}$/) }));
@@ -37,8 +37,8 @@ describe('AuthService', () => {
     const { service } = setup();
     expect(service.me({ id: 'phone-user', email: null, displayName: 'Phone User', status: UserStatus.ACTIVE, roles: [UserRole.USER] } as User)).toEqual({ id: 'phone-user', email: null, displayName: 'Phone User', status: UserStatus.ACTIVE, roles: [UserRole.USER] });
   });
-  it('rejects duplicate normalized email', async () => { const { service, userRepo } = setup(); userRepo.exists.mockResolvedValue(true); await expect(service.register(dto)).rejects.toBeInstanceOf(ConflictException); });
-  it('captures an explicit referral transactionally so registration rewards remain authoritative', async () => { const context = setup(); await context.service.register({ ...dto, referralCode: 'sc-ab12cd' }); expect(context.referrals.ensureReferralCode).toHaveBeenCalledWith('a1', expect.anything()); expect(context.referrals.capturePatient).toHaveBeenCalledWith(expect.anything(), 'sc-ab12cd', 'a1', 'patient-a'); });
+  it('rejects duplicate normalized email', async () => { const { service, userRepo } = setup(); userRepo.exists.mockResolvedValue(true); await expect(service.registerStandardUser(dto, null)).rejects.toBeInstanceOf(ConflictException); });
+  it('captures an explicit referral transactionally so registration rewards remain authoritative', async () => { const context = setup(); await context.service.registerStandardUser({ ...dto, referralCode: 'sc-ab12cd' }, null); expect(context.referrals.ensureReferralCode).toHaveBeenCalledWith('a1', expect.anything()); expect(context.referrals.capturePatient).toHaveBeenCalledWith(expect.anything(), 'sc-ab12cd', 'a1', 'patient-a'); });
   it('logs in only active accounts with a valid password', async () => {
     const hash = await bcrypt.hash(dto.password, 4);
     const user = { id: 'a1', email: 'ada@example.com', displayName: 'Ada', status: UserStatus.ACTIVE, roles: [UserRole.USER], deletedAt: null, credential: { passwordHash: hash } };
