@@ -21,7 +21,13 @@ export class HealthCheckConfigurationService {
     const [pkg,mode]=await Promise.all([this.packages.findOne({where:{code:dto.packageCode,isActive:true}}),this.modes.findOne({where:{code:dto.fulfilmentModeCode,isActive:true}})]);
     if(!pkg||!mode)throw new NotFoundException('Health Check package or fulfilment mode not found');
     const end=deriveAppointmentEndTime(dto.preferredTime,pkg.estimatedDurationMinutes??0);if(!end)throw new BadRequestException('Health Check package duration is invalid');
-    const eligible=await this.capabilities.findEligibleProviders(pkg.id,mode.id,{requestedDate:dto.preferredDate,requestedStartTime:dto.preferredTime,requestedEndTime:end,requestedTimezone:dto.timezone,visitAddress:{countryCode:dto.countryCode,stateOrRegion:dto.stateOrRegion,city:dto.city,postalCode:dto.postalCode??null,latitude:dto.latitude??null,longitude:dto.longitude??null}});
+    // Provider-location care is destination-based: the patient travels to the provider.
+    // Do not incorrectly filter provider locations by the patient's current/home geography.
+    // Home visits remain geography-bound because the provider must cover the patient's address.
+    const visitAddress = mode.code === 'HOME_VISIT'
+      ? {countryCode:dto.countryCode,stateOrRegion:dto.stateOrRegion,city:dto.city,postalCode:dto.postalCode??null,latitude:dto.latitude??null,longitude:dto.longitude??null}
+      : null;
+    const eligible=await this.capabilities.findEligibleProviders(pkg.id,mode.id,{requestedDate:dto.preferredDate,requestedStartTime:dto.preferredTime,requestedEndTime:end,requestedTimezone:dto.timezone,visitAddress});
     const ids=eligible.map(x=>x.id);if(!ids.length)return{items:[],page:dto.page,limit:dto.limit,total:0,totalPages:0};
     const rows=await this.services.find({where:{id:In(ids)},relations:{provider:true,healthCheckPackage:{contents:{clinicalContent:true},addonAvailability:{clinicalContent:true}},fulfilmentMode:true,locationLinks:{providerLocation:true},addons:{clinicalContent:true}}});
     const rank=new Map(ids.map((id,i)=>[id,i]));
