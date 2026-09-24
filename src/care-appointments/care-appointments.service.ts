@@ -495,15 +495,29 @@ async schedule(
     const existing = await manager.getRepository(CareAppointment).findOne({ where: { careRequestId: care.id, status: In(ACTIVE) } });
     if (existing) return existing;
     const appointmentReference = generateCareAppointmentReference();
-    const parts = care.preferredTime.split(':').map(Number);
+    const timezone = care.preferredTimezone || 'Africa/Lagos';
+    let scheduledDate = care.preferredDate;
+    let scheduledTimeFrom = care.preferredTime.slice(0, 5);
+    const nowParts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' }).formatToParts(new Date());
+    const part=(type:Intl.DateTimeFormatPartTypes)=>nowParts.find(x=>x.type===type)?.value??'';
+    const localDate=`${part('year')}-${part('month')}-${part('day')}`;
+    const localTime=`${part('hour')}:${part('minute')}`;
+    if (scheduledDate < localDate || (scheduledDate === localDate && scheduledTimeFrom <= localTime)) {
+      const soon = new Date(Date.now() + 5 * 60_000);
+      const soonParts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' }).formatToParts(soon);
+      const sp=(type:Intl.DateTimeFormatPartTypes)=>soonParts.find(x=>x.type===type)?.value??'';
+      scheduledDate=`${sp('year')}-${sp('month')}-${sp('day')}`;
+      scheduledTimeFrom=`${sp('hour')}:${sp('minute')}`;
+    }
+    const parts = scheduledTimeFrom.split(':').map(Number);
     const endMinutes = parts[0] * 60 + parts[1] + 30;
     const timeTo = String(Math.floor(endMinutes / 60) % 24).padStart(2, '0') + ':' + String(endMinutes % 60).padStart(2, '0');
     const repository = manager.getRepository(CareAppointment);
     const appointment = await repository.save(repository.create({
       reference: appointmentReference, careRequestId: care.id, patientId: care.patientId,
       providerId: care.assignedProviderId, providerCareServiceId: care.assignedProviderCareServiceId,
-      providerLocationId: null, scheduledDate: care.preferredDate, scheduledTimeFrom: care.preferredTime,
-      scheduledTimeTo: timeTo, timezone: 'Africa/Lagos', deliveryMode: care.deliveryMode,
+      providerLocationId: null, scheduledDate, scheduledTimeFrom,
+      scheduledTimeTo: timeTo, timezone, deliveryMode: care.deliveryMode,
       meetingUrl: care.deliveryMode === CareDeliveryMode.VIRTUAL ? 'https://meet.jit.si/SmartClinic-' + appointmentReference.replace('SC-APT-', '') : null,
       status: CareAppointmentStatus.SCHEDULED, notes: care.notes ?? null,
     }));
