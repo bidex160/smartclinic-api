@@ -9,7 +9,7 @@ import {
 } from "./provider-service-units.controller";
 import { ProviderServiceUnitsService } from "./provider-service-units.service";
 import { AuthModule } from "../auth/auth.module";
-import { User } from "src/users/entities/user.entity";
+import { User } from "../users/entities/user.entity";
 
 @Module({
   imports: [
