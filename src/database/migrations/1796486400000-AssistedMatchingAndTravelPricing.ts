@@ -31,6 +31,9 @@ export class AssistedMatchingAndTravelPricing1796486400000 implements MigrationI
       "search_expands_at" timestamptz NOT NULL DEFAULT (now() + interval '10 minutes'),
       "agent_review_at" timestamptz NOT NULL DEFAULT (now() + interval '20 minutes'),
       "matched_provider_id" uuid,
+      "matched_provider_service_id" uuid,
+      "quoted_travel_fee_minor" bigint,
+      "matched_at" timestamptz,
       "notes" text,
       "created_at" timestamptz NOT NULL DEFAULT now(),
       "updated_at" timestamptz NOT NULL DEFAULT now(),
@@ -38,7 +41,8 @@ export class AssistedMatchingAndTravelPricing1796486400000 implements MigrationI
       CONSTRAINT "PK_assisted_match_requests" PRIMARY KEY ("id"),
       CONSTRAINT "FK_assisted_match_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE,
       CONSTRAINT "FK_assisted_match_patient" FOREIGN KEY ("patient_id") REFERENCES "patients"("id") ON DELETE SET NULL,
-      CONSTRAINT "FK_assisted_match_provider" FOREIGN KEY ("matched_provider_id") REFERENCES "providers"("id") ON DELETE SET NULL
+      CONSTRAINT "FK_assisted_match_provider" FOREIGN KEY ("matched_provider_id") REFERENCES "providers"("id") ON DELETE SET NULL,
+      CONSTRAINT "FK_assisted_match_service" FOREIGN KEY ("matched_provider_service_id") REFERENCES "provider_services"("id") ON DELETE SET NULL
     )`);
     await q.query(`CREATE INDEX "IDX_assisted_match_queue" ON "assisted_match_requests" ("status","agent_review_at","created_at")`);
     await q.query(`CREATE INDEX "IDX_assisted_match_user" ON "assisted_match_requests" ("user_id","created_at")`);
