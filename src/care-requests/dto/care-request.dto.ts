@@ -31,13 +31,12 @@ export class CreateCareRequestDto {
   )
   @Matches(/^[A-Z][A-Z0-9_]{1,79}$/)
   serviceCode!: string;
+  @ApiPropertyOptional({ nullable: true, description: "Institution whose virtual clinic owns this journey." })
+  @Transform(({ value }) => typeof value === "string" ? value.trim().toUpperCase() : value)
+  @IsOptional() @Matches(/^SCPR-[A-F0-9]{16,32}$/) hostProviderReference?: string | null;
   @ApiPropertyOptional({ nullable: true })
-  @Transform(({ value }) =>
-    typeof value === "string" ? value.trim().toUpperCase() : value,
-  )
-  @IsOptional()
-  @Matches(/^SCPR-[A-F0-9]{16,32}$/)
-  preferredProviderReference?: string | null;
+  @Transform(({ value }) => typeof value === "string" ? value.trim().toUpperCase() : value)
+  @IsOptional() @Matches(/^SCPR-[A-F0-9]{16,32}$/) preferredProviderReference?: string | null;
   @ApiPropertyOptional({ example: "NG", nullable: true })
   @IsOptional()
   @Transform(({ value }) =>
