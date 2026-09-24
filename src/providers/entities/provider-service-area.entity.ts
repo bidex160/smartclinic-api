@@ -17,6 +17,9 @@ export class ProviderServiceArea {
   @Column({ name: 'postal_code', type: 'varchar', length: 30, nullable: true }) postalCode!: string | null;
   @Column({ name: 'travel_fee_minor', type: 'bigint', default: 0 }) travelFeeMinor!: string;
   @Column({ type: 'integer', default: 100 }) priority!: number;
+  @Column({ name: 'origin_latitude', type: 'decimal', precision: 9, scale: 6, nullable: true }) originLatitude!: string | null;
+  @Column({ name: 'origin_longitude', type: 'decimal', precision: 9, scale: 6, nullable: true }) originLongitude!: string | null;
+  @Column({ name: 'max_radius_km', type: 'decimal', precision: 8, scale: 2, nullable: true }) maxRadiusKm!: string | null;
   @Column({ name: 'is_active', type: 'boolean', default: true }) isActive!: boolean;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;
