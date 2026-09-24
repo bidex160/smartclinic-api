@@ -87,6 +87,12 @@ export class Provider {
   @Column({ name: 'commission_override_bps', type: 'smallint', nullable: true })
   commissionOverrideBps!: number | null;
 
+  @Column({ name: 'is_platform_default', type: 'boolean', default: false })
+  isPlatformDefault!: boolean;
+
+  @Column({ name: 'platform_default_priority', type: 'smallint', nullable: true })
+  platformDefaultPriority!: number | null;
+
   @Column({ name: 'new_patient_registration_enabled', type: 'boolean', default: false })
   newPatientRegistrationEnabled!: boolean;
   @Column({ name: 'new_patient_registration_fee_minor', type: 'bigint', nullable: true })
