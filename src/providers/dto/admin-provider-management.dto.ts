@@ -12,6 +12,7 @@ import {
   Min,
   MinLength,
   Matches,
+  IsBoolean,
 } from "class-validator";
 import { UserStatus } from "../../users/enums/user-status.enum";
 import { UserRole } from "../../users/enums/user-role.enum";
@@ -64,7 +65,19 @@ export class CreateAdminProviderDto {
   @MaxLength(120)
   city!: string;
 }
-export class UpdateAdminProviderDto extends PartialType(OmitType(CreateAdminProviderDto, ["email"] as const)) {}
+export class UpdateAdminProviderDto extends PartialType(OmitType(CreateAdminProviderDto, ["email"] as const)) {
+  @ApiPropertyOptional({ description: 'Prioritize this provider as a SmartClinic-managed default option.' })
+  @IsOptional()
+  @IsBoolean()
+  isPlatformDefault?: boolean;
+
+  @ApiPropertyOptional({ nullable: true, minimum: 0, description: 'Lower values appear first among SmartClinic-managed defaults.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  platformDefaultPriority?: number | null;
+}
 export class LinkProviderUserDto {
   @ApiProperty({ format: "uuid" }) @IsUUID() userId!: string;
 }
@@ -119,6 +132,8 @@ export class AdminProviderListItemResponseDto {
   @ApiPropertyOptional({ nullable: true }) stateOrRegion!: string | null;
   @ApiPropertyOptional({ nullable: true }) city!: string | null;
   @ApiProperty({ enum: ProviderOnboardingStatus }) onboardingStatus!: ProviderOnboardingStatus;
+  @ApiProperty() isPlatformDefault!: boolean;
+  @ApiPropertyOptional({ nullable: true }) platformDefaultPriority!: number | null;
   @ApiPropertyOptional({ nullable: true }) submittedAt!: Date | null;
   @ApiPropertyOptional({ nullable: true }) reviewedAt!: Date | null;
   @ApiPropertyOptional({ nullable: true }) reviewNote!: string | null;
