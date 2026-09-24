@@ -44,7 +44,7 @@ describe('PublicBookingsService', () => {
   } = {}) {
     const patientRepository = {
       create: jest.fn((input: object) => input),
-      save: jest.fn().mockResolvedValue({ id: '2f4a443d-5c93-4f8f-a05a-8ddf37d91b7a' }),
+      save: jest.fn(async (input: any) => ({ id: '2f4a443d-5c93-4f8f-a05a-8ddf37d91b7a', patientReference: 'SCPT-TESTPATIENT01', ...input })),
     };
     const bookingTransactionRepository = {
       create: jest.fn((input: object) => input),
