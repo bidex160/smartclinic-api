@@ -7,6 +7,7 @@ import { HealthCheckPackage } from "./entities/health-check-package.entity";
 import { FulfilmentMode } from "./entities/fulfilment-mode.entity";
 import { ProviderService } from "../providers/entities/provider-service.entity";
 import { ProviderStatus } from "../providers/enums/provider-status.enum";
+import { PackagePrice } from "./entities/package-price.entity";
 import { ProviderOnboardingStatus } from "../providers/enums/provider-onboarding-status.enum";
 
 @Injectable()
@@ -18,6 +19,8 @@ export class HealthCheckPackagesService {
     private readonly providerServices: Repository<ProviderService>,
     @InjectRepository(FulfilmentMode)
     private readonly fulfilmentModesRepository: Repository<FulfilmentMode>,
+    @InjectRepository(PackagePrice)
+    private readonly packagePricesRepository: Repository<PackagePrice>,
   ) {}
 
   async findActive(): Promise<HealthCheckPackageResponseDto[]> {
@@ -29,7 +32,8 @@ export class HealthCheckPackagesService {
       },
       order: { code: "ASC" },
     });
-    const [prices, activeModes] = await Promise.all([
+    const today = new Date().toISOString().slice(0, 10);
+    const [prices, activeModes, cataloguePrices] = await Promise.all([
       this.providerServices.find({
       where: {
         isActive: true,
@@ -42,17 +46,25 @@ export class HealthCheckPackagesService {
       relations: { provider: true, fulfilmentMode: true },
       }),
       this.fulfilmentModesRepository.find({ where: { isActive: true }, order: { name: "ASC" } }),
+      this.packagePricesRepository.find({
+        where: { isActive: true, currency: "NGN" },
+        relations: { fulfilmentMode: true },
+      }),
     ]);
     return healthCheckPackages
       .map((item) => {
         const active = prices.filter(
           (price) => price.healthCheckPackageId === item.id,
         );
-        const currencies = [...new Set(active.map((price) => price.currency))];
-        const fromPriceMinor =
-          currencies.length === 1 && active.length
-            ? Math.min(...active.map((price) => Number(price.priceMinor)))
-            : null;
+        const currentCatalogue = cataloguePrices.filter(
+          (price) =>
+            price.healthCheckPackageId === item.id &&
+            price.effectiveFrom <= today &&
+            (price.effectiveTo === null || today < price.effectiveTo),
+        );
+        const fromPriceMinor = currentCatalogue.length
+          ? Math.min(...currentCatalogue.map((price) => Math.round(Number(price.amount) * 100)))
+          : null;
         return {
           ...HealthCheckPackageResponseDto.fromEntity(item),
           includedContents: (item.contents ?? [])
@@ -90,7 +102,7 @@ export class HealthCheckPackagesService {
               description: clinicalContent.description,
             })),
           fromPriceMinor,
-          currency: fromPriceMinor === null ? null : currencies[0],
+          currency: fromPriceMinor === null ? null : "NGN",
           fulfilmentModes: [
             ...new Map(
               (active.length ? active.map((price) => price.fulfilmentMode) : activeModes)
