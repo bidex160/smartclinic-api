@@ -26,6 +26,8 @@ export class AssistedMatchingAndTravelPricing1796486400000 implements MigrationI
       "state_or_region" varchar(120),
       "city" varchar(120),
       "postal_code" varchar(30),
+      "latitude" decimal(9,6),
+      "longitude" decimal(9,6),
       "contact_preference" "assisted_match_contact_enum" NOT NULL DEFAULT 'NOTIFY',
       "status" "assisted_match_status_enum" NOT NULL DEFAULT 'SEARCHING',
       "search_expands_at" timestamptz NOT NULL DEFAULT (now() + interval '10 minutes'),
