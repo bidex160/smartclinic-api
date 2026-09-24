@@ -649,6 +649,24 @@ export class ProviderCapabilitiesService {
                 OR LOWER(TRIM(area.postal_code)) =
                   LOWER(TRIM(:visitPostal))
               )
+              AND (
+                area.max_radius_km IS NULL
+                OR (
+                  :visitLatitude IS NOT NULL
+                  AND :visitLongitude IS NOT NULL
+                  AND area.origin_latitude IS NOT NULL
+                  AND area.origin_longitude IS NOT NULL
+                  AND (
+                    6371 * 2 * ASIN(
+                      SQRT(
+                        POWER(SIN(RADIANS(:visitLatitude - area.origin_latitude) / 2), 2) +
+                        COS(RADIANS(area.origin_latitude)) * COS(RADIANS(:visitLatitude)) *
+                        POWER(SIN(RADIANS(:visitLongitude - area.origin_longitude) / 2), 2)
+                      )
+                    )
+                  ) <= area.max_radius_km
+                )
+              )
           )
         )
         `,
@@ -664,6 +682,8 @@ export class ProviderCapabilitiesService {
 
           visitPostal:
             window.visitAddress.postalCode ?? '',
+          visitLatitude: window.visitAddress.latitude ?? null,
+          visitLongitude: window.visitAddress.longitude ?? null,
         },
       );
     } else {
