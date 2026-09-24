@@ -64,7 +64,7 @@ describe('patient payment contact route contracts', () => {
 
   it('forwards paymentEmail through patient-provider connection initialization', async () => {
     const payments = { initializePatientProviderConnectionFunding: jest.fn() };
-    await new MePatientProviderConnectionsController({} as any, payments as any).initialize({ user }, { reference: 'SC-PPC' }, dto);
+    await new MePatientProviderConnectionsController({} as any, payments as any, {} as any, {} as any, {} as any).initialize({ user }, { reference: 'SC-PPC' }, dto);
     expect(payments.initializePatientProviderConnectionFunding).toHaveBeenCalledWith('SC-PPC', user.id, dto.paymentEmail);
   });
 
