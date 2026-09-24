@@ -13,7 +13,7 @@ describe('Guided Self-Check internal clinical professional worklist', () => {
   function harness(rows: any[] = []) {
     const calls: Array<[string, Record<string, unknown> | undefined]> = [];
     const qb: any = {};
-    for (const method of ['innerJoinAndSelect', 'orderBy', 'addOrderBy', 'skip', 'take']) qb[method] = jest.fn().mockReturnValue(qb);
+    for (const method of ['innerJoinAndSelect', 'addSelect', 'orderBy', 'addOrderBy', 'skip', 'take']) qb[method] = jest.fn().mockReturnValue(qb);
     qb.andWhere = jest.fn((sql: string, params?: Record<string, unknown>) => { calls.push([sql, params]); return qb; });
     qb.getManyAndCount = jest.fn().mockResolvedValue([rows, rows.length]);
     const reviews = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
