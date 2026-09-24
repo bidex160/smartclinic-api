@@ -10,6 +10,9 @@ import { Patient } from "../patients/entities/patient.entity";
 import { PatientStatus } from "../patients/enums/patient-status.enum";
 import { CareServiceDefinition } from "../providers/entities/care-service-definition.entity";
 import { Provider } from "../providers/entities/provider.entity";
+import { ProviderStatus } from "../providers/enums/provider-status.enum";
+import { ProviderOnboardingStatus } from "../providers/enums/provider-onboarding-status.enum";
+import { ProviderType } from "../providers/enums/provider-type.enum";
 import { CurrentProviderService } from "../providers/current-provider.service";
 import {
   ProviderCareEligibilityInput,
@@ -106,14 +109,15 @@ export class CareRequestsService {
                 };
           let hostProvider: Provider | null = null;
           if (dto.hostProviderReference) {
-            hostProvider = await manager.getRepository(Provider).findOne({ where: { providerReference: dto.hostProviderReference, isActive: true } });
-            if (!hostProvider) throw new ConflictException("Selected hospital or clinic is not active");
+            hostProvider = await manager.getRepository(Provider).findOne({ where: { providerReference: dto.hostProviderReference, status: ProviderStatus.ACTIVE, onboardingStatus: ProviderOnboardingStatus.APPROVED } });
+            if (!hostProvider || ![ProviderType.HOSPITAL, ProviderType.CLINIC].includes(hostProvider.providerType)) throw new ConflictException("Selected hospital or clinic is not active");
             if (deliveryMode !== CareDeliveryMode.VIRTUAL) throw new ConflictException("Institutional virtual clinic requests must use VIRTUAL delivery");
           }
           const eligibilityInput: ProviderCareEligibilityInput = {
             careServiceDefinitionId: definition.id,
             deliveryMode,
             ...geography,
+            hostProviderId: hostProvider?.id ?? null,
           };
 
           const offering = dto.preferredProviderReference
@@ -155,9 +159,9 @@ export class CareRequestsService {
               ...geography,
               deliveryMode,
               servicePriceMinor:
-                offering?.selectedDeliveryOption.priceMinor ?? null,
+                offering?.institutionalPriceMinor ?? offering?.selectedDeliveryOption.priceMinor ?? null,
               serviceCurrency:
-                offering?.selectedDeliveryOption.currency ?? null,
+                offering?.institutionalCurrency ?? offering?.selectedDeliveryOption.currency ?? null,
               notes: dto.notes ?? null,
               preferredDate: dto.preferredDate ?? null,
               preferredTime: dto.preferredTime ?? null,
@@ -694,6 +698,7 @@ export class CareRequestsService {
           : null,
       preferredProvider: provider(request.preferredProvider),
       assignedProvider: provider(request.assignedProvider),
+      hostProvider: provider(request.hostProvider),
       preferredDate: request.preferredDate,
       preferredTime: request.preferredTime,
       preferredTimezone: request.preferredTimezone,
