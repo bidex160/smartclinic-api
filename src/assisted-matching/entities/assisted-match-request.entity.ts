@@ -12,6 +12,7 @@ export class AssistedMatchRequest {
  @Column({name:'preferred_time',type:'time',nullable:true}) preferredTime!:string|null; @Column({name:'preferred_timezone',type:'varchar',length:80,nullable:true}) preferredTimezone!:string|null;
  @Column({name:'country_code',type:'char',length:2,nullable:true}) countryCode!:string|null; @Column({name:'state_or_region',type:'varchar',length:120,nullable:true}) stateOrRegion!:string|null;
  @Column({type:'varchar',length:120,nullable:true}) city!:string|null; @Column({name:'postal_code',type:'varchar',length:30,nullable:true}) postalCode!:string|null;
+ @Column({type:'decimal',precision:9,scale:6,nullable:true}) latitude!:string|null; @Column({type:'decimal',precision:9,scale:6,nullable:true}) longitude!:string|null;
  @Column({name:'contact_preference',type:'enum',enum:AssistedMatchContact,enumName:'assisted_match_contact_enum',default:AssistedMatchContact.NOTIFY}) contactPreference!:AssistedMatchContact;
  @Column({type:'enum',enum:AssistedMatchStatus,enumName:'assisted_match_status_enum',default:AssistedMatchStatus.SEARCHING}) status!:AssistedMatchStatus;
  @Column({name:'search_expands_at',type:'timestamptz'}) searchExpandsAt!:Date; @Column({name:'agent_review_at',type:'timestamptz'}) agentReviewAt!:Date;
