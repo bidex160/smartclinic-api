@@ -17,6 +17,7 @@ import { NotificationActionType } from '../notifications/enums/notification-acti
 import { NotificationEntityType } from '../notifications/enums/notification-entity-type.enum';
 import { NotificationType } from '../notifications/enums/notification-type.enum';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ProviderGrowthInvitesService } from './provider-growth-invites.service';
 
 @Injectable()
 export class ProviderOnboardingService {
@@ -28,6 +29,7 @@ export class ProviderOnboardingService {
     private readonly readiness: ProviderOnboardingReadinessService,
     private readonly referrals: ReferralsService,
     @Optional() private readonly notifications?: NotificationsService,
+    private readonly growthInvites?: ProviderGrowthInvitesService,
   ) {}
 
   async register(dto: RegisterProviderDto): Promise<ProviderOnboardingProfileResponseDto> {
@@ -44,6 +46,7 @@ export class ProviderOnboardingService {
         const provider = await providerRepository.save(providerRepository.create({ userId: user.id, displayName: dto.displayName.trim(), email, phone: dto.phone.trim(), professionalReference: dto.professionalReference?.trim() || null, providerType: dto.providerType, countryCode: dto.countryCode.toUpperCase(), stateOrRegion: dto.stateOrRegion.trim(), city: dto.city.trim(), status: ProviderStatus.PENDING, onboardingStatus: ProviderOnboardingStatus.DRAFT, submittedAt: null, reviewedAt: null, reviewedByUserId: null, reviewNote: null }));
         await this.referrals.ensureReferralCode(user.id, manager);
         if (dto.referralCode) await this.referrals.captureProvider(manager, dto.referralCode, provider, dto.intendedReferralType);
+        if (dto.inviteToken && this.growthInvites) await this.growthInvites.claim(manager, dto.inviteToken, provider.id);
         return provider;
       });
       return this.map(provider);
