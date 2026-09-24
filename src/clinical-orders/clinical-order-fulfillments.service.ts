@@ -336,7 +336,9 @@ export class ClinicalOrderFulfillmentsService {
       b.andWhere("COALESCE(location.city,provider.city) ILIKE :city", {
         city: q.city,
       });
-    b.orderBy("provider.displayName", "ASC")
+    b.orderBy("provider.isPlatformDefault", "DESC")
+      .addOrderBy("provider.platformDefaultPriority", "ASC", "NULLS LAST")
+      .addOrderBy("provider.displayName", "ASC")
       .addOrderBy("unit.name", "ASC")
       .addOrderBy("unit.reference", "ASC")
       .skip((q.page - 1) * q.limit)
