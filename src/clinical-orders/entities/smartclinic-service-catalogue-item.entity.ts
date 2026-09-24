@@ -16,6 +16,8 @@ export class SmartClinicServiceCatalogueItem {
   @Column({ type: 'varchar', length: 20 }) category!: SmartClinicCatalogueCategory;
   @Column({ type: 'varchar', length: 200 }) name!: string;
   @Column({ type: 'text', nullable: true }) description!: string | null;
+  @Column({ name: 'group_name', type: 'varchar', length: 80, nullable: true }) groupName!: string | null;
+  @Column({ type: 'varchar', length: 100, nullable: true }) subcategory!: string | null;
   @Column({ name: 'unit_label', type: 'varchar', length: 120, nullable: true }) unitLabel!: string | null;
   @Column({ name: 'average_cost_minor', type: 'bigint' }) averageCostMinor!: string;
   @Column({ name: 'markup_bps', type: 'smallint', default: 2000 }) markupBps!: number;
