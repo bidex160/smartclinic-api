@@ -8,6 +8,7 @@ import { ProvidersModule } from "../providers/providers.module";
 import { ProviderCareService } from "../providers/entities/provider-care-service.entity";
 import { ProviderLocation } from "../providers/entities/provider-location.entity";
 import { Provider } from "../providers/entities/provider.entity";
+import { ProviderPracticeAffiliation } from "../providers/entities/provider-practice-affiliation.entity";
 import { CareAppointmentStatusHistory } from "./entities/care-appointment-status-history.entity";
 import { CareAppointment } from "./entities/care-appointment.entity";
 import { CareAppointmentsService } from "./care-appointments.service";
@@ -43,6 +44,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       Provider,
       ProviderCareService,
       ProviderLocation,
+      ProviderPracticeAffiliation,
       User,
       CareRequestFunding,
       CareServiceDefinition,
