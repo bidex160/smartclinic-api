@@ -67,7 +67,7 @@ describe('Guided Self-Check internal clinical professional worklist', () => {
     ]));
     expect(h.qb.addSelect).toHaveBeenCalledWith(expect.stringContaining("review.priority = 'URGENT'"), 'priority_order');
     expect(h.qb.orderBy).toHaveBeenCalledWith('priority_order', 'ASC');
-    expect(h.qb.addOrderBy).toHaveBeenNthCalledWith(1, 'review.assignedAt', 'ASC', 'NULLS LAST');
+    expect(h.qb.addOrderBy).toHaveBeenNthCalledWith(1, 'review.createdAt', 'ASC');
     expect(h.qb.addOrderBy).toHaveBeenNthCalledWith(2, 'review.id', 'ASC');
   });
 
