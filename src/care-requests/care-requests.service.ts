@@ -173,8 +173,8 @@ export class CareRequestsService {
           const reasonCode = dto.preferredProviderReference
             ? "PREFERRED_PROVIDER_ROUTED"
             : offering
-              ? "PROVIDER_AUTO_MATCHED"
-              : "MATCHING_REQUESTED";
+              ? (hostProvider ? "INSTITUTION_CLINICIAN_AUTO_MATCHED" : "PROVIDER_AUTO_MATCHED")
+              : (hostProvider ? "INSTITUTION_MATCHING_REQUESTED" : "MATCHING_REQUESTED");
           const statusHistory = await this.history(
             manager,
             request.id,
