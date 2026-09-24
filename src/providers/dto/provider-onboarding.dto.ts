@@ -79,6 +79,11 @@ export class RegisterProviderDto extends ProviderProfileFieldsDto {
   @IsOptional()
   @IsEnum(ReferralTargetType)
   intendedReferralType?: ReferralTargetType;
+  @ApiPropertyOptional({ description: "Opaque provider-growth invitation token" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  inviteToken?: string;
 }
 
 export class UpdateProviderProfileDto extends PartialType(
