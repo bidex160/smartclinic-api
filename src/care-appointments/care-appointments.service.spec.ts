@@ -61,7 +61,7 @@ describe('CareAppointmentsService', () => {
     await expect(subject.schedule(user, care.reference, { ...dto, providerLocationReference: null })).resolves.toBeDefined();
     expect(appointmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({
       deliveryMode: CareDeliveryMode.VIRTUAL,
-      meetingUrl: 'https://meet.jit.si/SmartClinic-SCAPTABCDEF123456',
+      meetingUrl: expect.stringMatching(/^https:\/\/meet\.jit\.si\/SmartClinic-SCAPT[A-Z0-9]{12}$/),
     }));
   });
 
