@@ -19,6 +19,7 @@ import { User } from "src/users/entities/user.entity";
 import { SmartClinicServiceCatalogueItem } from './entities/smartclinic-service-catalogue-item.entity';
 import { SmartClinicServiceCatalogueService } from './smartclinic-service-catalogue.service';
 import { SmartClinicServiceCatalogueController } from './smartclinic-service-catalogue.controller';
+import { ProviderCatalogueOffering } from './entities/provider-catalogue-offering.entity';
 import { ProviderServiceUnitsModule } from '../provider-service-units/provider-service-units.module';
 import { RewardsModule } from '../rewards/rewards.module';
 import { ClinicalOrderFulfillment } from './entities/clinical-order-fulfillment.entity';
@@ -46,7 +47,7 @@ import { PharmacyQuote } from './entities/pharmacy-quote.entity';import { Pharma
       ClinicalOrderFulfillment,
       ClinicalOrderFulfillmentHistory,
       PharmacyQuote,PharmacyQuoteItem,PharmacyFulfillmentFunding,PharmacyDispensing,
-      SmartClinicServiceCatalogueItem,
+      SmartClinicServiceCatalogueItem,ProviderCatalogueOffering,
     ]),
   ],
   controllers: [ProviderClinicalOrdersController, MeClinicalOrdersController, ProviderOrderFulfillmentsController, MeOrderFulfillmentsController,ProviderPharmacyFulfillmentController,MePharmacyFulfillmentController,SmartClinicServiceCatalogueController],
