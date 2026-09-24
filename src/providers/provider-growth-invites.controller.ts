@@ -1,0 +1,7 @@
+import { Body,Controller,Get,Param,Post,Req,UseGuards } from '@nestjs/common';import { ApiBearerAuth,ApiTags } from '@nestjs/swagger';import { JwtAuthGuard } from '../auth/jwt-auth.guard';import { RolesGuard } from '../auth/roles.guard';import { Roles } from '../auth/roles.decorator';import { User } from '../users/entities/user.entity';import { UserRole } from '../users/enums/user-role.enum';import { CreateProviderGrowthInviteDto } from './dto/provider-growth-invite.dto';import { ProviderGrowthInvitesService } from './provider-growth-invites.service';
+@ApiTags('Provider network growth') @Controller()
+export class ProviderGrowthInvitesController{constructor(private service:ProviderGrowthInvitesService){}
+ @ApiBearerAuth()@UseGuards(JwtAuthGuard,RolesGuard)@Roles(UserRole.PROVIDER)@Post('provider/network/invites')create(@Req()req:{user:User},@Body()dto:CreateProviderGrowthInviteDto){return this.service.create(req.user,dto)}
+ @ApiBearerAuth()@UseGuards(JwtAuthGuard,RolesGuard)@Roles(UserRole.PROVIDER)@Get('provider/network/invites')mine(@Req()req:{user:User}){return this.service.mine(req.user)}
+ @Get('public/provider-invites/:token')get(@Param('token')token:string){return this.service.publicInvite(token)}
+}
