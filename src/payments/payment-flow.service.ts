@@ -80,6 +80,9 @@ import { GuidedSelfCheckFundingStatus } from "../guided-self-checks/enums/guided
 import { DiagnosticQuote } from '../clinical-orders/entities/diagnostic-quote.entity';
 import { DiagnosticFulfillmentFunding,DiagnosticFundingStatus } from '../clinical-orders/entities/diagnostic-fulfillment-funding.entity';
 import { CareAppointmentsService } from '../care-appointments/care-appointments.service';
+import { WalletTopUp, WalletTopUpStatus } from '../wallet/entities/wallet-top-up.entity';
+import { PatientWalletService } from '../wallet/patient-wallet.service';
+import { InitializeWalletTopUpDto } from './dto/initialize-wallet-top-up.dto';
 
 @Injectable()
 export class PaymentFlowService {
@@ -105,7 +108,131 @@ export class PaymentFlowService {
     private readonly careAppointments?: CareAppointmentsService,
     @Optional()
     private readonly providerRegistry?: PaymentProviderRegistry,
+    @Optional()
+    private readonly patientWallet?: PatientWalletService,
   ) {}
+
+  async getWalletTopUp(userId: string, reference: string) {
+    const topUp = await this.bookings.manager.getRepository(WalletTopUp).findOne({ where: { reference, userId } });
+    if (!topUp) throw new NotFoundException('Wallet top-up was not found');
+    const attempt = await this.attempts.findOne({ where: { walletTopUpId: topUp.id }, order: { createdAt: 'DESC' } });
+    return this.walletTopUpResponse(topUp, attempt);
+  }
+
+  async initializeWalletTopUp(userId: string, dto: InitializeWalletTopUpDto) {
+    const user = await this.bookings.manager.getRepository(User).findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User was not found');
+    const customerEmail = this.resolvePaymentEmail(user.email, dto.paymentEmail);
+    const reference = 'SC-WAL-' + randomBytes(8).toString('hex').toUpperCase();
+    const initialized = await this.resolvePaymentProvider(dto.paymentProvider).initializePayment({
+      amount: this.fromMinor(BigInt(dto.amountMinor)),
+      currency: 'NGN',
+      idempotencyKey: 'WALLET-' + randomBytes(16).toString('hex'),
+      bookingReference: reference,
+      customerEmail,
+      paymentReference: 'SC-PAY-' + randomBytes(12).toString('hex'),
+      callbackUrl: this.walletTopUpReturnUrl(reference, dto.clientPlatform),
+    });
+    return this.bookings.manager.transaction(async manager => {
+      const topUp = await manager.getRepository(WalletTopUp).save({
+        reference,
+        userId,
+        amountMinor: String(dto.amountMinor),
+        currency: 'NGN',
+        status: WalletTopUpStatus.PENDING,
+        connectionReference: dto.connectionReference?.trim() || null,
+        paidAt: null,
+      });
+      const attempt = await manager.getRepository(PaymentAttempt).save({
+        bookingFundingId: null,
+        fastTrackRequestId: null,
+        careRequestFundingId: null,
+        patientProviderConnectionFundingId: null,
+        pharmacyFulfillmentFundingId: null,
+        guidedSelfCheckId: null,
+        diagnosticFulfillmentFundingId: null,
+        walletTopUpId: topUp.id,
+        amount: this.fromMinor(BigInt(dto.amountMinor)),
+        currency: 'NGN',
+        status: initialized.status,
+        idempotencyKey: 'WALLET-ATTEMPT-' + randomBytes(16).toString('hex'),
+        customerEmail,
+        providerCode: initialized.providerCode,
+        providerReference: initialized.providerReference,
+        checkoutUrl: initialized.checkoutUrl,
+        accessCode: initialized.accessCode,
+      });
+      return this.walletTopUpResponse(topUp, attempt);
+    });
+  }
+
+  async verifyLatestWalletTopUp(userId: string, reference: string) {
+    const topUp = await this.bookings.manager.getRepository(WalletTopUp).findOne({ where: { reference, userId } });
+    if (!topUp) throw new NotFoundException('Wallet top-up was not found');
+    if (topUp.status === WalletTopUpStatus.PAID) return this.getWalletTopUp(userId, reference);
+    const attempt = await this.attempts.findOne({ where: { walletTopUpId: topUp.id }, order: { createdAt: 'DESC' } });
+    if (!attempt?.providerReference) throw new ConflictException('No wallet payment is available to verify');
+    if (attempt.status !== PaymentAttemptStatus.SUCCEEDED) {
+      await this.applyWalletTopUpVerification(attempt.id, userId, await this.resolvePaymentProvider(attempt.providerCode as PaymentProvider | undefined).verifyPayment(attempt.providerReference));
+    }
+    return this.getWalletTopUp(userId, reference);
+  }
+
+  private async applyWalletTopUpVerification(attemptId: string, actor: string | null, verified: VerifyPaymentResult) {
+    if (!this.patientWallet) throw new ConflictException('Patient wallet is not available');
+    return this.bookings.manager.transaction(async manager => {
+      const attempt = await manager.getRepository(PaymentAttempt).findOne({ where: { id: attemptId }, lock: { mode: 'pessimistic_write' } });
+      if (!attempt?.walletTopUpId) throw new NotFoundException('Wallet payment attempt was not found');
+      const topUp = await manager.getRepository(WalletTopUp).findOne({ where: { id: attempt.walletTopUpId }, lock: { mode: 'pessimistic_write' } });
+      if (!topUp) throw new NotFoundException('Wallet top-up was not found');
+      if (attempt.status === PaymentAttemptStatus.SUCCEEDED && topUp.status === WalletTopUpStatus.PAID) return this.walletTopUpResponse(topUp, attempt);
+      const expected = this.fromMinor(BigInt(topUp.amountMinor));
+      if (!verified.succeeded || verified.providerReference !== attempt.providerReference || verified.amount !== attempt.amount || verified.currency !== attempt.currency || attempt.amount !== expected || attempt.currency !== topUp.currency) {
+        attempt.status = verified.succeeded ? PaymentAttemptStatus.FAILED : verified.status;
+        attempt.lastVerifiedAt = new Date();
+        await manager.save(attempt);
+        if ([PaymentAttemptStatus.FAILED, PaymentAttemptStatus.CANCELLED].includes(attempt.status)) {
+          topUp.status = WalletTopUpStatus.FAILED;
+          await manager.save(topUp);
+        }
+        return this.walletTopUpResponse(topUp, attempt);
+      }
+      attempt.status = PaymentAttemptStatus.SUCCEEDED;
+      attempt.lastVerifiedAt = new Date();
+      await manager.save(attempt);
+      let transaction = await manager.getRepository(PaymentTransaction).findOne({ where: { paymentAttemptId: attempt.id, status: PaymentTransactionStatus.SUCCEEDED } });
+      if (!transaction) transaction = await manager.getRepository(PaymentTransaction).save({
+        paymentAttemptId: attempt.id,
+        parentTransactionId: null,
+        transactionType: PaymentTransactionType.COLLECTION,
+        status: PaymentTransactionStatus.SUCCEEDED,
+        amount: attempt.amount,
+        currency: attempt.currency,
+        providerReference: attempt.providerReference,
+        occurredAt: verified.occurredAt,
+      });
+      await this.patientWallet!.credit(actor ?? topUp.userId, BigInt(topUp.amountMinor), topUp.currency, 'TOP_UP', topUp.reference, manager);
+      topUp.status = WalletTopUpStatus.PAID;
+      topUp.paidAt = verified.occurredAt;
+      await manager.save(topUp);
+      return this.walletTopUpResponse(topUp, attempt);
+    });
+  }
+
+  private walletTopUpResponse(topUp: WalletTopUp, attempt: PaymentAttempt | null) {
+    return {
+      reference: topUp.reference,
+      amountMinor: Number(topUp.amountMinor),
+      currency: topUp.currency,
+      status: topUp.status,
+      paid: topUp.status === WalletTopUpStatus.PAID,
+      connectionReference: topUp.connectionReference,
+      attemptStatus: attempt?.status ?? null,
+      checkoutUrl: attempt?.checkoutUrl ?? null,
+      accessCode: attempt?.accessCode ?? null,
+      provider: attempt?.providerCode ?? null,
+    };
+  }
 
   private resolvePaymentProvider(
     requested?: PaymentProvider,
@@ -796,6 +923,12 @@ async initiatePatientPayment(
       ) as never;
     if (attempt.pharmacyFulfillmentFundingId)
       return this.applyPharmacyVerification(
+        attempt.id,
+        null,
+        verified,
+      ) as never;
+    if (attempt.walletTopUpId)
+      return this.applyWalletTopUpVerification(
         attempt.id,
         null,
         verified,
@@ -3562,6 +3695,8 @@ private guidedSelfCheckReturnUrl(reference: string, clientPlatform?: import('./e
     `/me/self-checks/${encodeURIComponent(reference)}`,
   );
 }
+
+private walletTopUpReturnUrl(reference:string,clientPlatform?:import('./enums/payment-client-platform.enum').PaymentClientPlatform):string|undefined{if(clientPlatform==='MOBILE')return this.mobileUrl(`/mobile/payment-return/wallet/${encodeURIComponent(reference)}`);return this.frontendUrl(`/me/pay-bills?walletPayment=${encodeURIComponent(reference)}`);}
 
 private diagnosticReturnUrl(reference:string,clientPlatform?:import('./enums/payment-client-platform.enum').PaymentClientPlatform):string|undefined{if(clientPlatform==='MOBILE')return this.mobileUrl(`/mobile/payment-return/diagnostic/${encodeURIComponent(reference)}`);return this.frontendUrl('/me/tests');}
 
