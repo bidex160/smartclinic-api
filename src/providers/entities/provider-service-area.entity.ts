@@ -15,6 +15,8 @@ export class ProviderServiceArea {
   @Column({ name: 'state_or_region', type: 'varchar', length: 120 }) stateOrRegion!: string;
   @Column({ type: 'varchar', length: 120, nullable: true }) city!: string | null;
   @Column({ name: 'postal_code', type: 'varchar', length: 30, nullable: true }) postalCode!: string | null;
+  @Column({ name: 'travel_fee_minor', type: 'bigint', default: 0 }) travelFeeMinor!: string;
+  @Column({ type: 'integer', default: 100 }) priority!: number;
   @Column({ name: 'is_active', type: 'boolean', default: true }) isActive!: boolean;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;
