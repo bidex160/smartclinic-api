@@ -154,7 +154,17 @@ export class PublicBookingsService {
     const end = healthPackage?.estimatedDurationMinutes ? deriveAppointmentEndTime(details.preferredTimeFrom, healthPackage.estimatedDurationMinutes) : null;
     if (!end) throw new BadRequestException('Health Check package has no valid appointment duration');
     const address = modeCode === 'HOME_VISIT' && details.visitAddress ? this.normalizedAddress(details.visitAddress) : null;
-    const eligible = await this.providerCapabilities.findEligibleProviders(details.healthCheckPackageId, details.fulfilmentModeId, { requestedDate: details.preferredDate, requestedStartTime: details.preferredTimeFrom, requestedEndTime: end, requestedTimezone: details.preferredTimezone, visitAddress: address });
+    const eligible = await this.providerCapabilities.findEligibleProviders(details.healthCheckPackageId, details.fulfilmentModeId, { requestedDate: details.preferredDate, requestedStartTime: details.preferredTimeFrom, requestedEndTime: end, requestedTimezone: details.preferredTimezone,
+       visitAddress: {
+              ...address,
+              countryCode: address?.countryCode ?? '',
+              stateOrRegion: address?.stateOrRegion ?? '',
+              city: address?.city ?? '',
+              postalCode: address?.postalCode ?? '',
+              latitude: address?.latitude ? Number(address.latitude) : null,
+              longitude: address?.longitude ? Number(address.longitude) : null,
+            },
+       });
     const capability = eligible[0];
     if (!capability) throw new ConflictException('No eligible priced Provider is currently available for this Health Check');
     return capability;

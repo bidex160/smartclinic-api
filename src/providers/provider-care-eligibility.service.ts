@@ -272,7 +272,7 @@ async requireEligible(
         )
         .getExists();
 
-  const affiliationMatches = locationMatches ? false : await manager.getRepository(ProviderPracticeAffiliation).createQueryBuilder("affiliation").innerJoin("affiliation.hostLocation","hostLocation").where("affiliation.doctorProviderId = :providerId",{providerId:provider.id}).andWhere("affiliation.isActive = true").andWhere("hostLocation.isActive = true").andWhere("hostLocation.countryCode = :countryCode",{countryCode:input.countryCode}).andWhere("LOWER(TRIM(hostLocation.state)) = LOWER(TRIM(:stateOrRegion))",{stateOrRegion:input.stateOrRegion}).andWhere("LOWER(TRIM(hostLocation.city)) = LOWER(TRIM(:city))",{city:input.city}).getExists();
+  const affiliationMatches = locationMatches ? false : await manager.getRepository(ProviderPracticeAffiliation).createQueryBuilder("affiliation").innerJoin("affiliation.hostLocation","hostLocation").where("affiliation.doctorProviderId = :providerId",{providerId:provider.id}).andWhere("affiliation.isActive = true").andWhere("affiliation.status = :approvedAffiliation",{approvedAffiliation:ProviderPracticeAffiliationStatus.APPROVED}).andWhere("hostLocation.isActive = true").andWhere("hostLocation.countryCode = :countryCode",{countryCode:input.countryCode}).andWhere("LOWER(TRIM(hostLocation.state)) = LOWER(TRIM(:stateOrRegion))",{stateOrRegion:input.stateOrRegion}).andWhere("LOWER(TRIM(hostLocation.city)) = LOWER(TRIM(:city))",{city:input.city}).getExists();
 
   if (!locationMatches && !affiliationMatches) {
     return this.ineligible();
@@ -393,8 +393,8 @@ async findEligibleCareProvider(
         "LOWER(location.city) = LOWER(:city)",
       );
 
-    const affiliationQuery = manager.getRepository(ProviderPracticeAffiliation).createQueryBuilder("affiliation").innerJoin("affiliation.hostLocation","affiliatedLocation").select("1").where("affiliation.doctorProviderId = provider.id").andWhere("affiliation.isActive = true").andWhere("affiliatedLocation.isActive = true").andWhere("affiliatedLocation.countryCode = :countryCode").andWhere("LOWER(TRIM(affiliatedLocation.state)) = LOWER(TRIM(:stateOrRegion))").andWhere("LOWER(TRIM(affiliatedLocation.city)) = LOWER(TRIM(:city))");
-    query.andWhere(`(EXISTS (${locationQuery.getQuery()}) OR EXISTS (${affiliationQuery.getQuery()}))`,{countryCode:input.countryCode,stateOrRegion:input.stateOrRegion,city:input.city});
+    const affiliationQuery = manager.getRepository(ProviderPracticeAffiliation).createQueryBuilder("affiliation").innerJoin("affiliation.hostLocation","affiliatedLocation").select("1").where("affiliation.doctorProviderId = provider.id").andWhere("affiliation.isActive = true").andWhere("affiliation.status = :approvedAffiliation").andWhere("affiliatedLocation.isActive = true").andWhere("affiliatedLocation.countryCode = :countryCode").andWhere("LOWER(TRIM(affiliatedLocation.state)) = LOWER(TRIM(:stateOrRegion))").andWhere("LOWER(TRIM(affiliatedLocation.city)) = LOWER(TRIM(:city))");
+    query.andWhere(`(EXISTS (${locationQuery.getQuery()}) OR EXISTS (${affiliationQuery.getQuery()}))`,{countryCode:input.countryCode,stateOrRegion:input.stateOrRegion,city:input.city,approvedAffiliation:ProviderPracticeAffiliationStatus.APPROVED});
   } else {
     /**
      * Current fallback for other physical delivery modes.
