@@ -29,7 +29,7 @@ import { ClinicalAttachmentResourceType } from "./enums/clinical-attachment-reso
 import { ClinicalAttachmentStorageProvider } from "./enums/clinical-attachment-storage-provider.enum";
 import { ClinicalRecordStatus } from "./enums/clinical-record-status.enum";
 import { DiagnosticExecution, DiagnosticExecutionStatus } from "../clinical-orders/entities/diagnostic-execution.entity";
-import { ClinicalOrderFulfillmentStatus } from "src/clinical-orders/enums/clinical-order-fulfillment-status.enum";
+import { ClinicalOrderFulfillmentStatus } from "../clinical-orders/enums/clinical-order-fulfillment-status.enum";
 export type UploadedClinicalFile = UploadedPrivateFile;
 const MAX_ATTACHMENTS = 5;
 
