@@ -16,5 +16,6 @@ export class AssistedMatchRequest {
  @Column({type:'enum',enum:AssistedMatchStatus,enumName:'assisted_match_status_enum',default:AssistedMatchStatus.SEARCHING}) status!:AssistedMatchStatus;
  @Column({name:'search_expands_at',type:'timestamptz'}) searchExpandsAt!:Date; @Column({name:'agent_review_at',type:'timestamptz'}) agentReviewAt!:Date;
  @Column({name:'matched_provider_id',type:'uuid',nullable:true}) matchedProviderId!:string|null; @ManyToOne(()=>Provider,{nullable:true,onDelete:'SET NULL'})@JoinColumn({name:'matched_provider_id'}) matchedProvider!:Provider|null;
+ @Column({name:'matched_provider_service_id',type:'uuid',nullable:true}) matchedProviderServiceId!:string|null; @Column({name:'quoted_travel_fee_minor',type:'bigint',nullable:true}) quotedTravelFeeMinor!:string|null; @Column({name:'matched_at',type:'timestamptz',nullable:true}) matchedAt!:Date|null;
  @Column({type:'text',nullable:true}) notes!:string|null; @CreateDateColumn({name:'created_at',type:'timestamptz'}) createdAt!:Date; @UpdateDateColumn({name:'updated_at',type:'timestamptz'}) updatedAt!:Date;
 }
