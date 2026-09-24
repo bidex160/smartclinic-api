@@ -128,6 +128,10 @@ export class AdminProvidersService {
     if (dto.countryCode !== undefined) provider.countryCode = dto.countryCode.toUpperCase();
     if (dto.stateOrRegion !== undefined) provider.stateOrRegion = dto.stateOrRegion.trim();
     if (dto.city !== undefined) provider.city = dto.city.trim();
+    if (dto.isPlatformDefault !== undefined) provider.isPlatformDefault = dto.isPlatformDefault;
+    if (dto.platformDefaultPriority !== undefined) provider.platformDefaultPriority = dto.platformDefaultPriority;
+    if (provider.isPlatformDefault && provider.platformDefaultPriority === null) provider.platformDefaultPriority = 100;
+    if (!provider.isPlatformDefault) provider.platformDefaultPriority = null;
     await this.providers.save(provider);
     return this.get(id);
   }
@@ -324,6 +328,8 @@ export class AdminProvidersService {
       city: provider.city,
       status: provider.status,
       onboardingStatus: provider.onboardingStatus,
+      isPlatformDefault: provider.isPlatformDefault,
+      platformDefaultPriority: provider.platformDefaultPriority,
       submittedAt: provider.submittedAt,
       reviewedAt: provider.reviewedAt,
       reviewNote: provider.reviewNote,
