@@ -23,6 +23,9 @@ import { ProviderPayoutAccountsService } from "./provider-payout-accounts.servic
 import { ProviderPayoutAccountCryptoService } from "./provider-payout-account-crypto.service";
 import { OpayPayoutProviderAdapter } from "./payout-providers/opay-payout-provider.adapter";
 import { PayoutProviderRegistry } from "./payout-providers/payout-provider.registry";
+import { ProviderReferralCommission } from "./entities/provider-referral-commission.entity";
+import { ProviderGrowthInvite } from "../providers/entities/provider-growth-invite.entity";
+import { ProviderReferralCommissionService } from "./provider-referral-commission.service";
 
 @Module({
   imports: [
@@ -38,10 +41,12 @@ import { PayoutProviderRegistry } from "./payout-providers/payout-provider.regis
       ProviderPayoutAccount,
       ProviderPayoutAccountHistory,
       User,
+      ProviderReferralCommission,
+      ProviderGrowthInvite,
     ]),
   ],
   controllers: [ProviderEarningsController, AdminProviderEarningsController, ProviderPayoutsController, AdminProviderPayoutsController, ProviderPayoutAccountsController, AdminProviderPayoutAccountsController],
-  providers: [ProviderEarningsService, ProviderPayoutsService, ProviderPayoutAccountsService, ProviderPayoutAccountCryptoService, OpayPayoutProviderAdapter, PayoutProviderRegistry],
-  exports: [ProviderEarningsService, ProviderPayoutsService, ProviderPayoutAccountsService, PayoutProviderRegistry],
+  providers: [ProviderReferralCommissionService, ProviderEarningsService, ProviderPayoutsService, ProviderPayoutAccountsService, ProviderPayoutAccountCryptoService, OpayPayoutProviderAdapter, PayoutProviderRegistry],
+  exports: [ProviderReferralCommissionService, ProviderEarningsService, ProviderPayoutsService, ProviderPayoutAccountsService, PayoutProviderRegistry],
 })
 export class EarningsModule {}
