@@ -717,12 +717,12 @@ export class ProviderCapabilitiesService {
   }
 
   const rows = await query
-    .orderBy({
-      'service.createdAt': 'ASC',
-      'service.id': 'ASC',
-      'location.createdAt': 'ASC',
-      'location.id': 'ASC',
-    })
+    .orderBy('provider.isPlatformDefault', 'DESC')
+    .addOrderBy('provider.platformDefaultPriority', 'ASC', 'NULLS LAST')
+    .addOrderBy('service.createdAt', 'ASC')
+    .addOrderBy('service.id', 'ASC')
+    .addOrderBy('location.createdAt', 'ASC')
+    .addOrderBy('location.id', 'ASC')
     .getMany();
 
   return rows.map((service) => {
