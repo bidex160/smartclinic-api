@@ -15,6 +15,9 @@ export class ProviderPracticeAffiliation{
  @Column({name:'affiliation_type',type:'enum',enum:ProviderPracticeAffiliationType,enumName:'provider_practice_affiliation_type_enum'}) affiliationType!:ProviderPracticeAffiliationType;
  @Column({name:'is_default',type:'boolean',default:false}) isDefault!:boolean;
  @Column({name:'is_active',type:'boolean',default:true}) isActive!:boolean;
+ @Column({name:'allows_virtual_care',type:'boolean',default:false}) allowsVirtualCare!:boolean;
+ @Column({name:'virtual_care_price_minor',type:'bigint',nullable:true}) virtualCarePriceMinor!:string|null;
+ @Column({name:'virtual_care_currency',type:'char',length:3,nullable:true}) virtualCareCurrency!:string|null;
  @CreateDateColumn({name:'created_at',type:'timestamptz'}) createdAt!:Date;
  @UpdateDateColumn({name:'updated_at',type:'timestamptz'}) updatedAt!:Date;
 }
