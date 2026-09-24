@@ -70,7 +70,7 @@ export class SmartClinicServiceCatalogueService {
     const provider=await this.currentProvider.resolveOperational(user);
     const item=await this.repo.findOne({where:{code:code.toUpperCase(),isActive:true}});
     if(!item)throw new NotFoundException('Catalogue item was not found');
-    const expected=item.category===SmartClinicCatalogueCategory.LAB_TEST?ProviderServiceUnitType.LABORATORY:ProviderServiceUnitType.PHARMACY;
+    const expected=item.category===SmartClinicCatalogueCategory.LAB_TEST?ProviderServiceUnitType.LABORATORY:item.category===SmartClinicCatalogueCategory.IMAGING_STUDY?ProviderServiceUnitType.RADIOLOGY:ProviderServiceUnitType.PHARMACY;
     let unit:ProviderServiceUnit|null=null;
     if(body.providerServiceUnitReference) unit=await this.repo.manager.getRepository(ProviderServiceUnit).findOne({where:{reference:body.providerServiceUnitReference,providerId:provider.id,type:expected,status:ProviderServiceUnitStatus.ACTIVE}});
     else unit=await this.repo.manager.getRepository(ProviderServiceUnit).findOne({where:{providerId:provider.id,type:expected,status:ProviderServiceUnitStatus.ACTIVE},order:{createdAt:'ASC'}});
