@@ -20,6 +20,7 @@ import { PatientProviderConnectionFunding } from '../../patient-provider-connect
 import { PharmacyFulfillmentFunding } from '../../clinical-orders/entities/pharmacy-fulfillment-funding.entity';
 import { GuidedSelfCheck } from '../../guided-self-checks/entities/guided-self-check.entity';
 import { DiagnosticFulfillmentFunding } from '../../clinical-orders/entities/diagnostic-fulfillment-funding.entity';
+import { WalletTopUp } from '../../wallet/entities/wallet-top-up.entity';
 
 @Entity("payment_attempts")
 @Index("UQ_payment_attempts_idempotency_key", ["idempotencyKey"], {
@@ -37,7 +38,8 @@ import { DiagnosticFulfillmentFunding } from '../../clinical-orders/entities/dia
 @Index("IDX_payment_attempts_pharmacy_funding_status", ["pharmacyFulfillmentFundingId", "status"])
 @Index("IDX_payment_attempts_guided_self_check_status", ["guidedSelfCheckId", "status"])
 @Index("IDX_payment_attempts_diagnostic_funding_status", ["diagnosticFulfillmentFundingId", "status"])
-@Check('CHK_payment_attempts_obligation', '(CASE WHEN "booking_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "fasttrack_request_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "care_request_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "patient_provider_connection_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "pharmacy_fulfillment_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "guided_self_check_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "diagnostic_fulfillment_funding_id" IS NULL THEN 0 ELSE 1 END) = 1')
+@Index("IDX_payment_attempts_wallet_top_up_status", ["walletTopUpId", "status"])
+@Check('CHK_payment_attempts_obligation', '(CASE WHEN "booking_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "fasttrack_request_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "care_request_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "patient_provider_connection_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "pharmacy_fulfillment_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "guided_self_check_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "diagnostic_fulfillment_funding_id" IS NULL THEN 0 ELSE 1 END + CASE WHEN "wallet_top_up_id" IS NULL THEN 0 ELSE 1 END) = 1')
 @Check("CHK_payment_attempts_amount_non_negative", '"amount" >= 0')
 @Check("CHK_payment_attempts_currency_format", "\"currency\" ~ '^[A-Z]{3}$'")
 export class PaymentAttempt {
@@ -65,6 +67,9 @@ export class PaymentAttempt {
   @ManyToOne(()=>PharmacyFulfillmentFunding,f=>f.paymentAttempts,{nullable:true,onDelete:'RESTRICT'})@JoinColumn({name:'pharmacy_fulfillment_funding_id'})pharmacyFulfillmentFunding!:PharmacyFulfillmentFunding|null;
   @Column({name:'guided_self_check_id',type:'uuid',nullable:true}) guidedSelfCheckId!:string|null;
   @ManyToOne(()=>GuidedSelfCheck,{nullable:true,onDelete:'RESTRICT'}) @JoinColumn({name:'guided_self_check_id'}) guidedSelfCheck!:GuidedSelfCheck|null;
+
+  @Column({name:'wallet_top_up_id',type:'uuid',nullable:true}) walletTopUpId!:string|null;
+  @ManyToOne(()=>WalletTopUp,{nullable:true,onDelete:'RESTRICT'}) @JoinColumn({name:'wallet_top_up_id'}) walletTopUp!:WalletTopUp|null;
 
   @Column({name:'diagnostic_fulfillment_funding_id',type:'uuid',nullable:true}) diagnosticFulfillmentFundingId!:string|null;
   @ManyToOne(()=>DiagnosticFulfillmentFunding,{nullable:true,onDelete:'RESTRICT'}) @JoinColumn({name:'diagnostic_fulfillment_funding_id'}) diagnosticFulfillmentFunding!:DiagnosticFulfillmentFunding|null;
