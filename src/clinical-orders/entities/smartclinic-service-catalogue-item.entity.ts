@@ -3,6 +3,7 @@ import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn,
 export enum SmartClinicCatalogueCategory {
   LAB_TEST = 'LAB_TEST',
   MEDICATION = 'MEDICATION',
+  IMAGING_STUDY = 'IMAGING_STUDY',
 }
 
 @Entity('smartclinic_service_catalogue')
