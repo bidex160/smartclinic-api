@@ -11,6 +11,7 @@ import { CareDeliveryMode } from "./enums/care-delivery-mode.enum";
 import { ProviderCareServiceDeliveryOption } from "./entities/provider-care-service-delivery-option.entity";
 import { CareRequest } from "../care-requests/entities/care-request.entity";
 import { CareRequestStatus } from "../care-requests/enums/care-request-status.enum";
+import { ProviderPracticeAffiliation } from "./entities/provider-practice-affiliation.entity";
 
 export type EligibleProviderCareService = ProviderCareService & {
   selectedDeliveryOption: ProviderCareServiceDeliveryOption;
@@ -250,7 +251,9 @@ async requireEligible(
         )
         .getExists();
 
-  if (!locationMatches) {
+  const affiliationMatches = locationMatches ? false : await manager.getRepository(ProviderPracticeAffiliation).createQueryBuilder("affiliation").innerJoin("affiliation.hostLocation","hostLocation").where("affiliation.doctorProviderId = :providerId",{providerId:provider.id}).andWhere("affiliation.isActive = true").andWhere("hostLocation.isActive = true").andWhere("hostLocation.countryCode = :countryCode",{countryCode:input.countryCode}).andWhere("LOWER(TRIM(hostLocation.state)) = LOWER(TRIM(:stateOrRegion))",{stateOrRegion:input.stateOrRegion}).andWhere("LOWER(TRIM(hostLocation.city)) = LOWER(TRIM(:city))",{city:input.city}).getExists();
+
+  if (!locationMatches && !affiliationMatches) {
     return this.ineligible();
   }
 
@@ -359,14 +362,8 @@ async findEligibleCareProvider(
         "LOWER(location.city) = LOWER(:city)",
       );
 
-    query.andWhere(
-      `EXISTS (${locationQuery.getQuery()})`,
-      {
-        countryCode: input.countryCode,
-        stateOrRegion: input.stateOrRegion,
-        city: input.city,
-      },
-    );
+    const affiliationQuery = manager.getRepository(ProviderPracticeAffiliation).createQueryBuilder("affiliation").innerJoin("affiliation.hostLocation","affiliatedLocation").select("1").where("affiliation.doctorProviderId = provider.id").andWhere("affiliation.isActive = true").andWhere("affiliatedLocation.isActive = true").andWhere("affiliatedLocation.countryCode = :countryCode").andWhere("LOWER(TRIM(affiliatedLocation.state)) = LOWER(TRIM(:stateOrRegion))").andWhere("LOWER(TRIM(affiliatedLocation.city)) = LOWER(TRIM(:city))");
+    query.andWhere(`(EXISTS (${locationQuery.getQuery()}) OR EXISTS (${affiliationQuery.getQuery()}))`,{countryCode:input.countryCode,stateOrRegion:input.stateOrRegion,city:input.city});
   } else {
     /**
      * Current fallback for other physical delivery modes.
