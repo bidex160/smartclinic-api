@@ -36,7 +36,10 @@ import { MeCareRequestFundingController } from './me-care-request-funding.contro
 import { PatientProviderConnection } from '../patient-provider-connections/entities/patient-provider-connection.entity';
 import { PatientProviderConnectionFunding } from '../patient-provider-connections/entities/patient-provider-connection-funding.entity';
 import { PatientProviderConnectionHistory } from '../patient-provider-connections/entities/patient-provider-connection-history.entity';
-import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy-fulfillment-funding.entity';import { PharmacyQuote } from '../clinical-orders/entities/pharmacy-quote.entity';import { ClinicalOrderFulfillment } from '../clinical-orders/entities/clinical-order-fulfillment.entity';import { PharmacyDispensing } from '../clinical-orders/entities/pharmacy-dispensing.entity';import { Patient } from '../patients/entities/patient.entity';import { MePharmacyFundingController } from './me-pharmacy-funding.controller'; import { MeDiagnosticFundingController } from './me-diagnostic-funding.controller'; import { DiagnosticFulfillmentFunding } from '../clinical-orders/entities/diagnostic-fulfillment-funding.entity'; import { DiagnosticQuote } from '../clinical-orders/entities/diagnostic-quote.entity'; import { GuidedSelfCheck } from '../guided-self-checks/entities/guided-self-check.entity'; import { GuidedSelfCheckHistory } from '../guided-self-checks/entities/guided-self-check-history.entity'; import { MeGuidedSelfCheckFundingController } from './me-guided-self-check-funding.controller';
+import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy-fulfillment-funding.entity';import { PharmacyQuote } from '../clinical-orders/entities/pharmacy-quote.entity';import { ClinicalOrderFulfillment } from '../clinical-orders/entities/clinical-order-fulfillment.entity';import { PharmacyDispensing } from '../clinical-orders/entities/pharmacy-dispensing.entity';import { Patient } from '../patients/entities/patient.entity';import { MePharmacyFundingController } from './me-pharmacy-funding.controller'; import { MeDiagnosticFundingController } from './me-diagnostic-funding.controller'; import { DiagnosticFulfillmentFunding } from '../clinical-orders/entities/diagnostic-fulfillment-funding.entity'; import { DiagnosticQuote } from '../clinical-orders/entities/diagnostic-quote.entity'; import { GuidedSelfCheck } from '../guided-self-checks/entities/guided-self-check.entity';
+import { WalletTopUp } from '../wallet/entities/wallet-top-up.entity';
+import { WalletModule } from '../wallet/wallet.module';
+import { MeWalletFundingController } from './me-wallet-funding.controller'; import { GuidedSelfCheckHistory } from '../guided-self-checks/entities/guided-self-check-history.entity'; import { MeGuidedSelfCheckFundingController } from './me-guided-self-check-funding.controller';
 @Module({
   imports: [
     AuthModule,
@@ -45,6 +48,7 @@ import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy
     EarningsModule,
     CommissionsModule,
     CareAppointmentsModule,
+    WalletModule,
     TypeOrmModule.forFeature([
       PaymentAttempt,
       PaymentTransaction,
@@ -63,10 +67,10 @@ import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy
       ,PatientProviderConnection,
       PatientProviderConnectionFunding,
       PatientProviderConnectionHistory
-      ,PharmacyFulfillmentFunding,PharmacyQuote,ClinicalOrderFulfillment,PharmacyDispensing,Patient,GuidedSelfCheck,GuidedSelfCheckHistory,DiagnosticFulfillmentFunding,DiagnosticQuote
+      ,PharmacyFulfillmentFunding,PharmacyQuote,ClinicalOrderFulfillment,PharmacyDispensing,Patient,GuidedSelfCheck,GuidedSelfCheckHistory,DiagnosticFulfillmentFunding,DiagnosticQuote,WalletTopUp
     ]),
   ],
-  controllers: [AdminPaymentFlowController, PaystackWebhookController, OpayWebhookController, MeCareRequestFundingController,MePharmacyFundingController,MeGuidedSelfCheckFundingController,MeDiagnosticFundingController],
+  controllers: [AdminPaymentFlowController, PaystackWebhookController, OpayWebhookController, MeCareRequestFundingController,MePharmacyFundingController,MeGuidedSelfCheckFundingController,MeDiagnosticFundingController,MeWalletFundingController],
   providers: [
     PaymentFlowService,
     TestPaymentProviderAdapter,
