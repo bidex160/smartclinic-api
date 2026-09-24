@@ -40,6 +40,7 @@ import { ClinicalRecord } from "../clinical-records/entities/clinical-record.ent
 import { ClinicalRecordStatus } from "../clinical-records/enums/clinical-record-status.enum";
 import { ClinicalRecordsService } from "../clinical-records/clinical-records.service";
 import { ProviderType } from "../providers/enums/provider-type.enum";
+import { ProviderPracticeAffiliation } from "../providers/entities/provider-practice-affiliation.entity";
 import { ClinicalOrdersService } from "../clinical-orders/clinical-orders.service";
 import { ReferralsService } from '../rewards/referrals.service';
 import { PatientCareActionSource } from '../rewards/enums/patient-care-action-source.enum';
@@ -244,28 +245,15 @@ async schedule(
           );
         }
 
-        const location = dto.providerLocationReference
-          ? await manager
-              .getRepository(ProviderLocation)
-              .findOne({
-                where: {
-                  locationReference:
-                    dto.providerLocationReference,
-                  providerId: provider.id,
-                  isActive: true,
-                },
-                lock: {
-                  mode: "pessimistic_read",
-                },
-              })
-          : null;
+        let location = dto.providerLocationReference ? await manager.getRepository(ProviderLocation).findOne({where:{locationReference:dto.providerLocationReference,providerId:provider.id,isActive:true},lock:{mode:"pessimistic_read"}}) : null;
+        if(dto.providerLocationReference && !location){const affiliation=await manager.getRepository(ProviderPracticeAffiliation).createQueryBuilder("affiliation").innerJoinAndSelect("affiliation.hostLocation","hostLocation").where("affiliation.doctorProviderId = :providerId",{providerId:provider.id}).andWhere("affiliation.isActive = true").andWhere("hostLocation.locationReference = :reference",{reference:dto.providerLocationReference}).andWhere("hostLocation.isActive = true").getOne();location=affiliation?.hostLocation??null;}
 
         if (
           dto.providerLocationReference &&
           !location
         ) {
           throw new ConflictException(
-            "Provider location is not active or does not belong to this provider",
+            "Provider location is not an active owned or approved affiliated practice location",
           );
         }
 
