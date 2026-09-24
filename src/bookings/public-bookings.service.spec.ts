@@ -88,7 +88,7 @@ describe('PublicBookingsService', () => {
         updatedAt: new Date('2026-08-17T12:00:00.000Z'),
         healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential Health Check' },
         fulfilmentMode: { code: 'HOME_VISIT', name: 'Home visit' },
-        participant: expect.objectContaining({ givenName: 'Ada', familyName: 'Okafor' }),
+        participant: { patientReference: 'SCPT-TESTPATIENT01', givenName: 'Ada', familyName: 'Okafor' },
       } as Booking),
     };
     const healthCheckPackageRepository = { exists: jest.fn().mockResolvedValue(options.packageExists ?? true), findOne: jest.fn().mockResolvedValue({ id: createPublicBookingDto.booking.healthCheckPackageId, isActive: true, estimatedDurationMinutes: 30 }) };
