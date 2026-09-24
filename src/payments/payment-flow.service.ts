@@ -211,7 +211,7 @@ export class PaymentFlowService {
         providerReference: attempt.providerReference,
         occurredAt: verified.occurredAt,
       });
-      await this.patientWallet!.credit(actor ?? topUp.userId, BigInt(topUp.amountMinor), topUp.currency, 'TOP_UP', topUp.reference, manager);
+      await this.patientWallet!.creditConfirmedTopUp(topUp.userId, Number(topUp.amountMinor), topUp.currency, attempt.providerReference ?? topUp.reference);
       topUp.status = WalletTopUpStatus.PAID;
       topUp.paidAt = verified.occurredAt;
       await manager.save(topUp);
