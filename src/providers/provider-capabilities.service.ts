@@ -36,6 +36,8 @@ export interface AvailabilityWindow {
     city: string;
     postalCode: string | null;
     addressLine1?: string;
+    latitude?: number | null;
+    longitude?: number | null;
   } | null;
 }
 
