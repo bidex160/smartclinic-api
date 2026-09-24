@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Provider } from './entities/provider.entity';
 import { ProviderPracticeAffiliation } from './entities/provider-practice-affiliation.entity';
+import { ProviderPracticeAffiliationStatus } from './entities/provider-practice-affiliation.entity';
 import { ProviderType } from './enums/provider-type.enum';
 import { ProviderStatus } from './enums/provider-status.enum';
 import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
@@ -20,7 +21,7 @@ export class InstitutionalVirtualCareService {
  async detail(reference:string){
   const p=await this.providers.createQueryBuilder('p').leftJoinAndSelect('p.locations','location','location.isActive=true').leftJoinAndSelect('p.careServices','service','service.isActive=true').leftJoinAndSelect('service.definition','definition','definition.isActive=true').leftJoinAndSelect('service.deliveryOptions','option').where('p.providerReference=:reference',{reference}).andWhere('p.status=:active',{active:ProviderStatus.ACTIVE}).andWhere('p.onboardingStatus=:approved',{approved:ProviderOnboardingStatus.APPROVED}).andWhere('p.providerType IN (:...types)',{types:[ProviderType.HOSPITAL,ProviderType.CLINIC]}).getOne();
   if(!p)throw new NotFoundException('Hospital or clinic was not found');
-  const aff=await this.affiliations.find({where:{hostProviderId:p.id,isActive:true,allowsVirtualCare:true},relations:{doctorProvider:true},order:{isDefault:'DESC',createdAt:'ASC'}});
+  const aff=await this.affiliations.find({where:{hostProviderId:p.id,isActive:true,allowsVirtualCare:true,status:ProviderPracticeAffiliationStatus.APPROVED},relations:{doctorProvider:true},order:{isDefault:'DESC',createdAt:'ASC'}});
   return{...this.mapInstitution(p),virtualDoctors:aff.filter(a=>a.doctorProvider?.status===ProviderStatus.ACTIVE&&a.doctorProvider?.onboardingStatus===ProviderOnboardingStatus.APPROVED).map(a=>({providerReference:a.doctorProvider.providerReference,displayName:a.doctorProvider.displayName,isDefault:a.isDefault,priceMinor:a.virtualCarePriceMinor==null?null:Number(a.virtualCarePriceMinor),currency:a.virtualCareCurrency}))};
  }
  private mapInstitution(p:Provider){
