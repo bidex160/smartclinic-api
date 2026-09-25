@@ -12,8 +12,8 @@ describe('HealthCheckConfigurationService', () => {
   const create = (row: any) => {
     const qb: any = {}; for (const name of ['innerJoinAndSelect', 'leftJoinAndSelect', 'where', 'andWhere']) qb[name] = jest.fn().mockReturnValue(qb);
     qb.getOne = jest.fn().mockResolvedValue(row);
-    const patients={findOne:jest.fn().mockResolvedValue({id:'patient',userId:'user',status:'ACTIVE',deletedAt:null})};(qb as any).manager={query:jest.fn().mockResolvedValue([{travel_fee_minor:0}])};const quotes={create:jest.fn((x)=>x),save:jest.fn(async(x)=>({reference:'SC-HCQ-TEST',...x}))};
-    return new HealthCheckConfigurationService({ createQueryBuilder: jest.fn().mockReturnValue(qb) } as never,patients as never,quotes as never,{} as never,{} as never,{} as never,{} as never,{} as never);
+    const patients={findOne:jest.fn().mockResolvedValue({id:'patient',userId:'user',status:'ACTIVE',deletedAt:null})};const manager={query:jest.fn().mockResolvedValue([{travel_fee_minor:0}])};const quotes={create:jest.fn((x)=>x),save:jest.fn(async(x)=>({reference:'SC-HCQ-TEST',...x}))};
+    return new HealthCheckConfigurationService({ createQueryBuilder: jest.fn().mockReturnValue(qb), manager } as never,patients as never,quotes as never,{} as never,{} as never,{} as never,{} as never,{} as never);
   };
 
   it('calculates base, clinical add-ons, fulfilment fee and total from authoritative rows', async () => {
