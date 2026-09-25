@@ -20,6 +20,7 @@ export class HealthCheckConfigurationService {
   async discover(dto:HealthCheckOfferingDiscoveryDto){
     const [pkg,mode]=await Promise.all([this.packages.findOne({where:{code:dto.packageCode,isActive:true}}),this.modes.findOne({where:{code:dto.fulfilmentModeCode,isActive:true}})]);
     if(!pkg||!mode)throw new NotFoundException('Health Check package or fulfilment mode not found');
+    if(mode.code==='HOME_VISIT'&&(!dto.countryCode||!dto.stateOrRegion||!dto.city))throw new BadRequestException('Country, state or region, and city are required for Home Visit');
     const end=deriveAppointmentEndTime(dto.preferredTime,pkg.estimatedDurationMinutes??0);if(!end)throw new BadRequestException('Health Check package duration is invalid');
     // Provider-location care is destination-based: the patient travels to the provider.
     // Do not incorrectly filter provider locations by the patient's current/home geography.
