@@ -29,13 +29,7 @@ jobs:
       - name: Check duplicate migration timestamps
         shell: bash
         run: |
-          dupes="$(find src/database/migrations -maxdepth 1 -type f -printf '%f\n' | sed -n 's/^\([0-9][0-9]*\)-.*/\1/p' | grep -v '^1792512000000
-          if [ -n "$dupes" ]; then
-            echo "::error::Duplicate migration timestamps found: $dupes"
-            echo "::error::Before renaming historical migrations, run the staging migration-history pre-deploy query documented in docs/development.md."
-            exit 1
-          fi
- | sort | uniq -d)"
+          dupes="$(find src/database/migrations -maxdepth 1 -type f -printf '%f\n' | sed -n 's/^\([0-9][0-9]*\)-.*/\1/p' | grep -v '^1792512000000$' | sort | uniq -d)"
           if [ -n "$dupes" ]; then
             echo "::error::Duplicate migration timestamps found: $dupes"
             echo "::error::Before renaming historical migrations, run the staging migration-history pre-deploy query documented in docs/development.md."
