@@ -8,10 +8,12 @@ export class InstitutionalVirtualCare1796572800000 implements MigrationInterface
   await q.query(`ALTER TABLE "provider_practice_affiliations" ADD "allows_virtual_care" boolean NOT NULL DEFAULT false`);
   await q.query(`ALTER TABLE "provider_practice_affiliations" ADD "virtual_care_price_minor" bigint`);
   await q.query(`ALTER TABLE "provider_practice_affiliations" ADD "virtual_care_currency" char(3)`);
+  await q.query(`CREATE INDEX "IDX_provider_practice_affiliations_host_virtual" ON "provider_practice_affiliations" ("host_provider_id","status","is_active","allows_virtual_care")`);
   await q.query(`ALTER TABLE "provider_practice_affiliations" ADD CONSTRAINT "CHK_affiliation_virtual_price" CHECK (("allows_virtual_care"=false AND "virtual_care_price_minor" IS NULL AND "virtual_care_currency" IS NULL) OR ("allows_virtual_care"=true AND "virtual_care_price_minor">=0 AND "virtual_care_currency" ~ '^[A-Z]{3}$'))`);
  }
  async down(q:QueryRunner):Promise<void>{
   await q.query(`ALTER TABLE "provider_practice_affiliations" DROP CONSTRAINT "CHK_affiliation_virtual_price"`);
+  await q.query(`DROP INDEX "IDX_provider_practice_affiliations_host_virtual"`);
   await q.query(`ALTER TABLE "provider_practice_affiliations" DROP COLUMN "virtual_care_currency"`);
   await q.query(`ALTER TABLE "provider_practice_affiliations" DROP COLUMN "virtual_care_price_minor"`);
   await q.query(`ALTER TABLE "provider_practice_affiliations" DROP COLUMN "allows_virtual_care"`);
