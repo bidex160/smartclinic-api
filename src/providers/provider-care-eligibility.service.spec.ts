@@ -4,6 +4,7 @@ import { ProviderCareService } from './entities/provider-care-service.entity';
 import { Provider } from './entities/provider.entity';
 import { CareServiceDefinition } from './entities/care-service-definition.entity';
 import { ProviderLocation } from './entities/provider-location.entity';
+import { ProviderPracticeAffiliation } from './entities/provider-practice-affiliation.entity';
 import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 import { ProviderStatus } from './enums/provider-status.enum';
 import { CareDeliveryMode } from './enums/care-delivery-mode.enum';
@@ -13,7 +14,7 @@ import { CareRequestStatus } from '../care-requests/enums/care-request-status.en
 
 describe('ProviderCareEligibilityService', () => {
   const input = { careServiceDefinitionId: 'definition', providerReference: 'SCPR-ABCDEF0123456789', countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', deliveryMode: CareDeliveryMode.IN_PERSON };
-  let offering: any; let selectedOption: any; let provider: any; let definition: any; let candidateQb: any; let locationQb: any; let workloadQb: any; let serviceRepository: any; let optionRepository: any; let careRequestRepository: any; let manager: any; let subject: ProviderCareEligibilityService;
+  let offering: any; let selectedOption: any; let provider: any; let definition: any; let candidateQb: any; let locationQb: any; let affiliationQb: any; let workloadQb: any; let serviceRepository: any; let optionRepository: any; let careRequestRepository: any; let manager: any; let subject: ProviderCareEligibilityService;
   beforeEach(() => {
     offering = { id: 'offering', providerId: 'provider', careServiceDefinitionId: 'definition', isActive: true, supportsAppointmentRequests: true, createdAt: new Date('2026-01-01T00:00:00Z'), deliveryOptions: [{ deliveryMode: CareDeliveryMode.IN_PERSON, priceMinor: '1500', currency: 'NGN' }, { deliveryMode: CareDeliveryMode.VIRTUAL, priceMinor: '1000', currency: 'NGN' }] };
     selectedOption = offering.deliveryOptions[0];
@@ -21,6 +22,7 @@ describe('ProviderCareEligibilityService', () => {
     definition = { id: 'definition', isActive: true };
     candidateQb = {}; for (const method of ['innerJoin', 'where', 'andWhere', 'orderBy']) candidateQb[method] = jest.fn().mockReturnValue(candidateQb); candidateQb.getOne = jest.fn().mockResolvedValue(offering); candidateQb.getMany = jest.fn().mockResolvedValue([offering]);
     locationQb = {}; for (const method of ['select', 'where', 'andWhere']) locationQb[method] = jest.fn().mockReturnValue(locationQb); locationQb.getExists = jest.fn().mockResolvedValue(true); locationQb.getQuery = jest.fn().mockReturnValue('SELECT 1');
+    affiliationQb = {}; for (const method of ['innerJoin', 'select', 'where', 'andWhere']) affiliationQb[method] = jest.fn().mockReturnValue(affiliationQb); affiliationQb.getExists = jest.fn().mockResolvedValue(false); affiliationQb.getQuery = jest.fn().mockReturnValue('SELECT 1');
     workloadQb = {}; for (const method of ['select', 'addSelect', 'where', 'andWhere', 'groupBy']) workloadQb[method] = jest.fn().mockReturnValue(workloadQb); workloadQb.getRawMany = jest.fn().mockResolvedValue([]);
     serviceRepository = { createQueryBuilder: jest.fn().mockReturnValue(candidateQb), findOne: jest.fn().mockResolvedValue(offering), find: jest.fn().mockResolvedValue([offering]) };
     optionRepository = { findOne: jest.fn().mockImplementation(async ({ where }: any) => where.deliveryMode === selectedOption?.deliveryMode ? selectedOption : null) };
@@ -28,7 +30,7 @@ describe('ProviderCareEligibilityService', () => {
     const repositories = new Map<any, any>([
       [ProviderCareService, serviceRepository], [ProviderCareServiceDeliveryOption, optionRepository],
       [Provider, { findOne: jest.fn().mockResolvedValue(provider) }], [CareServiceDefinition, { findOne: jest.fn().mockResolvedValue(definition) }],
-      [ProviderLocation, { createQueryBuilder: jest.fn().mockReturnValue(locationQb) }],
+      [ProviderLocation, { createQueryBuilder: jest.fn().mockReturnValue(locationQb) }], [ProviderPracticeAffiliation, { createQueryBuilder: jest.fn().mockReturnValue(affiliationQb) }],
       [CareRequest, careRequestRepository],
     ]);
     manager = { getRepository: (entity: any) => repositories.get(entity) };

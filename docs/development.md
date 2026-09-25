@@ -59,7 +59,7 @@ npm run start:prod
 
 ## Migrations
 
-The migration CLI uses `src/database/data-source.ts`, independent of the running Nest application. No domain migrations exist yet.
+The migration CLI uses `src/database/data-source.ts`, independent of the running Nest application. Domain migrations are applied explicitly; application startup never runs them automatically.
 
 Generate a migration after an approved entity/schema change:
 
@@ -103,3 +103,34 @@ npm run test:e2e
 ```
 
 Automated tests set `NODE_ENV=test` and disable the TypeORM connection so bootstrap and health-endpoint coverage do not require a local PostgreSQL server. This test-only behaviour does not affect normal development startup.
+
+
+## Staging migration pre-deploy gate
+
+Before changing migration filenames/timestamps or running `npm run migration:run` against staging, inspect the TypeORM migration history on the target PostgreSQL database.
+
+Run:
+
+```sql
+SELECT id, timestamp, name
+FROM migrations
+WHERE timestamp IN (1792512000000, 1796486400000)
+   OR name IN (
+     'AddBasicHealthCheckTier1792512000000',
+     'HealthCheckConfigurationQuotes1792512000000',
+     'AssistedMatchingAndTravelPricing1796486400000',
+     'ProviderAffiliationGovernance1796486400000'
+   )
+ORDER BY timestamp, id;
+```
+
+Expected review set:
+
+- `AddBasicHealthCheckTier1792512000000`
+- `HealthCheckConfigurationQuotes1792512000000`
+- `AssistedMatchingAndTravelPricing1796486400000`
+- `ProviderAffiliationGovernance1796486400000`
+
+Do not rename either duplicate-timestamp migration until this query has been run against the actual staging database. If any listed migration is already recorded, preserve its recorded migration identity and reconcile history before assigning a new timestamp. If neither migration in a duplicate pair has been applied, assign a unique later timestamp only after confirming migration dependency order.
+
+After the history is reconciled, run `npm run migration:run`, then `npm run seed`, and retain the migration output as deployment evidence.

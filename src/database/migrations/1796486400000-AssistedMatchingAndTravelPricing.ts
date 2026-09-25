@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AssistedMatchingAndTravelPricing1796486400000 implements MigrationInterface {
-  name='AssistedMatchingAndTravelPricing1796486400000';
+export class AssistedMatchingAndTravelPricing1796486400001 implements MigrationInterface {
+  name='AssistedMatchingAndTravelPricing1796486400001';
   async up(q:QueryRunner):Promise<void>{
     await q.query(`ALTER TABLE "provider_service_areas" ADD "travel_fee_minor" bigint NOT NULL DEFAULT 0`);
     await q.query(`ALTER TABLE "provider_service_areas" ADD "priority" integer NOT NULL DEFAULT 100`);

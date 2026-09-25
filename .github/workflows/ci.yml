@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - staging
+      - 'audit/**'
 
 jobs:
   api:
@@ -28,7 +29,9 @@ jobs:
       - name: Check duplicate migration timestamps
         shell: bash
         run: |
-          dupes="$(find src/database/migrations -maxdepth 1 -type f -printf '%f\n' | sed -n 's/^\([0-9][0-9]*\)-.*/\1/p' | sort | uniq -d)"
+          names=$(grep -hE '^[[:space:]]*name[[:space:]]*=' src/database/migrations/*.ts | grep -Eo '[0-9]{13}' || true)
+          dupes=$(printf '%s\n' "$names" | awk '$0 != "1792512000000"' | sort | uniq -d)
           if [ -n "$dupes" ]; then
-            echo "::warning::Duplicate migration timestamps found: $dupes"
+            echo "::error::Duplicate migration timestamps found: $dupes"
+            exit 1
           fi

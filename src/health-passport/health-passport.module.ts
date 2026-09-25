@@ -16,7 +16,7 @@ import { HealthCheckMeasurement } from '../health-checks/entities/health-check-m
 import { Patient } from '../patients/entities/patient.entity';
 import { HealthPassportController } from './health-passport.controller';
 import { HealthPassportService } from './health-passport.service';
-import { User } from 'src/users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [

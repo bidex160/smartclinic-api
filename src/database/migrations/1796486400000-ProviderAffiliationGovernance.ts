@@ -71,15 +71,17 @@ export class ProviderAffiliationGovernance1796486400000 implements MigrationInte
         AND "status"='PENDING'
     `);
 
+    // Virtual-care columns are introduced by the later InstitutionalVirtualCare migration.
+    // Governance must not reference them before they exist.
     await q.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_provider_practice_affiliations_host_virtual"
+      CREATE INDEX IF NOT EXISTS "IDX_provider_practice_affiliations_host_status"
       ON "provider_practice_affiliations"
-      ("host_provider_id","status","is_active","allows_virtual_care")
+      ("host_provider_id","status","is_active")
     `);
   }
 
   async down(q: QueryRunner): Promise<void> {
-    await q.query(`DROP INDEX IF EXISTS "public"."IDX_provider_practice_affiliations_host_virtual"`);
+    await q.query(`DROP INDEX IF EXISTS "public"."IDX_provider_practice_affiliations_host_status"`);
     await q.query(`
       ALTER TABLE "provider_practice_affiliations"
       DROP CONSTRAINT IF EXISTS "FK_provider_practice_affiliations_host_location_owner"

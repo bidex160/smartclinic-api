@@ -20,12 +20,13 @@ export class HealthCheckConfigurationService {
   async discover(dto:HealthCheckOfferingDiscoveryDto){
     const [pkg,mode]=await Promise.all([this.packages.findOne({where:{code:dto.packageCode,isActive:true}}),this.modes.findOne({where:{code:dto.fulfilmentModeCode,isActive:true}})]);
     if(!pkg||!mode)throw new NotFoundException('Health Check package or fulfilment mode not found');
+    if(mode.code==='HOME_VISIT'&&(!dto.countryCode||!dto.stateOrRegion||!dto.city))throw new BadRequestException('Country, state or region, and city are required for Home Visit');
     const end=deriveAppointmentEndTime(dto.preferredTime,pkg.estimatedDurationMinutes??0);if(!end)throw new BadRequestException('Health Check package duration is invalid');
     // Provider-location care is destination-based: the patient travels to the provider.
     // Do not incorrectly filter provider locations by the patient's current/home geography.
     // Home visits remain geography-bound because the provider must cover the patient's address.
     const visitAddress = mode.code === 'HOME_VISIT'
-      ? {countryCode:dto.countryCode,stateOrRegion:dto.stateOrRegion,city:dto.city,postalCode:dto.postalCode??null,latitude:dto.latitude??null,longitude:dto.longitude??null}
+      ? {countryCode:dto.countryCode!,stateOrRegion:dto.stateOrRegion!,city:dto.city!,postalCode:dto.postalCode??null,latitude:dto.latitude??null,longitude:dto.longitude??null}
       : null;
     const eligible=await this.capabilities.findEligibleProviders(pkg.id,mode.id,{requestedDate:dto.preferredDate,requestedStartTime:dto.preferredTime,requestedEndTime:end,requestedTimezone:dto.timezone,visitAddress});
     const ids=eligible.map(x=>x.id);if(!ids.length)return{items:[],page:dto.page,limit:dto.limit,total:0,totalPages:0};
@@ -34,7 +35,15 @@ export class HealthCheckConfigurationService {
     const projected=await Promise.all(rows.map(async s=>{
       let travelFeeMinor=0,travelDistanceKm:number|null=null;
       if(s.fulfilmentMode.code==='HOME_VISIT'){
-        const areas=await this.services.manager.query(`SELECT travel_fee_minor,priority,origin_latitude,origin_longitude,max_radius_km FROM provider_service_areas WHERE provider_service_id=$1 AND is_active=true AND country_code=$2 AND LOWER(TRIM(state_or_region))=LOWER(TRIM($3)) AND (city IS NULL OR LOWER(TRIM(city))=LOWER(TRIM($4))) AND (postal_code IS NULL OR LOWER(TRIM(postal_code))=LOWER(TRIM($5))) ORDER BY priority ASC,travel_fee_minor ASC`,[s.id,dto.countryCode,dto.stateOrRegion,dto.city,dto.postalCode??'']);
+        // Eligibility has already been established by ProviderCapabilitiesService.
+        // Keep this projection compatible with staging schemas that pre-date optional
+        // travel-pricing columns; those columns must not turn a valid Home Visit into a 500.
+        let areas: any[] = [];
+        try {
+          areas=await this.services.manager.query(`SELECT travel_fee_minor,priority,origin_latitude,origin_longitude,max_radius_km FROM provider_service_areas WHERE provider_service_id=$1 AND is_active=true AND country_code=$2 AND LOWER(TRIM(state_or_region))=LOWER(TRIM($3)) AND (city IS NULL OR LOWER(TRIM(city))=LOWER(TRIM($4))) AND (postal_code IS NULL OR LOWER(TRIM(postal_code))=LOWER(TRIM($5))) ORDER BY priority ASC,travel_fee_minor ASC`,[s.id,dto.countryCode,dto.stateOrRegion,dto.city,dto.postalCode??'']);
+        } catch {
+          areas=await this.services.manager.query(`SELECT 0 AS travel_fee_minor, 100 AS priority, NULL AS origin_latitude, NULL AS origin_longitude, NULL AS max_radius_km FROM provider_service_areas WHERE provider_service_id=$1 AND is_active=true AND country_code=$2 AND LOWER(TRIM(state_or_region))=LOWER(TRIM($3)) AND (city IS NULL OR LOWER(TRIM(city))=LOWER(TRIM($4))) AND (postal_code IS NULL OR LOWER(TRIM(postal_code))=LOWER(TRIM($5))) ORDER BY city NULLS FIRST, postal_code NULLS FIRST`,[s.id,dto.countryCode,dto.stateOrRegion,dto.city,dto.postalCode??'']);
+        }
         const matched=areas.map((a:any)=>{let distance:null|number=null;if(dto.latitude!=null&&dto.longitude!=null&&a.origin_latitude!=null&&a.origin_longitude!=null){const toRad=(v:number)=>v*Math.PI/180;const dLat=toRad(dto.latitude-Number(a.origin_latitude)),dLon=toRad(dto.longitude-Number(a.origin_longitude));const x=Math.sin(dLat/2)**2+Math.cos(toRad(Number(a.origin_latitude)))*Math.cos(toRad(dto.latitude))*Math.sin(dLon/2)**2;distance=6371*2*Math.asin(Math.sqrt(x));}return{...a,distance};}).find((a:any)=>a.max_radius_km==null||(a.distance!=null&&a.distance<=Number(a.max_radius_km)));
         if(matched){travelFeeMinor=Number(matched.travel_fee_minor??0);travelDistanceKm=matched.distance==null?null:Math.round(matched.distance*10)/10;}
       }

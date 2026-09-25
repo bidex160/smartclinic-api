@@ -9,7 +9,7 @@ import { Patient } from './entities/patient.entity';
 import { MePatientDashboardController } from './patient-dashboard.controller';
 import { PatientDashboardService } from './patient-dashboard.service';
 import { PatientDashboardActionProjectionService } from './patient-dashboard-action-projection.service';
-import { User } from 'src/users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
 import { PatientRelationship } from './entities/patient-relationship.entity';
 import { DependantRewardProvenance } from './entities/dependant-reward-provenance.entity';
 import { PatientAccessService } from './patient-access.service';

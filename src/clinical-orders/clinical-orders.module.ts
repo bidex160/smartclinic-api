@@ -15,7 +15,7 @@ import { ClinicalOrder } from "./entities/clinical-order.entity";
 import { ClinicalDiagnosticOrderItem } from "./entities/clinical-diagnostic-order-item.entity";
 import { ClinicalPrescriptionDetail } from "./entities/clinical-prescription-detail.entity";
 import { ClinicalPrescriptionItem } from "./entities/clinical-prescription-item.entity";
-import { User } from "src/users/entities/user.entity";
+import { User } from "../users/entities/user.entity";
 import { SmartClinicServiceCatalogueItem } from './entities/smartclinic-service-catalogue-item.entity';
 import { SmartClinicServiceCatalogueService } from './smartclinic-service-catalogue.service';
 import { SmartClinicServiceCatalogueController } from './smartclinic-service-catalogue.controller';

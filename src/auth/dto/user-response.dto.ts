@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { User } from '../../users/entities/user.entity';
 import { UserRole } from '../../users/enums/user-role.enum';
 import { UserStatus } from '../../users/enums/user-status.enum';
-import { UserNetworkRole } from 'src/users/enums/user-network-role.enum';
+import { UserNetworkRole } from '../../users/enums/user-network-role.enum';
 
 export class UserResponseDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
@@ -10,14 +10,17 @@ export class UserResponseDto {
   @ApiProperty() displayName!: string;
   @ApiProperty({ enum: UserRole, isArray: true }) roles!: UserRole[];
   @ApiProperty({ enum: UserStatus }) status!: UserStatus;
-  @ApiPropertyOptional({
-  enum: UserNetworkRole,
-  nullable: true,
-})
-networkRole!: UserNetworkRole | null;
+  @ApiPropertyOptional({ enum: UserNetworkRole, nullable: true })
+  networkRole!: UserNetworkRole | null;
+
   static fromEntity(user: User): UserResponseDto {
-    return { id: user.id, email: user.email, displayName: user.displayName!, roles: user.roles, status: user.status, 
-      networkRole: user.networkRole
-     };
+    return {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName!,
+      roles: user.roles,
+      status: user.status,
+      networkRole: user.networkRole,
+    };
   }
 }

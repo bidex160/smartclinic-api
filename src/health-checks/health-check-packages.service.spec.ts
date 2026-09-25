@@ -59,7 +59,7 @@ describe('HealthCheckPackagesService', () => {
         } as HealthCheckPackage,
       ]),
     };
-    const service = new HealthCheckPackagesService(healthCheckPackageRepository as never, { find: jest.fn().mockResolvedValue([]) } as never);
+    const service = new HealthCheckPackagesService(healthCheckPackageRepository as never, { find: jest.fn().mockResolvedValue([]) } as never, { find: jest.fn().mockResolvedValue([]) } as never, { find: jest.fn().mockResolvedValue([]) } as never);
 
     await expect(service.findActive()).resolves.toMatchObject([
       {
@@ -83,7 +83,7 @@ describe('HealthCheckPackagesService', () => {
     const executive = { id: 'executive', code: 'EXECUTIVE', name: 'Executive', description: null, benefits: [], estimatedDurationMinutes: 45, isActive: true, contents: [], addonAvailability: [] } as any;
     const packages = { find: jest.fn().mockResolvedValue([executive]) };
     const offerings = { find: jest.fn().mockResolvedValue([{ healthCheckPackageId: executive.id, priceMinor: '2500000', currency: 'NGN', fulfilmentMode: { code: 'PROVIDER_LOCATION', name: 'Provider location' } }]) };
-    await expect(new HealthCheckPackagesService(packages as never, offerings as never).findActive()).resolves.toEqual([expect.objectContaining({ code: 'EXECUTIVE', fromPriceMinor: 2500000 })]);
+    await expect(new HealthCheckPackagesService(packages as never, offerings as never, { find: jest.fn().mockResolvedValue([]) } as never, { find: jest.fn().mockResolvedValue([{ healthCheckPackageId: executive.id, amount: '25000.00', currency: 'NGN', isActive: true, effectiveFrom: '2020-01-01', effectiveTo: null, fulfilmentMode: { code: 'PROVIDER_LOCATION', name: 'Provider location' } }]) } as never).findActive()).resolves.toEqual([expect.objectContaining({ code: 'EXECUTIVE', fromPriceMinor: 2500000 })]);
     expect(packages.find).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
   });
 
@@ -97,7 +97,7 @@ describe('HealthCheckPackagesService', () => {
       { id: 'essential', code: 'ESSENTIAL', name: 'Essential', description: null, benefits: [], estimatedDurationMinutes: 15, isActive: true, contents: ['PULSE', 'OXYGEN_SATURATION', 'TEMPERATURE', 'BMI', 'BLOOD_GLUCOSE', 'BLOOD_PRESSURE'].map((code, index) => content(code, 6 - index)), addonAvailability: [] },
       { id: 'complete', code: 'COMPLETE', name: 'Complete', description: null, benefits: [], estimatedDurationMinutes: 30, isActive: true, contents: [...['BLOOD_PRESSURE', 'BLOOD_GLUCOSE', 'BMI', 'TEMPERATURE', 'OXYGEN_SATURATION', 'PULSE'].map((code, index) => content(code, index + 1)), content('CLINICIAN_REVIEW', 7, 'REVIEW'), content('EXPANDED_INTERPRETATION', 8, 'REVIEW')], addonAvailability: [] },
     ]) };
-    const service = new HealthCheckPackagesService(repository as never, { find: jest.fn().mockResolvedValue([]) } as never);
+    const service = new HealthCheckPackagesService(repository as never, { find: jest.fn().mockResolvedValue([]) } as never, { find: jest.fn().mockResolvedValue([]) } as never, { find: jest.fn().mockResolvedValue([]) } as never);
 
     const result = await service.findActive();
 

@@ -7,7 +7,7 @@ import { ProviderService } from "../providers/entities/provider-service.entity";
 import { AssistedMatchRequest } from "./entities/assisted-match-request.entity";
 import { AssistedMatchingController } from "./assisted-matching.controller";
 import { AssistedMatchingService } from "./assisted-matching.service";
-import { User } from "src/users/entities/user.entity";
+import { User } from "../users/entities/user.entity";
 @Module({
   imports: [
     AuthModule,

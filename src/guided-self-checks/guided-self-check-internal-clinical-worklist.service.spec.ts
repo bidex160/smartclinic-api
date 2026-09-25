@@ -13,7 +13,7 @@ describe('Guided Self-Check internal clinical professional worklist', () => {
   function harness(rows: any[] = []) {
     const calls: Array<[string, Record<string, unknown> | undefined]> = [];
     const qb: any = {};
-    for (const method of ['innerJoinAndSelect', 'orderBy', 'addOrderBy', 'skip', 'take']) qb[method] = jest.fn().mockReturnValue(qb);
+    for (const method of ['innerJoinAndSelect', 'addSelect', 'orderBy', 'addOrderBy', 'skip', 'take']) qb[method] = jest.fn().mockReturnValue(qb);
     qb.andWhere = jest.fn((sql: string, params?: Record<string, unknown>) => { calls.push([sql, params]); return qb; });
     qb.getManyAndCount = jest.fn().mockResolvedValue([rows, rows.length]);
     const reviews = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
@@ -65,8 +65,9 @@ describe('Guided Self-Check internal clinical professional worklist', () => {
       ['review.status = :status', { status: GuidedSelfCheckReviewStatus.COMPLETED }],
       ['review.priority = :priority', { priority: GuidedSelfCheckReviewPriority.URGENT }],
     ]));
-    expect(h.qb.orderBy).toHaveBeenCalledWith(expect.stringContaining("review.priority = 'URGENT'"), 'ASC');
-    expect(h.qb.addOrderBy).toHaveBeenNthCalledWith(1, 'review.assignedAt', 'ASC', 'NULLS LAST');
+    expect(h.qb.addSelect).toHaveBeenCalledWith(expect.stringContaining("review.priority = 'URGENT'"), 'priority_order');
+    expect(h.qb.orderBy).toHaveBeenCalledWith('priority_order', 'ASC');
+    expect(h.qb.addOrderBy).toHaveBeenNthCalledWith(1, 'review.createdAt', 'ASC');
     expect(h.qb.addOrderBy).toHaveBeenNthCalledWith(2, 'review.id', 'ASC');
   });
 

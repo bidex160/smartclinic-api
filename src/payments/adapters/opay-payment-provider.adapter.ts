@@ -65,17 +65,11 @@ export class OpayPaymentProviderAdapter implements PaymentProviderAdapter {
     const merchantId = this.required(opay.merchantId);
     const publicKey = this.required(opay.publicKey);
     const returnBaseUrl = this.config.frontendUrl;
-
-
-    if (!returnBaseUrl) {
-      throw new ServiceUnavailableException(
-        "OPay return URL is not configured",
-      );
-    }
-
     const returnUrl = input.callbackUrl
       ? `${input.callbackUrl}`
-      : `${returnBaseUrl.replace(/\/$/, "")}/me/payment-return/${encodeURIComponent(input.paymentReference)}`;
+      : returnBaseUrl
+        ? `${returnBaseUrl.replace(/\/$/, "")}/me/payment-return/${encodeURIComponent(input.paymentReference)}`
+        : null;
 
     if (!returnUrl)
       throw new ServiceUnavailableException(

@@ -44,7 +44,7 @@ describe('PublicBookingsService', () => {
   } = {}) {
     const patientRepository = {
       create: jest.fn((input: object) => input),
-      save: jest.fn().mockResolvedValue({ id: '2f4a443d-5c93-4f8f-a05a-8ddf37d91b7a' }),
+      save: jest.fn(async (input: any) => ({ id: '2f4a443d-5c93-4f8f-a05a-8ddf37d91b7a', patientReference: 'SCPT-TESTPATIENT01', ...input })),
     };
     const bookingTransactionRepository = {
       create: jest.fn((input: object) => input),
@@ -88,7 +88,7 @@ describe('PublicBookingsService', () => {
         updatedAt: new Date('2026-08-17T12:00:00.000Z'),
         healthCheckPackage: { code: 'ESSENTIAL', name: 'Essential Health Check' },
         fulfilmentMode: { code: 'HOME_VISIT', name: 'Home visit' },
-        participant: { givenName: 'Ada', familyName: 'Okafor' },
+        participant: { patientReference: 'SCPT-TESTPATIENT01', givenName: 'Ada', familyName: 'Okafor' },
       } as Booking),
     };
     const healthCheckPackageRepository = { exists: jest.fn().mockResolvedValue(options.packageExists ?? true), findOne: jest.fn().mockResolvedValue({ id: createPublicBookingDto.booking.healthCheckPackageId, isActive: true, estimatedDurationMinutes: 30 }) };
@@ -122,7 +122,7 @@ describe('PublicBookingsService', () => {
     await expect(service.create(createPublicBookingDto)).resolves.toEqual(
       expect.objectContaining({ sessionToken: 'raw-session-token', booking: expect.objectContaining({
         bookingReference: 'SC-2026-7F23B0C9D1E4',
-        participant: { givenName: 'Ada', familyName: 'Okafor' },
+        participant: expect.objectContaining({ givenName: 'Ada', familyName: 'Okafor' }),
         locationNote: 'Reception desk',
       }) }),
     );

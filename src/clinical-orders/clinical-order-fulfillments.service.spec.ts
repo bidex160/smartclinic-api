@@ -15,18 +15,18 @@ describe('ClinicalOrderFulfillmentsService eligibility',()=>{
   const provider=(providerType:string)=>({id:'provider',providerType,status:ProviderStatus.ACTIVE,onboardingStatus:ProviderOnboardingStatus.APPROVED,deletedAt:null});
   const unit=(providerType:string,type=ProviderServiceUnitType.PHARMACY,status=ProviderServiceUnitStatus.ACTIVE)=>({id:'unit',providerId:'provider',type,status,deletedAt:null,provider:provider(providerType)});
   it('uses an active PHARMACY unit rather than Provider type as capability',()=>{
-    expect(subject.assertUnit(unit('CLINIC'))).toBeDefined();
-    expect(subject.assertUnit(unit('PHARMACY'))).toBeDefined();
+    expect(subject.assertUnit(unit('CLINIC'), ProviderServiceUnitType.PHARMACY)).toBeDefined();
+    expect(subject.assertUnit(unit('PHARMACY'), ProviderServiceUnitType.PHARMACY)).toBeDefined();
   });
   it('rejects inactive units and non-operational Providers',()=>{
-    expect(()=>subject.assertUnit(unit('CLINIC',ProviderServiceUnitType.PHARMACY,ProviderServiceUnitStatus.INACTIVE))).toThrow(ConflictException);
+    expect(()=>subject.assertUnit(unit('CLINIC',ProviderServiceUnitType.PHARMACY,ProviderServiceUnitStatus.INACTIVE), ProviderServiceUnitType.PHARMACY)).toThrow(ConflictException);
     const row=unit('PHARMACY');row.provider.status=ProviderStatus.INACTIVE;
-    expect(()=>subject.assertUnit(row)).toThrow(ConflictException);
+    expect(()=>subject.assertUnit(row, ProviderServiceUnitType.PHARMACY)).toThrow(ConflictException);
   });
-  it('restricts routing to issued prescriptions',()=>{
-    expect(()=>subject.requirePrescription({type:ClinicalOrderType.PRESCRIPTION,status:ClinicalOrderStatus.ISSUED})).not.toThrow();
-    expect(()=>subject.requirePrescription({type:ClinicalOrderType.LABORATORY,status:ClinicalOrderStatus.ISSUED})).toThrow(ConflictException);
-    expect(()=>subject.requirePrescription({type:ClinicalOrderType.PRESCRIPTION,status:ClinicalOrderStatus.CANCELLED})).toThrow(ConflictException);
+  it('restricts fulfillment routing to issued actionable clinical orders',()=>{
+    expect(()=>subject.requireFulfillable({type:ClinicalOrderType.PRESCRIPTION,status:ClinicalOrderStatus.ISSUED})).not.toThrow();
+    expect(()=>subject.requireFulfillable({type:ClinicalOrderType.LABORATORY,status:ClinicalOrderStatus.ISSUED})).not.toThrow();
+    expect(()=>subject.requireFulfillable({type:ClinicalOrderType.PRESCRIPTION,status:ClinicalOrderStatus.CANCELLED})).toThrow(ConflictException);
   });
   it('returns provider-safe authoritative funding and dispensing state',async()=>{
     const fundingRepo={findOne:jest.fn().mockResolvedValue({status:PharmacyFundingStatus.PAID,grossAmountMinor:'250000',currency:'NGN'})};

@@ -5,6 +5,7 @@ import { CareRequestStatus } from '../care-requests/enums/care-request-status.en
 import { Patient } from '../patients/entities/patient.entity';
 import { ProviderCareService } from '../providers/entities/provider-care-service.entity';
 import { ProviderLocation } from '../providers/entities/provider-location.entity';
+import { ProviderPracticeAffiliation } from '../providers/entities/provider-practice-affiliation.entity';
 import { Provider } from '../providers/entities/provider.entity';
 import { CareAppointmentStatusHistory } from './entities/care-appointment-status-history.entity';
 import { CareAppointment } from './entities/care-appointment.entity';
@@ -23,7 +24,7 @@ describe('CareAppointmentsService', () => {
   const provider: any = { id: 'provider-id', status: 'ACTIVE', onboardingStatus: 'APPROVED', providerType: 'INDIVIDUAL', deletedAt: null };
   const care: any = { id: 'care-id', reference: 'SC-CARE-ABCDEF123456', userId: 'patient-user', patientId: 'patient-id', assignedProviderId: provider.id, assignedProviderCareServiceId: 'offering-id', careServiceDefinitionId: 'definition-id', deliveryMode: CareDeliveryMode.IN_PERSON, servicePriceMinor: '2000000', serviceCurrency: 'NGN', status: CareRequestStatus.PROVIDER_ACCEPTED };
   const dto: any = { scheduledDate: '2099-09-10', scheduledTimeFrom: '10:30', scheduledTimeTo: '11:00', timezone: 'Africa/Lagos', providerLocationReference: 'SCPL-ABCDEF0123456789' };
-  let manager: any; let appointmentRepo: any; let providerRepo: any; let careRepo: any; let fundingRepo: any; let offeringRepo: any; let locationRepo: any; let definitionRepo: any; let clinicalRecordRepo: any; let appointmentHistory: any; let requestHistory: any; let overlap: boolean; let referrals: any; let notifications: any; let subject: CareAppointmentsService;
+  let manager: any; let appointmentRepo: any; let providerRepo: any; let careRepo: any; let fundingRepo: any; let offeringRepo: any; let locationRepo: any; let affiliationRepo: any; let definitionRepo: any; let clinicalRecordRepo: any; let appointmentHistory: any; let requestHistory: any; let overlap: boolean; let referrals: any; let notifications: any; let subject: CareAppointmentsService;
   beforeEach(() => {
     care.status = CareRequestStatus.PROVIDER_ACCEPTED; care.deliveryMode = CareDeliveryMode.IN_PERSON;
     overlap = false;
@@ -33,11 +34,12 @@ describe('CareAppointmentsService', () => {
     careRepo = { findOne: jest.fn().mockResolvedValue(care), save: jest.fn(async (value) => value) };
     offeringRepo = { findOne: jest.fn().mockResolvedValue({ id: 'offering-id', providerId: provider.id, careServiceDefinitionId: 'definition-id', isActive: true, supportsAppointmentRequests: true, deliveryOptions: [CareDeliveryMode.IN_PERSON, CareDeliveryMode.VIRTUAL, CareDeliveryMode.HOME_VISIT].map((deliveryMode) => ({ deliveryMode })), definition: { isActive: true } }) };
     locationRepo = { findOne: jest.fn().mockResolvedValue({ id: 'location-id', providerId: provider.id, isActive: true, locationReference: dto.providerLocationReference }) };
+    const affiliationQb: any = {}; for (const method of ['innerJoinAndSelect','where','andWhere']) affiliationQb[method] = jest.fn().mockReturnValue(affiliationQb); affiliationQb.getOne = jest.fn().mockResolvedValue(null); affiliationRepo = { createQueryBuilder: jest.fn().mockReturnValue(affiliationQb) };
     appointmentHistory = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) }; requestHistory = { create: jest.fn((value) => value), save: jest.fn(async (value) => value) };
     fundingRepo = { findOne: jest.fn().mockResolvedValue({ careRequestId: care.id, amountMinor: care.servicePriceMinor, currency: 'NGN', status: CareRequestFundingStatus.PAID }), save: jest.fn(async value => value) };
     definitionRepo = { findOne: jest.fn().mockResolvedValue({ id: care.careServiceDefinitionId, clinicalRecordType: null }) };
     clinicalRecordRepo = { findOne: jest.fn().mockResolvedValue(null) };
-    manager = { transaction: jest.fn(async (work) => work(manager)), getRepository: jest.fn((entity) => entity === CareAppointment ? appointmentRepo : entity === Provider ? providerRepo : entity === CareRequest ? careRepo : entity === CareRequestFunding ? fundingRepo : entity === ProviderCareService ? offeringRepo : entity === ProviderLocation ? locationRepo : entity === CareServiceDefinition ? definitionRepo : entity === ClinicalRecord ? clinicalRecordRepo : entity === CareAppointmentStatusHistory ? appointmentHistory : entity === CareRequestStatusHistory ? requestHistory : {}) };
+    manager = { transaction: jest.fn(async (work) => work(manager)), getRepository: jest.fn((entity) => entity === CareAppointment ? appointmentRepo : entity === Provider ? providerRepo : entity === CareRequest ? careRepo : entity === CareRequestFunding ? fundingRepo : entity === ProviderCareService ? offeringRepo : entity === ProviderLocation ? locationRepo : entity === ProviderPracticeAffiliation ? affiliationRepo : entity === CareServiceDefinition ? definitionRepo : entity === ClinicalRecord ? clinicalRecordRepo : entity === CareAppointmentStatusHistory ? appointmentHistory : entity === CareRequestStatusHistory ? requestHistory : {}) };
     referrals = { recordPatientFirstCareAction: jest.fn().mockResolvedValue(undefined) };
     notifications = { createTransactionalNotification: jest.fn(), createForProviderTransactional: jest.fn() };
     subject = new CareAppointmentsService({ manager } as any, { findOne: jest.fn() } as any, { resolveOperational: jest.fn().mockResolvedValue(provider) } as any, { markGeneralCarePayable: jest.fn().mockResolvedValue(null) } as any, { ensureDraftForStartedAppointment: jest.fn().mockResolvedValue(null) } as any, referrals, undefined, notifications);
@@ -61,7 +63,7 @@ describe('CareAppointmentsService', () => {
     await expect(subject.schedule(user, care.reference, { ...dto, providerLocationReference: null })).resolves.toBeDefined();
     expect(appointmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({
       deliveryMode: CareDeliveryMode.VIRTUAL,
-      meetingUrl: 'https://meet.jit.si/SmartClinic-SCAPTABCDEF123456',
+      meetingUrl: expect.stringMatching(/^https:\/\/meet\.jit\.si\/SmartClinic-SCAPT[A-Z0-9]{12}$/),
     }));
   });
 
