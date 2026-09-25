@@ -12,12 +12,12 @@ describe('HealthCheckConfigurationService', () => {
   const create = (row: any) => {
     const qb: any = {}; for (const name of ['innerJoinAndSelect', 'leftJoinAndSelect', 'where', 'andWhere']) qb[name] = jest.fn().mockReturnValue(qb);
     qb.getOne = jest.fn().mockResolvedValue(row);
-    const patients={findOne:jest.fn().mockResolvedValue({id:'patient',userId:'user',status:'ACTIVE',deletedAt:null})};const quotes={create:jest.fn((x)=>x),save:jest.fn(async(x)=>({reference:'SC-HCQ-TEST',...x}))};
+    const patients={findOne:jest.fn().mockResolvedValue({id:'patient',userId:'user',status:'ACTIVE',deletedAt:null})};(qb as any).manager={query:jest.fn().mockResolvedValue([{travel_fee_minor:0}])};const quotes={create:jest.fn((x)=>x),save:jest.fn(async(x)=>({reference:'SC-HCQ-TEST',...x}))};
     return new HealthCheckConfigurationService({ createQueryBuilder: jest.fn().mockReturnValue(qb) } as never,patients as never,quotes as never,{} as never,{} as never,{} as never,{} as never,{} as never);
   };
 
   it('calculates base, clinical add-ons, fulfilment fee and total from authoritative rows', async () => {
-    await expect(create(serviceRow()).quote({id:'user'} as never,{ packageCode: 'ESSENTIAL', providerReference: 'SCPR-ONE', fulfilmentModeCode: 'HOME_VISIT', addonCodes: ['CHOLESTEROL'] })).resolves.toMatchObject({ configurationReference:'SC-HCQ-TEST',pricing: { currency: 'NGN', basePackagePriceMinor: 800000, clinicalAddonsTotalMinor: 150000, fulfilmentFeeMinor: 250000, totalMinor: 1200000 }, includedContents: [{ code: 'BLOOD_PRESSURE', resultType: 'BLOOD_PRESSURE', unit: 'mmHg' }], selectedAddons: [{ code: 'CHOLESTEROL', resultType: 'SINGLE_NUMERIC', unit: 'mmol/L', amountMinor: 150000 }] });
+    await expect(create(serviceRow()).quote({id:'user'} as never,{ packageCode: 'ESSENTIAL', providerReference: 'SCPR-ONE', fulfilmentModeCode: 'HOME_VISIT', countryCode:'NG', stateOrRegion:'Lagos', city:'Ikeja', addonCodes: ['CHOLESTEROL'] })).resolves.toMatchObject({ configurationReference:'SC-HCQ-TEST',pricing: { currency: 'NGN', basePackagePriceMinor: 800000, clinicalAddonsTotalMinor: 150000, fulfilmentFeeMinor: 250000, totalMinor: 1200000 }, includedContents: [{ code: 'BLOOD_PRESSURE', resultType: 'BLOOD_PRESSURE', unit: 'mmHg' }], selectedAddons: [{ code: 'CHOLESTEROL', resultType: 'SINGLE_NUMERIC', unit: 'mmol/L', amountMinor: 150000 }] });
   });
   it('keeps HOME_VISIT out of the clinical add-on domain', async () => {
     await expect(create(serviceRow()).quote({id:'user'} as never,{ packageCode: 'ESSENTIAL', providerReference: 'SCPR-ONE', fulfilmentModeCode: 'HOME_VISIT', addonCodes: ['HOME_VISIT'] })).rejects.toBeInstanceOf(BadRequestException);
@@ -27,7 +27,7 @@ describe('HealthCheckConfigurationService', () => {
   });
   it('rejects provider capability currency mismatch', async () => {
     const row = serviceRow({ addons: [{ clinicalContentId: 'cholesterol', priceMinor: '150000', currency: 'USD', clinicalContent: { id: 'cholesterol', code: 'CHOLESTEROL', name: 'Cholesterol' } }] });
-    await expect(create(row).quote({id:'user'} as never,{ packageCode: 'ESSENTIAL', providerReference: 'SCPR-ONE', fulfilmentModeCode: 'HOME_VISIT', addonCodes: ['CHOLESTEROL'] })).rejects.toBeInstanceOf(ConflictException);
+    await expect(create(row).quote({id:'user'} as never,{ packageCode: 'ESSENTIAL', providerReference: 'SCPR-ONE', fulfilmentModeCode: 'HOME_VISIT', countryCode:'NG', stateOrRegion:'Lagos', city:'Ikeja', addonCodes: ['CHOLESTEROL'] })).rejects.toBeInstanceOf(ConflictException);
   });
   it('does not create an unowned quote when no active patient belongs to the user',async()=>{const qb:any={};for(const name of ['innerJoinAndSelect','leftJoinAndSelect','where','andWhere'])qb[name]=jest.fn().mockReturnValue(qb);qb.getOne=jest.fn().mockResolvedValue(serviceRow());const subject=new HealthCheckConfigurationService({createQueryBuilder:jest.fn().mockReturnValue(qb)}as never,{findOne:jest.fn().mockResolvedValue(null)}as never,{create:jest.fn(),save:jest.fn()}as never,{}as never,{}as never,{}as never,{}as never,{}as never);await expect(subject.quote({id:'user'}as never,{packageCode:'ESSENTIAL',providerReference:'SCPR-ONE',fulfilmentModeCode:'HOME_VISIT',addonCodes:[]})).rejects.toThrow('Patient profile not found');});
   it('discovers an arbitrary active package code using area-only geography', async () => { const capabilities = { findEligibleProviders: jest.fn().mockResolvedValue([]) }; const packages = { findOne: jest.fn().mockResolvedValue({ id: 'package', code: 'EXECUTIVE', estimatedDurationMinutes: 30 }) }; const subject = new HealthCheckConfigurationService({} as never, {} as never, {} as never, {} as never, packages as never, { findOne: jest.fn().mockResolvedValue({ id: 'mode' }) } as never, capabilities as never, {} as never); await subject.discover({ packageCode: 'EXECUTIVE', fulfilmentModeCode: 'PROVIDER_LOCATION', preferredDate: '2026-09-10', preferredTime: '09:00', timezone: 'Africa/Lagos', countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', page: 1, limit: 20 }); expect(packages.findOne).toHaveBeenCalledWith({ where: { code: 'EXECUTIVE', isActive: true } }); expect(capabilities.findEligibleProviders).toHaveBeenCalledWith('package', 'mode', expect.objectContaining({ visitAddress: null })); });
@@ -70,7 +70,7 @@ describe('HealthCheckConfigurationService', () => {
     const dependant = { id: 'dependant-1', patientReference: 'SCP-CHLD-0001' };
     const access = { resolveAccessiblePatient: jest.fn().mockResolvedValue(dependant) };
     const subject = new HealthCheckConfigurationService({ createQueryBuilder: jest.fn().mockReturnValue(qb) } as never, {} as never, quotes as never, {} as never, {} as never, {} as never, {} as never, access as never);
-    await subject.quote({ id: 'guardian-1' } as never, { packageCode: 'EXECUTIVE', providerReference: 'SCPR-ONE', fulfilmentModeCode: 'HOME_VISIT', addonCodes: [], participantPatientReference: dependant.patientReference });
+    await subject.quote({ id: 'guardian-1' } as never, { packageCode: 'EXECUTIVE', providerReference: 'SCPR-ONE', fulfilmentModeCode: 'HOME_VISIT', countryCode:'NG', stateOrRegion:'Lagos', city:'Ikeja', addonCodes: [], participantPatientReference: dependant.patientReference });
     expect(access.resolveAccessiblePatient).toHaveBeenCalledWith('guardian-1', dependant.patientReference);
     expect(quotes.create).toHaveBeenCalledWith(expect.objectContaining({ userId: 'guardian-1', patientId: dependant.id }));
   });
