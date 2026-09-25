@@ -9,6 +9,11 @@ describe('HealthCheckOfferingDiscoveryDto', () => {
     await expect(pipe.transform(input, { type: 'query', metatype: HealthCheckOfferingDiscoveryDto })).resolves.toMatchObject({ packageCode: 'EXECUTIVE' });
   });
 
+  it('accepts provider-location discovery without patient geography', async () => {
+    const { countryCode, stateOrRegion, city, ...providerLocationInput } = input;
+    await expect(pipe.transform(providerLocationInput, { type: 'query', metatype: HealthCheckOfferingDiscoveryDto })).resolves.toMatchObject({ fulfilmentModeCode: 'PROVIDER_LOCATION' });
+  });
+
   it('still rejects malformed package codes', async () => {
     await expect(pipe.transform({ ...input, packageCode: 'bad code' }, { type: 'query', metatype: HealthCheckOfferingDiscoveryDto })).rejects.toBeDefined();
   });
