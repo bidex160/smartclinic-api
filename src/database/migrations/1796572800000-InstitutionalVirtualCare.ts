@@ -2,9 +2,9 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 export class InstitutionalVirtualCare1796572800000 implements MigrationInterface{
  name='InstitutionalVirtualCare1796572800000';
  async up(q:QueryRunner):Promise<void>{
-  await q.query(`ALTER TABLE "care_requests" ADD "host_provider_id" uuid`);
-  await q.query(`ALTER TABLE "care_requests" ADD CONSTRAINT "FK_care_requests_host_provider" FOREIGN KEY ("host_provider_id") REFERENCES "providers"("id") ON DELETE RESTRICT`);
-  await q.query(`CREATE INDEX "IDX_care_requests_host_provider" ON "care_requests" ("host_provider_id","status","created_at")`);
+  // host_provider_id is created by InstitutionalVirtualCare1796569200000.
+  // Its foreign key is also owned by the earlier migration.
+  await q.query(`CREATE INDEX IF NOT EXISTS "IDX_care_requests_host_provider" ON "care_requests" ("host_provider_id","status","created_at")`);
   await q.query(`ALTER TABLE "provider_practice_affiliations" ADD "allows_virtual_care" boolean NOT NULL DEFAULT false`);
   await q.query(`ALTER TABLE "provider_practice_affiliations" ADD "virtual_care_price_minor" bigint`);
   await q.query(`ALTER TABLE "provider_practice_affiliations" ADD "virtual_care_currency" char(3)`);
