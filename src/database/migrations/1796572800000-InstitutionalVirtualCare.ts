@@ -18,7 +18,7 @@ export class InstitutionalVirtualCare1796572800000 implements MigrationInterface
   await q.query(`ALTER TABLE "provider_practice_affiliations" DROP COLUMN "virtual_care_price_minor"`);
   await q.query(`ALTER TABLE "provider_practice_affiliations" DROP COLUMN "allows_virtual_care"`);
   await q.query(`DROP INDEX "IDX_care_requests_host_provider"`);
-  await q.query(`ALTER TABLE "care_requests" DROP CONSTRAINT "FK_care_requests_host_provider"`);
-  await q.query(`ALTER TABLE "care_requests" DROP COLUMN "host_provider_id"`);
+  // Earlier migration owns the host-provider foreign key.
+  // Earlier migration owns host_provider_id.
  }
 }
