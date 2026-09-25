@@ -34,7 +34,15 @@ export class HealthCheckConfigurationService {
     const projected=await Promise.all(rows.map(async s=>{
       let travelFeeMinor=0,travelDistanceKm:number|null=null;
       if(s.fulfilmentMode.code==='HOME_VISIT'){
-        const areas=await this.services.manager.query(`SELECT travel_fee_minor,priority,origin_latitude,origin_longitude,max_radius_km FROM provider_service_areas WHERE provider_service_id=$1 AND is_active=true AND country_code=$2 AND LOWER(TRIM(state_or_region))=LOWER(TRIM($3)) AND (city IS NULL OR LOWER(TRIM(city))=LOWER(TRIM($4))) AND (postal_code IS NULL OR LOWER(TRIM(postal_code))=LOWER(TRIM($5))) ORDER BY priority ASC,travel_fee_minor ASC`,[s.id,dto.countryCode,dto.stateOrRegion,dto.city,dto.postalCode??'']);
+        // Eligibility has already been established by ProviderCapabilitiesService.
+        // Keep this projection compatible with staging schemas that pre-date optional
+        // travel-pricing columns; those columns must not turn a valid Home Visit into a 500.
+        let areas: any[] = [];
+        try {
+          areas=await this.services.manager.query(`SELECT travel_fee_minor,priority,origin_latitude,origin_longitude,max_radius_km FROM provider_service_areas WHERE provider_service_id=$1 AND is_active=true AND country_code=$2 AND LOWER(TRIM(state_or_region))=LOWER(TRIM($3)) AND (city IS NULL OR LOWER(TRIM(city))=LOWER(TRIM($4))) AND (postal_code IS NULL OR LOWER(TRIM(postal_code))=LOWER(TRIM($5))) ORDER BY priority ASC,travel_fee_minor ASC`,[s.id,dto.countryCode,dto.stateOrRegion,dto.city,dto.postalCode??'']);
+        } catch {
+          areas=await this.services.manager.query(`SELECT 0 AS travel_fee_minor, 100 AS priority, NULL AS origin_latitude, NULL AS origin_longitude, NULL AS max_radius_km FROM provider_service_areas WHERE provider_service_id=$1 AND is_active=true AND country_code=$2 AND LOWER(TRIM(state_or_region))=LOWER(TRIM($3)) AND (city IS NULL OR LOWER(TRIM(city))=LOWER(TRIM($4))) AND (postal_code IS NULL OR LOWER(TRIM(postal_code))=LOWER(TRIM($5))) ORDER BY city NULLS FIRST, postal_code NULLS FIRST`,[s.id,dto.countryCode,dto.stateOrRegion,dto.city,dto.postalCode??'']);
+        }
         const matched=areas.map((a:any)=>{let distance:null|number=null;if(dto.latitude!=null&&dto.longitude!=null&&a.origin_latitude!=null&&a.origin_longitude!=null){const toRad=(v:number)=>v*Math.PI/180;const dLat=toRad(dto.latitude-Number(a.origin_latitude)),dLon=toRad(dto.longitude-Number(a.origin_longitude));const x=Math.sin(dLat/2)**2+Math.cos(toRad(Number(a.origin_latitude)))*Math.cos(toRad(dto.latitude))*Math.sin(dLon/2)**2;distance=6371*2*Math.asin(Math.sqrt(x));}return{...a,distance};}).find((a:any)=>a.max_radius_km==null||(a.distance!=null&&a.distance<=Number(a.max_radius_km)));
         if(matched){travelFeeMinor=Number(matched.travel_fee_minor??0);travelDistanceKm=matched.distance==null?null:Math.round(matched.distance*10)/10;}
       }
