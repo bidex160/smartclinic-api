@@ -69,7 +69,7 @@ describe('HealthCheckConfigurationService', () => {
     const quotes = { create: jest.fn((value) => value), save: jest.fn(async (value) => ({ reference: 'SC-HCQ-DEPENDANT', ...value })) };
     const dependant = { id: 'dependant-1', patientReference: 'SCP-CHLD-0001' };
     const access = { resolveAccessiblePatient: jest.fn().mockResolvedValue(dependant) };
-    const subject = new HealthCheckConfigurationService({ createQueryBuilder: jest.fn().mockReturnValue(qb) } as never, {} as never, quotes as never, {} as never, {} as never, {} as never, {} as never, access as never);
+    const subject = new HealthCheckConfigurationService({ createQueryBuilder: jest.fn().mockReturnValue(qb), manager: { query: jest.fn().mockResolvedValue([{ travel_fee_minor: 0 }]) } } as never, {} as never, quotes as never, {} as never, {} as never, {} as never, {} as never, access as never);
     await subject.quote({ id: 'guardian-1' } as never, { packageCode: 'EXECUTIVE', providerReference: 'SCPR-ONE', fulfilmentModeCode: 'HOME_VISIT', countryCode:'NG', stateOrRegion:'Lagos', city:'Ikeja', addonCodes: [], participantPatientReference: dependant.patientReference });
     expect(access.resolveAccessiblePatient).toHaveBeenCalledWith('guardian-1', dependant.patientReference);
     expect(quotes.create).toHaveBeenCalledWith(expect.objectContaining({ userId: 'guardian-1', patientId: dependant.id }));
