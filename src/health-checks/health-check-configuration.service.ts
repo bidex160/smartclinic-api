@@ -26,7 +26,7 @@ export class HealthCheckConfigurationService {
     // Do not incorrectly filter provider locations by the patient's current/home geography.
     // Home visits remain geography-bound because the provider must cover the patient's address.
     const visitAddress = mode.code === 'HOME_VISIT'
-      ? {countryCode:dto.countryCode,stateOrRegion:dto.stateOrRegion,city:dto.city,postalCode:dto.postalCode??null,latitude:dto.latitude??null,longitude:dto.longitude??null}
+      ? {countryCode:dto.countryCode!,stateOrRegion:dto.stateOrRegion!,city:dto.city!,postalCode:dto.postalCode??null,latitude:dto.latitude??null,longitude:dto.longitude??null}
       : null;
     const eligible=await this.capabilities.findEligibleProviders(pkg.id,mode.id,{requestedDate:dto.preferredDate,requestedStartTime:dto.preferredTime,requestedEndTime:end,requestedTimezone:dto.timezone,visitAddress});
     const ids=eligible.map(x=>x.id);if(!ids.length)return{items:[],page:dto.page,limit:dto.limit,total:0,totalPages:0};
