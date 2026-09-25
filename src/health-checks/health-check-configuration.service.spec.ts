@@ -34,6 +34,35 @@ describe('HealthCheckConfigurationService', () => {
 
   it('keeps home-visit discovery bound to the patient service area', async () => { const capabilities = { findEligibleProviders: jest.fn().mockResolvedValue([]) }; const packages = { findOne: jest.fn().mockResolvedValue({ id: 'package', code: 'ESSENTIAL', estimatedDurationMinutes: 30 }) }; const subject = new HealthCheckConfigurationService({} as never, {} as never, {} as never, {} as never, packages as never, { findOne: jest.fn().mockResolvedValue({ id: 'mode', code: 'HOME_VISIT' }) } as never, capabilities as never, {} as never); await subject.discover({ packageCode: 'ESSENTIAL', fulfilmentModeCode: 'HOME_VISIT', preferredDate: '2026-09-26', preferredTime: '13:00', timezone: 'Africa/Lagos', countryCode: 'NG', stateOrRegion: 'FCT', city: 'Municipal', page: 1, limit: 20 }); expect(capabilities.findEligibleProviders).toHaveBeenCalledWith('package', 'mode', expect.objectContaining({ visitAddress: expect.objectContaining({ countryCode: 'NG', stateOrRegion: 'FCT', city: 'Municipal' }) })); });
 
+  it('falls back safely when staging lacks optional home-visit travel-pricing columns', async () => {
+    const capabilities = { findEligibleProviders: jest.fn().mockResolvedValue([{ id: 'service-1' }]) };
+    const packages = { findOne: jest.fn().mockResolvedValue({ id: 'package', code: 'ESSENTIAL', estimatedDurationMinutes: 30 }) };
+    const modes = { findOne: jest.fn().mockResolvedValue({ id: 'mode', code: 'HOME_VISIT' }) };
+    const manager = {
+      query: jest.fn()
+        .mockRejectedValueOnce(new Error('column travel_fee_minor does not exist'))
+        .mockResolvedValueOnce([{ travel_fee_minor: 0, priority: 100, origin_latitude: null, origin_longitude: null, max_radius_km: null }]),
+    };
+    const services = {
+      find: jest.fn().mockResolvedValue([{
+        id: 'service-1',
+        priceMinor: '800000',
+        fulfilmentFeeMinor: '0',
+        currency: 'NGN',
+        provider: { providerReference: 'SCPR-ONE', displayName: 'Clinic' },
+        fulfilmentMode: { code: 'HOME_VISIT', name: 'Home visit' },
+        healthCheckPackage: { code: 'ESSENTIAL', contents: [], addonAvailability: [] },
+        locationLinks: [],
+        addons: [],
+      }]),
+      manager,
+    };
+    const subject = new HealthCheckConfigurationService(services as never, {} as never, {} as never, {} as never, packages as never, modes as never, capabilities as never, {} as never);
+    const result = await subject.discover({ packageCode: 'ESSENTIAL', fulfilmentModeCode: 'HOME_VISIT', preferredDate: '2026-09-26', preferredTime: '13:00', timezone: 'Africa/Lagos', countryCode: 'NG', stateOrRegion: 'Federal Capital Territory', city: 'Municipal', page: 1, limit: 20 });
+    expect(manager.query).toHaveBeenCalledTimes(2);
+    expect(result.items).toEqual([expect.objectContaining({ providerReference: 'SCPR-ONE', travelFeeMinor: 0 })]);
+  });
+
   it('binds a dependant configuration quote through PatientAccessService', async () => {
     const row = serviceRow({ healthCheckPackage: { ...serviceRow().healthCheckPackage, code: 'EXECUTIVE', name: 'Executive' } });
     const qb: any = {}; for (const name of ['innerJoinAndSelect', 'leftJoinAndSelect', 'where', 'andWhere']) qb[name] = jest.fn().mockReturnValue(qb); qb.getOne = jest.fn().mockResolvedValue(row);
