@@ -29,7 +29,13 @@ jobs:
       - name: Check duplicate migration timestamps
         shell: bash
         run: |
-          dupes="$(grep -hEo '[A-Za-z0-9_]+[0-9]{13}' src/database/migrations/*.ts | grep -Eo '[0-9]{13}$' | grep -v '^1792512000000$' | sort | uniq -d)"
+          dupes="$(grep -hE '^[[:space:]]*name[[:space:]]*=' src/database/migrations/*.ts | grep -Eo '[0-9]{13}' | grep -v '^1792512000000
+          if [ -n "$dupes" ]; then
+            echo "::error::Duplicate migration timestamps found: $dupes"
+            echo "::error::Before renaming historical migrations, run the staging migration-history pre-deploy query documented in docs/development.md."
+            exit 1
+          fi
+ | sort | uniq -d)"
           if [ -n "$dupes" ]; then
             echo "::error::Duplicate migration timestamps found: $dupes"
             echo "::error::Before renaming historical migrations, run the staging migration-history pre-deploy query documented in docs/development.md."
