@@ -1,6 +1,8 @@
 import { Body,Controller,Get,Param,Post,Query,Req,UseGuards } from '@nestjs/common'; import { ApiBearerAuth,ApiTags } from '@nestjs/swagger'; import { JwtAuthGuard } from '../auth/jwt-auth.guard'; import { RolesGuard } from '../auth/roles.guard'; import { Roles } from '../auth/roles.decorator'; import { UserRole } from '../users/enums/user-role.enum'; import { User } from '../users/entities/user.entity'; import { HmoService } from './hmo.service'; import { ConfirmDeliveredServicesDto,CreateHmoCaseDto,CreateHmoDto,CreateHmoPlanDto,DecideAuthorizationDto,RequestAuthorizationDto,UpsertCoverageDto,VerifyEligibilityDto } from './hmo.dto';
 @ApiTags('HMO') @ApiBearerAuth() @UseGuards(JwtAuthGuard,RolesGuard) @Controller('hmo') export class HmoController { constructor(private s:HmoService){}
  @Get() @Roles(UserRole.USER,UserRole.ADMIN,UserRole.OPERATIONS,UserRole.PROVIDER) hmos(){return this.s.listHmos();}
+ @Get('me/coverages/:patientReference') @Roles(UserRole.USER) mine(@Req() r:{user:User},@Param('patientReference') p:string){return this.s.listMine(r.user.id,p);}
+ @Post('me/coverages/:patientReference') @Roles(UserRole.USER) addMine(@Req() r:{user:User},@Param('patientReference') p:string,@Body() d:Omit<UpsertCoverageDto,'patientId'>){return this.s.addMine(r.user.id,p,d);}
  @Post('admin') @Roles(UserRole.ADMIN,UserRole.OPERATIONS) create(@Body() d:CreateHmoDto){return this.s.createHmo(d);}
  @Post('admin/plans') @Roles(UserRole.ADMIN,UserRole.OPERATIONS) plan(@Body() d:CreateHmoPlanDto){return this.s.createPlan(d);}
  @Post('admin/coverages') @Roles(UserRole.ADMIN,UserRole.OPERATIONS) coverage(@Body() d:UpsertCoverageDto){return this.s.addCoverage(d);}
