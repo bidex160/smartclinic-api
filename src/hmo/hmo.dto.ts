@@ -7,3 +7,6 @@ export class VerifyEligibilityDto { @IsIn(['ELIGIBLE','INELIGIBLE','EXPIRED','PE
 export class RequestAuthorizationDto { @IsArray() requestedServices!:unknown[]; @IsOptional() @IsString() clinicalReason?:string; @IsOptional() @IsInt() @Min(0) requestedAmountMinor?:number; @IsOptional() @IsString() currency?:string; @IsOptional() @IsArray() supportingDocuments?:unknown[]; }
 export class DecideAuthorizationDto { @IsIn(['APPROVED','PARTIALLY_APPROVED','REJECTED']) status!:string; @IsOptional() @IsString() authorizationCode?:string; @IsOptional() @IsArray() approvedServices?:unknown[]; @IsOptional() @IsInt() @Min(0) approvedAmountMinor?:number; @IsOptional() @IsInt() @Min(0) copayAmountMinor?:number; @IsOptional() @IsDateString() validUntil?:string; @IsOptional() @IsString() hmoComments?:string; }
 export class ConfirmDeliveredServicesDto { @IsArray() deliveredServices!:unknown[]; }
+export class SubmitClaimDto { @IsString() @IsNotEmpty() externalClaimReference!:string; }
+export class RecordClaimPaymentDto { @IsInt() @Min(0) paidAmountMinor!:number; @IsOptional() @IsInt() @Min(0) approvedAmountMinor?:number; @IsOptional() @IsInt() @Min(0) platformFeeBps?:number; @IsString() @IsNotEmpty() paymentReference!:string; }
+export class ReconcileClaimDto { @IsString() @IsNotEmpty() reconciliationReference!:string; }
