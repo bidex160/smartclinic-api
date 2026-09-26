@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Req, UseGuards } from "@nestjs/common";
+import { Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -83,6 +83,11 @@ export class AdminProviderEarningsController {
   @ApiOkResponse({ type: ProviderEarningListResponseDto })
   list(@Query() query: AdminProviderEarningListQueryDto) {
     return this.earnings.listAdmin(query);
+  }
+  @Post("release-matured-completed")
+  @ApiOperation({ summary: "Release matured completed wallet-funded hospital earnings" })
+  releaseMaturedCompleted() {
+    return this.earnings.releaseMaturedCompletedWalletEarnings();
   }
   @Get(":reference")
   @ApiOperation({ summary: "Inspect one Provider earning" })
