@@ -11,7 +11,7 @@ import { HmoAuthorization } from "./entities/hmo-authorization.entity";
 import { HmoClaim } from "./entities/hmo-claim.entity";
 import { HmoController } from "./hmo.controller";
 import { HmoService } from "./hmo.service";
-import { User } from "src/users/entities/user.entity";
+import { User } from "../users/entities/user.entity";
 @Module({
   imports: [
     AuthModule,
