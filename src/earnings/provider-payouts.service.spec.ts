@@ -61,6 +61,21 @@ describe('ProviderPayoutsService', () => {
     await expect(subject.create('admin-1', { providerReference: provider.providerReference, currency: 'NGN', earningReferences: ['SC-EARN-ONE', 'sc-earn-one'], settlementMethod: ProviderPayoutSettlementMethod.MANUAL_OTHER })).rejects.toBeInstanceOf(ConflictException);
     expect(payoutRepo.save).not.toHaveBeenCalled();
   });
+  it('batches only PAYABLE earnings into a draft payout when a verified bank account exists', async () => {
+    const qb:any = earningRepo.createQueryBuilder();
+    qb.andWhere = jest.fn().mockReturnThis(); qb.orderBy = jest.fn().mockReturnThis(); qb.addOrderBy = jest.fn().mockReturnThis();
+    payoutAccountRepo.findOne.mockResolvedValue(payoutAccount());
+    await expect(subject.createEligibleBatches('admin-1')).resolves.toMatchObject({ count: 1 });
+    expect(payoutRepo.create).toHaveBeenCalledWith(expect.objectContaining({ status: ProviderPayoutStatus.DRAFT, settlementMethod: ProviderPayoutSettlementMethod.MANUAL_BANK_TRANSFER, totalAmountMinor: '9000', providerPayoutAccountId: 'account-1' }));
+    expect(membershipRepo.create).toHaveBeenCalledWith(expect.objectContaining({ providerEarningId: 'earning-1', providerShareMinor: '9000', releasedAt: null }));
+  });
+  it('does not create a payout batch without a verified bank account', async () => {
+    const qb:any = earningRepo.createQueryBuilder();
+    qb.andWhere = jest.fn().mockReturnThis(); qb.orderBy = jest.fn().mockReturnThis(); qb.addOrderBy = jest.fn().mockReturnThis();
+    payoutAccountRepo.findOne.mockResolvedValue(null);
+    await expect(subject.createEligibleBatches('admin-1')).resolves.toEqual({ created: [], count: 0 });
+    expect(payoutRepo.save).not.toHaveBeenCalled();
+  });
   it('completes transactionally, settles earnings, and appends both histories', async () => {
     const row = payout({ status: ProviderPayoutStatus.PROCESSING }); payoutRepo.findOne.mockResolvedValue(row); membershipRepo.find.mockResolvedValue([{ providerEarningId: 'earning-1', providerShareMinor: '9000' }]); earningRepo.createQueryBuilder().getMany.mockResolvedValue([earning()]);
     await subject.complete(row.reference, 'admin-1', { externalReference: 'BANK-123' });
