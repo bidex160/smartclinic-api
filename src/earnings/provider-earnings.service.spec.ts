@@ -97,6 +97,39 @@ describe('ProviderEarningsService', () => {
     expect(qb.andWhere).toHaveBeenCalledWith('e.payableAt IS NOT NULL AND e.payableAt<=:now', expect.any(Object));
     expect(future.status).toBe(ProviderEarningStatus.HELD);
   });
+  it('uses the accepted wallet commercial snapshot even after provider commission configuration changes', async () => {
+    commissions.requireForProvider.mockResolvedValue({ source: CommissionRateSource.PROVIDER_OVERRIDE, rateBasisPoints: 2500 });
+    const result = await subject.createWalletFulfillmentEarning(manager, {
+      providerId: 'provider-1',
+      fulfillmentReference: 'SC-ORF-WALLET-SNAPSHOT',
+      grossAmountMinor: '10000',
+      currency: 'NGN',
+      sourceType: ProviderEarningSourceType.PHARMACY_FULFILLMENT,
+      commercialSnapshot: {
+        commissionBps: 1000,
+        commissionSource: CommissionRateSource.PLATFORM_DEFAULT,
+        commissionAmountMinor: '1000',
+        providerShareMinor: '9000',
+      },
+    });
+    expect(result).toMatchObject({ commissionBps: 1000, commissionAmountMinor: '1000', providerShareMinor: '9000' });
+    expect(commissions.requireForProvider).not.toHaveBeenCalled();
+  });
+  it('rejects an invalid wallet commercial snapshot whose split does not equal gross', async () => {
+    await expect(subject.createWalletFulfillmentEarning(manager, {
+      providerId: 'provider-1',
+      fulfillmentReference: 'SC-ORF-BAD-SNAPSHOT',
+      grossAmountMinor: '10000',
+      currency: 'NGN',
+      sourceType: ProviderEarningSourceType.PHARMACY_FULFILLMENT,
+      commercialSnapshot: {
+        commissionBps: 1000,
+        commissionSource: CommissionRateSource.PLATFORM_DEFAULT,
+        commissionAmountMinor: '1000',
+        providerShareMinor: '8000',
+      },
+    })).rejects.toBeInstanceOf(ConflictException);
+  });
   it('returns narrow not-found for cross-Provider detail', async () => { earnings.findOne.mockResolvedValue(null); await expect(subject.getOwn({ id: 'user-1' } as any, 'SC-EARN-other')).rejects.toBeInstanceOf(NotFoundException); });
   it('aggregates gross, commission, Provider share, statuses, and sources separately by currency', async () => {
     const qb = (rows: any[]) => { const value: any = { getRawMany: jest.fn().mockResolvedValue(rows) }; for (const method of ['select', 'addSelect', 'groupBy', 'addGroupBy', 'orderBy', 'addOrderBy', 'andWhere', 'innerJoin']) value[method] = jest.fn().mockReturnValue(value); return value; };
