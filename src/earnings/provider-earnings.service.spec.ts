@@ -9,6 +9,10 @@ import { RewardBookingRedemption } from '../rewards/entities/reward-booking-rede
 import { ProviderEarning } from './entities/provider-earning.entity';
 import { ProviderEarningStatusHistory } from './entities/provider-earning-status-history.entity';
 import { ProviderEarningStatus } from './enums/provider-earning-status.enum';
+import { ProviderEarningSourceType } from './enums/provider-earning-source-type.enum';
+import { ClinicalOrderFulfillment } from '../clinical-orders/entities/clinical-order-fulfillment.entity';
+import { DiagnosticExecution, DiagnosticExecutionStatus } from '../clinical-orders/entities/diagnostic-execution.entity';
+import { PharmacyDispensing } from '../clinical-orders/entities/pharmacy-dispensing.entity';
 import { ProviderEarningsService } from './provider-earnings.service';
 
 describe('ProviderEarningsService', () => {
@@ -77,6 +81,21 @@ describe('ProviderEarningsService', () => {
     await subject.markPharmacyFulfillmentPayable(manager, input.fulfillmentReference, 'actor-1');
     expect(first).toMatchObject({ commissionBps: 1000, status: ProviderEarningStatus.PAYABLE });
     expect(history.save).toHaveBeenCalledTimes(2);
+  });
+  it('releases only matured and authoritatively completed wallet hospital earnings', async () => {
+    const matured = { id: 'earning-wallet-1', sourceType: ProviderEarningSourceType.DIAGNOSTIC_FULFILLMENT, sourceReference: 'FUL-1', status: ProviderEarningStatus.HELD, paymentTransactionId: null, payableAt: new Date(Date.now() - 1000) };
+    const future = { id: 'earning-wallet-2', sourceType: ProviderEarningSourceType.DIAGNOSTIC_FULFILLMENT, sourceReference: 'FUL-2', status: ProviderEarningStatus.HELD, paymentTransactionId: null, payableAt: new Date(Date.now() + 60000) };
+    const qb: any = { where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), getMany: jest.fn().mockResolvedValue([matured]) };
+    earnings.createQueryBuilder.mockReturnValue(qb);
+    earnings.findOne.mockResolvedValue(matured);
+    const fulfillmentRepo = { findOne: jest.fn().mockResolvedValue({ id: 'fulfillment-1', reference: 'FUL-1' }) };
+    const diagnosticRepo = { exists: jest.fn().mockResolvedValue(true) };
+    manager.getRepository = jest.fn((entity:any) => entity === ProviderEarning ? earnings : entity === ProviderEarningStatusHistory ? history : entity === ClinicalOrderFulfillment ? fulfillmentRepo : entity === DiagnosticExecution ? diagnosticRepo : entity === PharmacyDispensing ? { exists: jest.fn().mockResolvedValue(false) } : providers);
+    await expect(subject.releaseMaturedCompletedWalletEarnings(manager)).resolves.toEqual({ released: 1 });
+    expect(matured.status).toBe(ProviderEarningStatus.PAYABLE);
+    expect(history.save).toHaveBeenCalledWith(expect.objectContaining({ reasonCode: 'WALLET_SETTLEMENT_HOLD_MATURED' }));
+    expect(qb.andWhere).toHaveBeenCalledWith('e.payableAt IS NOT NULL AND e.payableAt<=:now', expect.any(Object));
+    expect(future.status).toBe(ProviderEarningStatus.HELD);
   });
   it('returns narrow not-found for cross-Provider detail', async () => { earnings.findOne.mockResolvedValue(null); await expect(subject.getOwn({ id: 'user-1' } as any, 'SC-EARN-other')).rejects.toBeInstanceOf(NotFoundException); });
   it('aggregates gross, commission, Provider share, statuses, and sources separately by currency', async () => {
