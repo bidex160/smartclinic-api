@@ -21,6 +21,7 @@ export class AdminProviderPayoutsController {
   @Get('eligible-earnings') @ApiOperation({ summary: 'List unreserved PAYABLE earnings eligible for payout' }) eligible(@Query() query: EligibleProviderEarningQueryDto) { return this.payouts.eligible(query); }
   @Get() @ApiOperation({ summary: 'List Provider payouts' }) list(@Query() query: AdminProviderPayoutListQueryDto) { return this.payouts.adminList(query); }
   @Get(':reference') @ApiOperation({ summary: 'Get Provider payout, earnings, and history' }) detail(@Param() params: ProviderPayoutParamsDto) { return this.payouts.adminDetail(params.reference); }
+  @Post('batch-eligible') @ApiOperation({ summary: 'Create draft payout batches from all unreserved PAYABLE earnings with verified bank accounts' }) batchEligible(@Req() request: { user: User }) { return this.payouts.createEligibleBatches(request.user.id); }
   @Post() @ApiOperation({ summary: 'Create a manual Provider payout and reserve PAYABLE earnings' }) create(@Req() request: { user: User }, @Body() body: CreateProviderPayoutDto) { return this.payouts.create(request.user.id, body); }
   @Post(':reference/process') process(@Req() request: { user: User }, @Param() params: ProviderPayoutParamsDto) { return this.payouts.process(params.reference, request.user.id); }
   @Post(':reference/complete') complete(@Req() request: { user: User }, @Param() params: ProviderPayoutParamsDto, @Body() body: CompleteProviderPayoutDto) { return this.payouts.complete(params.reference, request.user.id, body); }
