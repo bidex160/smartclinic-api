@@ -109,8 +109,13 @@ export class UpdateClinicalRecordDto {
   @optionalText()
   @IsOptional()
   @IsString()
-  @MaxLength(4000)
   summary?: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  @optionalText()
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  recordType?: string | null;
   @ApiPropertyOptional({ type: ClinicalConsultationDetailDto })
   @IsOptional()
   @ValidateNested()
