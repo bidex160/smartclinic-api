@@ -24,7 +24,7 @@ describe('ProviderPayoutsService', () => {
     payoutRepo = { create: jest.fn(value => value), save: jest.fn(async value => Object.assign(value, { id: value.id ?? 'payout-1', reference: value.reference ?? 'SC-PAYOUT-ONE', provider, createdAt: value.createdAt ?? new Date(), updatedAt: value.updatedAt ?? new Date() })), findOne: jest.fn() };
     membershipRepo = { create: jest.fn(value => value), save: jest.fn(async value => value), find: jest.fn(), createQueryBuilder: jest.fn() };
     payoutHistory = { create: jest.fn(value => value), save: jest.fn(async value => value) }; earningHistory = { create: jest.fn(value => value), save: jest.fn(async value => value) };
-    const providerRepo = { findOne: jest.fn().mockResolvedValue(provider) };
+    const providerRepo = { findOne: jest.fn().mockResolvedValue(provider), findOneByOrFail: jest.fn().mockResolvedValue(provider) };
     payoutAccountRepo = { findOne: jest.fn() };
     manager = { getRepository: jest.fn(entity => entity === Provider ? providerRepo : entity === ProviderEarning ? earningRepo : entity === ProviderPayout ? payoutRepo : entity === ProviderPayoutEarning ? membershipRepo : entity === ProviderPayoutStatusHistory ? payoutHistory : entity === ProviderPayoutAccount ? payoutAccountRepo : earningHistory) };
     payouts = { manager: { transaction: jest.fn((callback: any) => callback(manager)), getRepository: jest.fn(entity => entity === ProviderEarning ? earningRepo : undefined) }, createQueryBuilder: jest.fn() };
