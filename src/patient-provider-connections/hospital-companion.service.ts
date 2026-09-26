@@ -13,6 +13,7 @@ import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy
 import { PharmacyFundingStatus } from '../clinical-orders/enums/pharmacy-quote-status.enum';
 import { DiagnosticExecution } from '../clinical-orders/entities/diagnostic-execution.entity';
 import { PharmacyDispensing } from '../clinical-orders/entities/pharmacy-dispensing.entity';
+import { HospitalServicePass, HospitalServicePassStatus } from './entities/hospital-service-pass.entity';
 
 @Injectable()
 export class HospitalCompanionService {
@@ -25,6 +26,7 @@ export class HospitalCompanionService {
     @InjectRepository(PharmacyFulfillmentFunding) private readonly pharmacyFunding: Repository<PharmacyFulfillmentFunding>,
     @InjectRepository(DiagnosticExecution) private readonly diagnosticExecutions: Repository<DiagnosticExecution>,
     @InjectRepository(PharmacyDispensing) private readonly pharmacyDispensings: Repository<PharmacyDispensing>,
+    @InjectRepository(HospitalServicePass) private readonly servicePasses: Repository<HospitalServicePass>,
   ) {}
 
   async patientView(user: User, reference: string) {
@@ -127,13 +129,25 @@ export class HospitalCompanionService {
           ? { kind: 'PROCEED_TO_SERVICE', title: 'Payment confirmed — continue your care', action: 'VIEW_REQUESTS' }
           : { kind: 'NO_ACTION', title: 'You are up to date at this hospital', action: null };
 
+    const latestServicePass = await this.servicePasses.findOne({
+      where: { patientId: patient.id, providerId: connection.providerId },
+      order: { paidAt: 'DESC' },
+    });
+
     return {
       provider: { reference: connection.provider.providerReference, displayName: connection.provider.displayName },
       connection: { reference: connection.reference, externalPatientReference: connection.externalPatientReference, connectedAt: connection.connectedAt },
       nextAction,
       requests,
       consolidatedPayment,
-      servicePass: null, // Added when grouped hospital settlement/service-pass persistence lands.
+      servicePass: latestServicePass && latestServicePass.status !== HospitalServicePassStatus.VOID ? {
+        reference: latestServicePass.reference,
+        status: latestServicePass.status,
+        amountMinor: Number(latestServicePass.amountMinor),
+        currency: latestServicePass.currency,
+        paidAt: latestServicePass.paidAt,
+        coveredServices: latestServicePass.coveredServices,
+      } : null,
     };
   }
 }
