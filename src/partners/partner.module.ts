@@ -10,7 +10,7 @@ import { PartnerCampaign } from "./entities/partner-campaign.entity";
 import { PartnerWellnessEvent } from "./entities/partner-wellness-event.entity";
 import { PartnerController } from "./partner.controller";
 import { PartnerService } from "./partner.service";
-import { User } from "src/users/entities/user.entity";
+import { User } from "../users/entities/user.entity";
 @Module({
   imports: [
     AuthModule,
