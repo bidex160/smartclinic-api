@@ -130,7 +130,7 @@ export class HospitalCompanionService {
           : { kind: 'NO_ACTION', title: 'You are up to date at this hospital', action: null };
 
     const latestServicePass = await this.servicePasses.findOne({
-      where: { patientId: patient.id, providerId: connection.providerId },
+      where: { connectionId: connection.id, patientId: patient.id, providerId: connection.providerId },
       order: { paidAt: 'DESC' },
     });
 
