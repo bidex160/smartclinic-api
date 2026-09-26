@@ -110,7 +110,7 @@ export class HospitalCompanionService {
       };
     });
 
-    const payable = requests.filter(item => item.amountMinor != null && item.paymentStatus === DiagnosticFundingStatus.PENDING);
+    const payable = requests.filter(item => item.amountMinor != null && item.paymentStatus === DiagnosticFundingStatus.PENDING && !!item.fulfillmentReference);
     const currencies = [...new Set(payable.map(item => item.currency).filter(Boolean))];
     const consolidatedPayment = {
       available: currencies.length === 1 && payable.length > 0,
