@@ -35,6 +35,7 @@ import { WalletModule } from './wallet/wallet.module';
 import { BuildersModule } from './builders/builders.module';
 import { AssistedMatchingModule } from './assisted-matching/assisted-matching.module';
 import { HmoModule } from './hmo/hmo.module';
+import { PartnerModule } from './partners/partner.module';
 
 const configuration = createAppConfiguration();
 const persistenceDomainModules = configuration.database.enabled
@@ -68,6 +69,7 @@ const persistenceDomainModules = configuration.database.enabled
       BuildersModule,
       AssistedMatchingModule,
       HmoModule,
+      PartnerModule,
     ]
   : [];
 
