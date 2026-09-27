@@ -18,14 +18,14 @@ export interface AppConfiguration {
   providerInvitations: { ttlSeconds: number; frontendUrl: string };
   healthResults: { guestAccessTtlSeconds: number };
   guidedSelfCheckAi: {
-    provider: 'none' | 'openai';
+    provider: "none" | "openai";
     openAiApiKey?: string;
     openAiModel?: string;
     timeoutMs: number;
     maxRetries: number;
   };
   clinicalAttachments: {
-    provider: 'none' | 'cloudinary';
+    provider: "none" | "cloudinary";
     cloudName?: string;
     apiKey?: string;
     apiSecret?: string;
@@ -47,7 +47,7 @@ export interface AppConfiguration {
     emailMaxAttempts: number;
     processingStaleAfterMs: number;
     push: {
-      provider: 'none' | 'firebase';
+      provider: "none" | "firebase";
       firebaseProjectId?: string;
       firebaseClientEmail?: string;
       firebasePrivateKey?: string;
@@ -90,6 +90,7 @@ export interface AppConfiguration {
       webhookEnabled: boolean;
     };
   };
+  referrals: { monetaryShareBps: number };
   database: {
     enabled: boolean;
     host: string;
@@ -117,7 +118,8 @@ export function createAppConfiguration(
     environment: environmentName,
     port: getNumber(environment.PORT, 3000),
     frontendUrl: environment.FRONTEND_URL ?? "http://localhost:3500",
-    mobileAppUrl: environment.MOBILE_APP_URL ?? "https://smartclinicnetwork.com",
+    mobileAppUrl:
+      environment.MOBILE_APP_URL ?? "https://smartclinicnetwork.com",
     auth: {
       jwtSecret:
         environment.JWT_SECRET ??
@@ -134,11 +136,11 @@ export function createAppConfiguration(
         environmentName === "production",
       cookieSameSite:
         (environment.AUTH_COOKIE_SAME_SITE as
-          | "lax"
-          | "strict"
-          | "none"
-          | undefined) ?? "lax",
-      passwordResetTokenTtlMinutes: getNumber(environment.PASSWORD_RESET_TOKEN_TTL_MINUTES, 30),
+          "lax" | "strict" | "none" | undefined) ?? "lax",
+      passwordResetTokenTtlMinutes: getNumber(
+        environment.PASSWORD_RESET_TOKEN_TTL_MINUTES,
+        30,
+      ),
       cookieDomain: environment.AUTH_COOKIE_DOMAIN,
     },
     providerMatching: {
@@ -160,29 +162,41 @@ export function createAppConfiguration(
       ),
     },
     guidedSelfCheckAi: {
-      provider: (environment.GUIDED_SELF_CHECK_AI_PROVIDER as 'none' | 'openai' | undefined) ?? 'none',
+      provider:
+        (environment.GUIDED_SELF_CHECK_AI_PROVIDER as
+          "none" | "openai" | undefined) ?? "none",
       openAiApiKey: environment.OPENAI_API_KEY,
       openAiModel: environment.GUIDED_SELF_CHECK_OPENAI_MODEL,
-      timeoutMs: getNumber(environment.GUIDED_SELF_CHECK_OPENAI_TIMEOUT_MS, 15_000),
-      maxRetries: getNumber(environment.GUIDED_SELF_CHECK_OPENAI_MAX_RETRIES, 1),
+      timeoutMs: getNumber(
+        environment.GUIDED_SELF_CHECK_OPENAI_TIMEOUT_MS,
+        15_000,
+      ),
+      maxRetries: getNumber(
+        environment.GUIDED_SELF_CHECK_OPENAI_MAX_RETRIES,
+        1,
+      ),
     },
     clinicalAttachments: {
-      provider: (environment.CLINICAL_ATTACHMENT_STORAGE_PROVIDER as 'none' | 'cloudinary' | undefined) ?? 'none',
+      provider:
+        (environment.CLINICAL_ATTACHMENT_STORAGE_PROVIDER as
+          "none" | "cloudinary" | undefined) ?? "none",
       cloudName: environment.CLOUDINARY_CLOUD_NAME,
       apiKey: environment.CLOUDINARY_API_KEY,
       apiSecret: environment.CLOUDINARY_API_SECRET,
-      accessTtlSeconds: getNumber(environment.CLINICAL_ATTACHMENT_ACCESS_TTL_SECONDS, 300),
+      accessTtlSeconds: getNumber(
+        environment.CLINICAL_ATTACHMENT_ACCESS_TTL_SECONDS,
+        300,
+      ),
     },
     email: {
       provider:
         (environment.EMAIL_PROVIDER as
-          | "none"
-          | "test"
-          | "resend"
-          | undefined) ?? (environmentName === "test" ? "test" : "none"),
+          "none" | "test" | "resend" | undefined) ??
+        (environmentName === "test" ? "test" : "none"),
       fromAddress:
         environment.EMAIL_FROM_ADDRESS ?? "no-reply@smartclinic.invalid",
-      contactToAddress: environment.CONTACT_TO_ADDRESS ?? "contact@smartclinic.invalid",
+      contactToAddress:
+        environment.CONTACT_TO_ADDRESS ?? "contact@smartclinic.invalid",
       fromName: environment.EMAIL_FROM_NAME,
       logoUrl: environment.EMAIL_LOGO_URL,
       resendApiKey: environment.RESEND_API_KEY,
@@ -210,7 +224,9 @@ export function createAppConfiguration(
         300_000,
       ),
       push: {
-        provider: (environment.PUSH_PROVIDER as 'none' | 'firebase' | undefined) ?? 'none',
+        provider:
+          (environment.PUSH_PROVIDER as "none" | "firebase" | undefined) ??
+          "none",
         firebaseProjectId: environment.FIREBASE_PROJECT_ID,
         firebaseClientEmail: environment.FIREBASE_CLIENT_EMAIL,
         firebasePrivateKey: environment.FIREBASE_PRIVATE_KEY,
@@ -223,7 +239,9 @@ export function createAppConfiguration(
       phoneNumberId: environment.WHATSAPP_META_PHONE_NUMBER_ID,
       webhookVerifyToken: environment.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
       appSecret: environment.WHATSAPP_META_APP_SECRET,
-      graphApiBaseUrl: environment.WHATSAPP_META_GRAPH_API_BASE_URL ?? "https://graph.facebook.com",
+      graphApiBaseUrl:
+        environment.WHATSAPP_META_GRAPH_API_BASE_URL ??
+        "https://graph.facebook.com",
       graphApiVersion: environment.WHATSAPP_META_GRAPH_API_VERSION ?? "v23.0",
       sendTimeoutMs: getNumber(environment.WHATSAPP_SEND_TIMEOUT_MS, 10_000),
     },
@@ -237,20 +255,14 @@ export function createAppConfiguration(
         environmentName === "production",
       cookieSameSite:
         (environment.PUBLIC_BOOKING_COOKIE_SAME_SITE as
-          | "lax"
-          | "strict"
-          | "none"
-          | undefined) ?? "lax",
+          "lax" | "strict" | "none" | undefined) ?? "lax",
       cookieDomain: environment.PUBLIC_BOOKING_COOKIE_DOMAIN,
     },
     payments: {
       provider:
         (environment.PAYMENT_PROVIDER as
-          | "none"
-          | "test"
-          | "paystack"
-          | "opay"
-          | undefined) ?? (environmentName === "test" ? "test" : "none"),
+          "none" | "test" | "paystack" | "opay" | undefined) ??
+        (environmentName === "test" ? "test" : "none"),
       verificationMinIntervalSeconds: Number(
         environment.PAYMENT_VERIFICATION_MIN_INTERVAL_SECONDS ?? 30,
       ),
@@ -262,7 +274,8 @@ export function createAppConfiguration(
         webhookEnabled: environment.PAYSTACK_WEBHOOK_ENABLED !== "false",
       },
       opay: {
-        baseUrl: environment.OPAY_BASE_URL ?? "https://testapi.opaycheckout.com",
+        baseUrl:
+          environment.OPAY_BASE_URL ?? "https://testapi.opaycheckout.com",
         merchantId: environment.OPAY_MERCHANT_ID,
         publicKey: environment.OPAY_PUBLIC_KEY,
         privateKey: environment.OPAY_PRIVATE_KEY,
@@ -270,6 +283,9 @@ export function createAppConfiguration(
         returnUrl: environment.OPAY_RETURN_URL,
         webhookEnabled: environment.OPAY_WEBHOOK_ENABLED !== "false",
       },
+    },
+    referrals: {
+      monetaryShareBps: getNumber(environment.PRIMARY_REFERRER_SHARE_BPS, 300),
     },
     database: {
       enabled: environment.DATABASE_ENABLED !== "false",

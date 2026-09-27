@@ -20,6 +20,14 @@ describe('OpayPaymentProviderAdapter', () => {
     expect(JSON.parse(init?.body as string)).toMatchObject({ reference: 'SC-PAY-1', country: 'NG', amount: { currency: 'NGN', total: 1250000 }, returnUrl: 'https://app.test/return/SC-BOOK-1' });
   });
 
+  it('uses the configured OPay return URL when a request-specific callback is absent', async () => {
+    const configured = config();
+    configured.payments.opay.returnUrl = 'https://app.test/opay-return';
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ code: '00000', data: { reference: 'SC-PAY-2', orderNo: 'opay-order-2', cashierUrl: 'https://cashier.test/order-2' } }) } as Response);
+    await new OpayPaymentProviderAdapter(configured).initializePayment({ amount: '5000.00', currency: 'NGN', idempotencyKey: 'key-2', bookingReference: 'SC-BOOK-2', customerEmail: 'payer@example.test', paymentReference: 'SC-PAY-2' });
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toMatchObject({ returnUrl: 'https://app.test/opay-return' });
+  });
+
   it('verifies server-side status and maps success/pending/failure conservatively', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ code: '00000', data: { reference: 'SC-PAY-1', status: 'SUCCESS', amount: { total: 1250000, currency: 'NGN' } } }) } as Response);
     await expect(new OpayPaymentProviderAdapter(config()).verifyPayment('SC-PAY-1')).resolves.toMatchObject({ succeeded: true, amount: '12500.00', currency: 'NGN', providerReference: 'SC-PAY-1' });

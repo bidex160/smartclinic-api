@@ -111,6 +111,16 @@ describe('CareRequestsService', () => {
   it('hides requests from unrelated providers', async () => { manager.getRepository(CareRequest).findOne.mockResolvedValue(null); await expect(subject.providerRespond(user, 'SC-CARE-ABCDEF123456', true, null)).rejects.toBeInstanceOf(NotFoundException); });
   it('provider queues are scoped only to the currently assigned provider', async () => { await subject.listForProvider(user, { page: 1, limit: 20 }); expect(readQb.where).toHaveBeenCalledWith('request.assignedProviderId = :providerId', { providerId: provider.id }); });
 
+  it('includes authoritative funding and appointments in the patient care list', async () => {
+    await subject.listMine(user, { page: 1, limit: 20 });
+    expect(readQb.leftJoinAndSelect).toHaveBeenCalledWith('request.funding', 'funding');
+    expect(readQb.leftJoinAndSelect).toHaveBeenCalledWith('request.appointments', 'appointment');
+    expect(readQb.leftJoinAndSelect).toHaveBeenCalledWith(
+      'appointment.providerLocation',
+      'appointmentLocation',
+    );
+  });
+
   it('returns null appointment for an unscheduled patient/provider detail', async () => {
     const request: any = { reference: 'SC-CARE-ABCDEF123456', status: CareRequestStatus.PROVIDER_ACCEPTED, patientId: patient.id, patient, assignedProviderId: provider.id, careServiceDefinition: definition, preferredProvider: null, assignedProvider: provider, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', preferredDate: null, preferredTime: null, contactMethod: CareRequestContactMethod.WHATSAPP, notes: null, appointments: [], createdAt: new Date(), updatedAt: new Date() };
     readQb.getOne.mockResolvedValue(request);

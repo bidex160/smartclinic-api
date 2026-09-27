@@ -219,7 +219,7 @@ export class CareRequestsService {
   }
 
   async listMine(user: User, query: CareRequestListQueryDto) {
-    const builder = this.readBuilder().where("request.userId = :userId", {
+    const builder = this.detailBuilder().where("request.userId = :userId", {
       userId: user.id,
     });
     if (query.status)

@@ -12,10 +12,14 @@ import { HmoClaim } from "./entities/hmo-claim.entity";
 import { HmoController } from "./hmo.controller";
 import { HmoService } from "./hmo.service";
 import { User } from "../users/entities/user.entity";
+import { HmoEnrollmentLead } from "./entities/hmo-enrollment-lead.entity";
+import { CareRequestFunding } from "../care-requests/entities/care-request-funding.entity";
+import { ProvidersModule } from "../providers/providers.module";
 @Module({
   imports: [
     AuthModule,
     PatientsModule,
+    ProvidersModule,
     TypeOrmModule.forFeature([
       Hmo,
       HmoPlan,
@@ -23,7 +27,9 @@ import { User } from "../users/entities/user.entity";
       HmoCase,
       HmoAuthorization,
       HmoClaim,
+      HmoEnrollmentLead,
       CareRequest,
+      CareRequestFunding,
       User,
     ]),
   ],

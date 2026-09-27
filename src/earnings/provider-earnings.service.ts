@@ -19,10 +19,13 @@ import { RewardBookingRedemption } from "../rewards/entities/reward-booking-rede
 import { RewardBookingRedemptionStatus } from "../rewards/enums/reward-booking-redemption-status.enum";
 import { User } from "../users/entities/user.entity";
 import { CareRequest } from "../care-requests/entities/care-request.entity";
-import { DiagnosticExecution, DiagnosticExecutionStatus } from '../clinical-orders/entities/diagnostic-execution.entity';
-import { PharmacyDispensing } from '../clinical-orders/entities/pharmacy-dispensing.entity';
-import { PharmacyDispensingStatus } from '../clinical-orders/enums/pharmacy-quote-status.enum';
-import { ClinicalOrderFulfillment } from '../clinical-orders/entities/clinical-order-fulfillment.entity';
+import {
+  DiagnosticExecution,
+  DiagnosticExecutionStatus,
+} from "../clinical-orders/entities/diagnostic-execution.entity";
+import { PharmacyDispensing } from "../clinical-orders/entities/pharmacy-dispensing.entity";
+import { PharmacyDispensingStatus } from "../clinical-orders/enums/pharmacy-quote-status.enum";
+import { ClinicalOrderFulfillment } from "../clinical-orders/entities/clinical-order-fulfillment.entity";
 import {
   AdminProviderEarningListQueryDto,
   ProviderEarningListQueryDto,
@@ -131,19 +134,17 @@ export class ProviderEarningsService {
         settledAt: null,
       }),
     );
-    await manager
-      .getRepository(ProviderEarningStatusHistory)
-      .save({
-        providerEarningId: earning.id,
-        fromStatus: null,
-        toStatus: status,
-        actorUserId: null,
-        reasonCode:
-          status === ProviderEarningStatus.PAYABLE
-            ? "HEALTH_CHECK_ALREADY_COMPLETED"
-            : "HEALTH_CHECK_PAYMENT_SETTLED",
-        reasonNote: null,
-      });
+    await manager.getRepository(ProviderEarningStatusHistory).save({
+      providerEarningId: earning.id,
+      fromStatus: null,
+      toStatus: status,
+      actorUserId: null,
+      reasonCode:
+        status === ProviderEarningStatus.PAYABLE
+          ? "HEALTH_CHECK_ALREADY_COMPLETED"
+          : "HEALTH_CHECK_PAYMENT_SETTLED",
+      reasonNote: null,
+    });
     return earning;
   }
 
@@ -166,7 +167,7 @@ export class ProviderEarningsService {
       paymentTransaction.transactionType !==
         PaymentTransactionType.COLLECTION ||
       paymentTransaction.currency !== care.serviceCurrency ||
-      this.toMinor(paymentTransaction.amount) !== BigInt(care.servicePriceMinor)
+      this.toMinor(paymentTransaction.amount) < BigInt(care.servicePriceMinor)
     )
       throw new ConflictException(
         "Payment transaction does not match the General Care commercial snapshot",
@@ -209,16 +210,14 @@ export class ProviderEarningsService {
         settledAt: null,
       }),
     );
-    await manager
-      .getRepository(ProviderEarningStatusHistory)
-      .save({
-        providerEarningId: earning.id,
-        fromStatus: null,
-        toStatus: ProviderEarningStatus.HELD,
-        actorUserId: null,
-        reasonCode: "GENERAL_CARE_PAYMENT_SETTLED",
-        reasonNote: null,
-      });
+    await manager.getRepository(ProviderEarningStatusHistory).save({
+      providerEarningId: earning.id,
+      fromStatus: null,
+      toStatus: ProviderEarningStatus.HELD,
+      actorUserId: null,
+      reasonCode: "GENERAL_CARE_PAYMENT_SETTLED",
+      reasonNote: null,
+    });
     return earning;
   }
 
@@ -249,16 +248,14 @@ export class ProviderEarningsService {
     earning.status = ProviderEarningStatus.PAYABLE;
     earning.payableAt = new Date();
     await repository.save(earning);
-    await manager
-      .getRepository(ProviderEarningStatusHistory)
-      .save({
-        providerEarningId: earning.id,
-        fromStatus: ProviderEarningStatus.HELD,
-        toStatus: ProviderEarningStatus.PAYABLE,
-        actorUserId,
-        reasonCode: "GENERAL_CARE_COMPLETED",
-        reasonNote: null,
-      });
+    await manager.getRepository(ProviderEarningStatusHistory).save({
+      providerEarningId: earning.id,
+      fromStatus: ProviderEarningStatus.HELD,
+      toStatus: ProviderEarningStatus.PAYABLE,
+      actorUserId,
+      reasonCode: "GENERAL_CARE_COMPLETED",
+      reasonNote: null,
+    });
     return earning;
   }
   async createHeldPharmacyFulfillmentEarning(
@@ -323,6 +320,208 @@ export class ProviderEarningsService {
         settledAt: null,
       }),
     );
+    await manager.getRepository(ProviderEarningStatusHistory).save({
+      providerEarningId: earning.id,
+      fromStatus: null,
+      toStatus: ProviderEarningStatus.HELD,
+      actorUserId: null,
+      reasonCode: "PHARMACY_PAYMENT_SETTLED",
+      reasonNote: null,
+    });
+    return earning;
+  }
+  async markWalletDiagnosticPayable(
+    manager: EntityManager,
+    fulfillmentReference: string,
+    actorUserId: string,
+  ) {
+    const repository = manager.getRepository(ProviderEarning);
+    const earning = await repository.findOne({
+      where: {
+        sourceType: ProviderEarningSourceType.DIAGNOSTIC_FULFILLMENT,
+        sourceReference: fulfillmentReference,
+      },
+      lock: { mode: "pessimistic_write" },
+    });
+    if (!earning) return null;
+    if (
+      [ProviderEarningStatus.PAYABLE, ProviderEarningStatus.SETTLED].includes(
+        earning.status,
+      )
+    )
+      return earning;
+    if (earning.status !== ProviderEarningStatus.HELD)
+      throw new ConflictException("Diagnostic earning cannot become payable");
+    const now = new Date();
+    if (earning.payableAt && earning.payableAt.getTime() > now.getTime())
+      return earning;
+    earning.status = ProviderEarningStatus.PAYABLE;
+    earning.payableAt = now;
+    await repository.save(earning);
+    await manager
+      .getRepository(ProviderEarningStatusHistory)
+      .save({
+        providerEarningId: earning.id,
+        fromStatus: ProviderEarningStatus.HELD,
+        toStatus: ProviderEarningStatus.PAYABLE,
+        actorUserId,
+        reasonCode: "DIAGNOSTIC_RESULT_COMPLETED",
+        reasonNote: null,
+      });
+    return earning;
+  }
+
+  async releaseMaturedCompletedWalletEarnings(manager?: EntityManager) {
+    const m = manager ?? this.earnings.manager;
+    const rows = await m
+      .getRepository(ProviderEarning)
+      .createQueryBuilder("e")
+      .where("e.status=:status", { status: ProviderEarningStatus.HELD })
+      .andWhere("e.paymentTransactionId IS NULL")
+      .andWhere("e.payableAt IS NOT NULL AND e.payableAt<=:now", {
+        now: new Date(),
+      })
+      .andWhere("e.sourceType IN (:...types)", {
+        types: [
+          ProviderEarningSourceType.PHARMACY_FULFILLMENT,
+          ProviderEarningSourceType.DIAGNOSTIC_FULFILLMENT,
+        ],
+      })
+      .getMany();
+    let released = 0;
+    for (const earning of rows) {
+      const fulfillment = await m
+        .getRepository(ClinicalOrderFulfillment)
+        .findOne({ where: { reference: earning.sourceReference } });
+      if (!fulfillment) continue;
+      let completed = false;
+      if (
+        earning.sourceType === ProviderEarningSourceType.PHARMACY_FULFILLMENT
+      ) {
+        completed = await m
+          .getRepository(PharmacyDispensing)
+          .exists({
+            where: {
+              fulfillmentId: fulfillment.id,
+              status: PharmacyDispensingStatus.COMPLETED,
+            },
+          });
+      } else {
+        completed = await m
+          .getRepository(DiagnosticExecution)
+          .exists({
+            where: {
+              fulfillmentId: fulfillment.id,
+              status: DiagnosticExecutionStatus.RESULT_READY,
+            },
+          });
+      }
+      if (!completed) continue;
+      const locked = await m
+        .getRepository(ProviderEarning)
+        .findOne({
+          where: { id: earning.id },
+          lock: manager ? { mode: "pessimistic_write" } : undefined,
+        });
+      if (!locked || locked.status !== ProviderEarningStatus.HELD) continue;
+      locked.status = ProviderEarningStatus.PAYABLE;
+      await m.getRepository(ProviderEarning).save(locked);
+      await m
+        .getRepository(ProviderEarningStatusHistory)
+        .save({
+          providerEarningId: locked.id,
+          fromStatus: ProviderEarningStatus.HELD,
+          toStatus: ProviderEarningStatus.PAYABLE,
+          actorUserId: null,
+          reasonCode: "WALLET_SETTLEMENT_HOLD_MATURED",
+          reasonNote: "Service completion verified before release",
+        });
+      released++;
+    }
+    return { released };
+  }
+
+  async createWalletFulfillmentEarning(
+    manager: EntityManager,
+    input: {
+      providerId: string;
+      fulfillmentReference: string;
+      grossAmountMinor: string;
+      currency: string;
+      sourceType:
+        | ProviderEarningSourceType.PHARMACY_FULFILLMENT
+        | ProviderEarningSourceType.DIAGNOSTIC_FULFILLMENT;
+      commercialSnapshot?: {
+        commissionBps: number;
+        commissionSource: CommissionRateSource;
+        commissionAmountMinor: string;
+        providerShareMinor: string;
+      };
+    },
+  ) {
+    const repository = manager.getRepository(ProviderEarning);
+    const existing = await repository.findOne({
+      where: {
+        sourceType: input.sourceType,
+        sourceReference: input.fulfillmentReference,
+      },
+      lock: { mode: "pessimistic_write" },
+    });
+    if (existing) {
+      if (
+        existing.providerId !== input.providerId ||
+        existing.currency !== input.currency ||
+        existing.grossAmountMinor !== input.grossAmountMinor
+      )
+        throw new ConflictException(
+          "Existing wallet earning does not match hospital settlement",
+        );
+      return existing;
+    }
+    const resolution = input.commercialSnapshot
+      ? {
+          rateBasisPoints: input.commercialSnapshot.commissionBps,
+          source: input.commercialSnapshot.commissionSource,
+        }
+      : await this.commissions.requireForProvider(input.providerId, manager);
+    const calculation = input.commercialSnapshot
+      ? {
+          commissionAmountMinor: BigInt(
+            input.commercialSnapshot.commissionAmountMinor,
+          ),
+          providerShareMinor: BigInt(
+            input.commercialSnapshot.providerShareMinor,
+          ),
+        }
+      : calculateCommission(
+          BigInt(input.grossAmountMinor),
+          resolution.rateBasisPoints,
+        );
+    if (
+      calculation.commissionAmountMinor + calculation.providerShareMinor !==
+      BigInt(input.grossAmountMinor)
+    )
+      throw new ConflictException(
+        "Hospital commercial snapshot does not equal gross amount",
+      );
+    const payableAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const earning = await repository.save(
+      repository.create({
+        providerId: input.providerId,
+        paymentTransactionId: null,
+        sourceType: input.sourceType,
+        sourceReference: input.fulfillmentReference,
+        currency: input.currency,
+        grossAmountMinor: input.grossAmountMinor,
+        commissionBps: resolution.rateBasisPoints,
+        commissionSource: resolution.source,
+        commissionAmountMinor: calculation.commissionAmountMinor.toString(),
+        providerShareMinor: calculation.providerShareMinor.toString(),
+        status: ProviderEarningStatus.HELD,
+        payableAt,
+        settledAt: null,
+      }),
+    );
     await manager
       .getRepository(ProviderEarningStatusHistory)
       .save({
@@ -330,16 +529,11 @@ export class ProviderEarningsService {
         fromStatus: null,
         toStatus: ProviderEarningStatus.HELD,
         actorUserId: null,
-        reasonCode: "PHARMACY_PAYMENT_SETTLED",
-        reasonNote: null,
+        reasonCode: "WALLET_HOSPITAL_PAYMENT_SETTLED",
+        reasonNote: "Eligible for release after 24-hour hold",
       });
     return earning;
   }
-  async markWalletDiagnosticPayable(manager:EntityManager,fulfillmentReference:string,actorUserId:string){const repository=manager.getRepository(ProviderEarning);const earning=await repository.findOne({where:{sourceType:ProviderEarningSourceType.DIAGNOSTIC_FULFILLMENT,sourceReference:fulfillmentReference},lock:{mode:'pessimistic_write'}});if(!earning)return null;if([ProviderEarningStatus.PAYABLE,ProviderEarningStatus.SETTLED].includes(earning.status))return earning;if(earning.status!==ProviderEarningStatus.HELD)throw new ConflictException('Diagnostic earning cannot become payable');const now=new Date();if(earning.payableAt&&earning.payableAt.getTime()>now.getTime())return earning;earning.status=ProviderEarningStatus.PAYABLE;earning.payableAt=now;await repository.save(earning);await manager.getRepository(ProviderEarningStatusHistory).save({providerEarningId:earning.id,fromStatus:ProviderEarningStatus.HELD,toStatus:ProviderEarningStatus.PAYABLE,actorUserId,reasonCode:'DIAGNOSTIC_RESULT_COMPLETED',reasonNote:null});return earning;}
-
-  async releaseMaturedCompletedWalletEarnings(manager?:EntityManager){const m=manager??this.earnings.manager;const rows=await m.getRepository(ProviderEarning).createQueryBuilder('e').where('e.status=:status',{status:ProviderEarningStatus.HELD}).andWhere('e.paymentTransactionId IS NULL').andWhere('e.payableAt IS NOT NULL AND e.payableAt<=:now',{now:new Date()}).andWhere('e.sourceType IN (:...types)',{types:[ProviderEarningSourceType.PHARMACY_FULFILLMENT,ProviderEarningSourceType.DIAGNOSTIC_FULFILLMENT]}).getMany();let released=0;for(const earning of rows){const fulfillment=await m.getRepository(ClinicalOrderFulfillment).findOne({where:{reference:earning.sourceReference}});if(!fulfillment)continue;let completed=false;if(earning.sourceType===ProviderEarningSourceType.PHARMACY_FULFILLMENT){completed=await m.getRepository(PharmacyDispensing).exists({where:{fulfillmentId:fulfillment.id,status:PharmacyDispensingStatus.COMPLETED}});}else{completed=await m.getRepository(DiagnosticExecution).exists({where:{fulfillmentId:fulfillment.id,status:DiagnosticExecutionStatus.RESULT_READY}});}if(!completed)continue;const locked=await m.getRepository(ProviderEarning).findOne({where:{id:earning.id},lock:manager?{mode:'pessimistic_write'}:undefined});if(!locked||locked.status!==ProviderEarningStatus.HELD)continue;locked.status=ProviderEarningStatus.PAYABLE;await m.getRepository(ProviderEarning).save(locked);await m.getRepository(ProviderEarningStatusHistory).save({providerEarningId:locked.id,fromStatus:ProviderEarningStatus.HELD,toStatus:ProviderEarningStatus.PAYABLE,actorUserId:null,reasonCode:'WALLET_SETTLEMENT_HOLD_MATURED',reasonNote:'Service completion verified before release'});released++;}return{released};}
-
-  async createWalletFulfillmentEarning(manager:EntityManager,input:{providerId:string;fulfillmentReference:string;grossAmountMinor:string;currency:string;sourceType:ProviderEarningSourceType.PHARMACY_FULFILLMENT|ProviderEarningSourceType.DIAGNOSTIC_FULFILLMENT;commercialSnapshot?:{commissionBps:number;commissionSource:CommissionRateSource;commissionAmountMinor:string;providerShareMinor:string};}){const repository=manager.getRepository(ProviderEarning);const existing=await repository.findOne({where:{sourceType:input.sourceType,sourceReference:input.fulfillmentReference},lock:{mode:'pessimistic_write'}});if(existing){if(existing.providerId!==input.providerId||existing.currency!==input.currency||existing.grossAmountMinor!==input.grossAmountMinor)throw new ConflictException('Existing wallet earning does not match hospital settlement');return existing;}const resolution=input.commercialSnapshot?{rateBasisPoints:input.commercialSnapshot.commissionBps,source:input.commercialSnapshot.commissionSource}:await this.commissions.requireForProvider(input.providerId,manager);const calculation=input.commercialSnapshot?{commissionAmountMinor:BigInt(input.commercialSnapshot.commissionAmountMinor),providerShareMinor:BigInt(input.commercialSnapshot.providerShareMinor)}:calculateCommission(BigInt(input.grossAmountMinor),resolution.rateBasisPoints);if(calculation.commissionAmountMinor+calculation.providerShareMinor!==BigInt(input.grossAmountMinor))throw new ConflictException('Hospital commercial snapshot does not equal gross amount');const payableAt=new Date(Date.now()+24*60*60*1000);const earning=await repository.save(repository.create({providerId:input.providerId,paymentTransactionId:null,sourceType:input.sourceType,sourceReference:input.fulfillmentReference,currency:input.currency,grossAmountMinor:input.grossAmountMinor,commissionBps:resolution.rateBasisPoints,commissionSource:resolution.source,commissionAmountMinor:calculation.commissionAmountMinor.toString(),providerShareMinor:calculation.providerShareMinor.toString(),status:ProviderEarningStatus.HELD,payableAt,settledAt:null}));await manager.getRepository(ProviderEarningStatusHistory).save({providerEarningId:earning.id,fromStatus:null,toStatus:ProviderEarningStatus.HELD,actorUserId:null,reasonCode:'WALLET_HOSPITAL_PAYMENT_SETTLED',reasonNote:'Eligible for release after 24-hour hold'});return earning;}
 
   async markPharmacyFulfillmentPayable(
     manager: EntityManager,
@@ -364,20 +558,19 @@ export class ProviderEarningsService {
     if (earning.status !== ProviderEarningStatus.HELD)
       throw new ConflictException("Pharmacy earning cannot become payable");
     const now = new Date();
-    if (earning.payableAt && earning.payableAt.getTime() > now.getTime()) return earning;
+    if (earning.payableAt && earning.payableAt.getTime() > now.getTime())
+      return earning;
     earning.status = ProviderEarningStatus.PAYABLE;
     earning.payableAt = now;
     await repository.save(earning);
-    await manager
-      .getRepository(ProviderEarningStatusHistory)
-      .save({
-        providerEarningId: earning.id,
-        fromStatus: ProviderEarningStatus.HELD,
-        toStatus: ProviderEarningStatus.PAYABLE,
-        actorUserId,
-        reasonCode: "PHARMACY_HANDOVER_COMPLETED",
-        reasonNote: null,
-      });
+    await manager.getRepository(ProviderEarningStatusHistory).save({
+      providerEarningId: earning.id,
+      fromStatus: ProviderEarningStatus.HELD,
+      toStatus: ProviderEarningStatus.PAYABLE,
+      actorUserId,
+      reasonCode: "PHARMACY_HANDOVER_COMPLETED",
+      reasonNote: null,
+    });
     return earning;
   }
 
@@ -445,16 +638,14 @@ export class ProviderEarningsService {
         settledAt: null,
       }),
     );
-    await manager
-      .getRepository(ProviderEarningStatusHistory)
-      .save({
-        providerEarningId: earning.id,
-        fromStatus: null,
-        toStatus: ProviderEarningStatus.HELD,
-        actorUserId: null,
-        reasonCode: "PATIENT_CONNECTION_PAYMENT_SETTLED",
-        reasonNote: null,
-      });
+    await manager.getRepository(ProviderEarningStatusHistory).save({
+      providerEarningId: earning.id,
+      fromStatus: null,
+      toStatus: ProviderEarningStatus.HELD,
+      actorUserId: null,
+      reasonCode: "PATIENT_CONNECTION_PAYMENT_SETTLED",
+      reasonNote: null,
+    });
     return earning;
   }
 
@@ -489,16 +680,14 @@ export class ProviderEarningsService {
       earning.status = ProviderEarningStatus.PAYABLE;
       earning.payableAt = new Date();
       await repository.save(earning);
-      await manager
-        .getRepository(ProviderEarningStatusHistory)
-        .save({
-          providerEarningId: earning.id,
-          fromStatus: ProviderEarningStatus.HELD,
-          toStatus: ProviderEarningStatus.PAYABLE,
-          actorUserId,
-          reasonCode: "PATIENT_CONNECTION_CONNECTED",
-          reasonNote: null,
-        });
+      await manager.getRepository(ProviderEarningStatusHistory).save({
+        providerEarningId: earning.id,
+        fromStatus: ProviderEarningStatus.HELD,
+        toStatus: ProviderEarningStatus.PAYABLE,
+        actorUserId,
+        reasonCode: "PATIENT_CONNECTION_CONNECTED",
+        reasonNote: null,
+      });
     }
   }
 
@@ -507,12 +696,10 @@ export class ProviderEarningsService {
     bookingId: string,
     actorUserId: string,
   ): Promise<ProviderEarning | null> {
-    const booking = await manager
-      .getRepository(Booking)
-      .findOne({
-        where: { id: bookingId },
-        lock: { mode: "pessimistic_write" },
-      });
+    const booking = await manager.getRepository(Booking).findOne({
+      where: { id: bookingId },
+      lock: { mode: "pessimistic_write" },
+    });
     if (!booking || booking.status !== BookingStatus.COMPLETED)
       throw new ConflictException(
         "Health Check must be completed before Provider earnings become payable",
@@ -538,16 +725,14 @@ export class ProviderEarningsService {
     earning.status = ProviderEarningStatus.PAYABLE;
     earning.payableAt = new Date();
     await repository.save(earning);
-    await manager
-      .getRepository(ProviderEarningStatusHistory)
-      .save({
-        providerEarningId: earning.id,
-        fromStatus: ProviderEarningStatus.HELD,
-        toStatus: ProviderEarningStatus.PAYABLE,
-        actorUserId,
-        reasonCode: "HEALTH_CHECK_COMPLETED",
-        reasonNote: null,
-      });
+    await manager.getRepository(ProviderEarningStatusHistory).save({
+      providerEarningId: earning.id,
+      fromStatus: ProviderEarningStatus.HELD,
+      toStatus: ProviderEarningStatus.PAYABLE,
+      actorUserId,
+      reasonCode: "HEALTH_CHECK_COMPLETED",
+      reasonNote: null,
+    });
     return earning;
   }
 

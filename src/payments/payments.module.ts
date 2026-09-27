@@ -16,7 +16,7 @@ import { PaymentAttempt } from "./entities/payment-attempt.entity";
 import { PaymentTransaction } from "./entities/payment-transaction.entity";
 import { PaymentFlowService } from "./payment-flow.service";
 import { PAYMENT_PROVIDER_ADAPTER } from "./payment-provider.adapter";
-import { PaymentProviderRegistry } from './payment-provider.registry';
+import { PaymentProviderRegistry } from "./payment-provider.registry";
 import { PaystackWebhookController } from "./paystack-webhook.controller";
 import { OpayWebhookController } from "./opay-webhook.controller";
 import { User } from "../users/entities/user.entity";
@@ -25,21 +25,33 @@ import { RewardsModule } from "../rewards/rewards.module";
 import { RewardBookingRedemption } from "../rewards/entities/reward-booking-redemption.entity";
 import { RewardConversionRate } from "../rewards/entities/reward-conversion-rate.entity";
 import { RewardPointsLedger } from "../rewards/entities/reward-points-ledger.entity";
-import { FastTrackRequest } from '../fasttrack/entities/fasttrack-request.entity';
-import { FastTrackRequestStatusHistory } from '../fasttrack/entities/fasttrack-request-status-history.entity';
-import { EarningsModule } from '../earnings/earnings.module';
-import { CommissionsModule } from '../commissions/commissions.module';
-import { CareAppointmentsModule } from '../care-appointments/care-appointments.module';
-import { CareRequest } from '../care-requests/entities/care-request.entity';
-import { CareRequestFunding } from '../care-requests/entities/care-request-funding.entity';
-import { MeCareRequestFundingController } from './me-care-request-funding.controller';
-import { PatientProviderConnection } from '../patient-provider-connections/entities/patient-provider-connection.entity';
-import { PatientProviderConnectionFunding } from '../patient-provider-connections/entities/patient-provider-connection-funding.entity';
-import { PatientProviderConnectionHistory } from '../patient-provider-connections/entities/patient-provider-connection-history.entity';
-import { PharmacyFulfillmentFunding } from '../clinical-orders/entities/pharmacy-fulfillment-funding.entity';import { PharmacyQuote } from '../clinical-orders/entities/pharmacy-quote.entity';import { ClinicalOrderFulfillment } from '../clinical-orders/entities/clinical-order-fulfillment.entity';import { PharmacyDispensing } from '../clinical-orders/entities/pharmacy-dispensing.entity';import { Patient } from '../patients/entities/patient.entity';import { MePharmacyFundingController } from './me-pharmacy-funding.controller'; import { MeDiagnosticFundingController } from './me-diagnostic-funding.controller'; import { DiagnosticFulfillmentFunding } from '../clinical-orders/entities/diagnostic-fulfillment-funding.entity'; import { DiagnosticQuote } from '../clinical-orders/entities/diagnostic-quote.entity'; import { GuidedSelfCheck } from '../guided-self-checks/entities/guided-self-check.entity';
-import { WalletTopUp } from '../wallet/entities/wallet-top-up.entity';
-import { WalletModule } from '../wallet/wallet.module';
-import { MeWalletFundingController } from './me-wallet-funding.controller'; import { GuidedSelfCheckHistory } from '../guided-self-checks/entities/guided-self-check-history.entity'; import { MeGuidedSelfCheckFundingController } from './me-guided-self-check-funding.controller';
+import { FastTrackRequest } from "../fasttrack/entities/fasttrack-request.entity";
+import { FastTrackRequestStatusHistory } from "../fasttrack/entities/fasttrack-request-status-history.entity";
+import { EarningsModule } from "../earnings/earnings.module";
+import { CommissionsModule } from "../commissions/commissions.module";
+import { CareAppointmentsModule } from "../care-appointments/care-appointments.module";
+import { CareRequest } from "../care-requests/entities/care-request.entity";
+import { CareRequestFunding } from "../care-requests/entities/care-request-funding.entity";
+import { MeCareRequestFundingController } from "./me-care-request-funding.controller";
+import { PatientProviderConnection } from "../patient-provider-connections/entities/patient-provider-connection.entity";
+import { PatientProviderConnectionFunding } from "../patient-provider-connections/entities/patient-provider-connection-funding.entity";
+import { PatientProviderConnectionHistory } from "../patient-provider-connections/entities/patient-provider-connection-history.entity";
+import { PharmacyFulfillmentFunding } from "../clinical-orders/entities/pharmacy-fulfillment-funding.entity";
+import { PharmacyQuote } from "../clinical-orders/entities/pharmacy-quote.entity";
+import { ClinicalOrderFulfillment } from "../clinical-orders/entities/clinical-order-fulfillment.entity";
+import { PharmacyDispensing } from "../clinical-orders/entities/pharmacy-dispensing.entity";
+import { Patient } from "../patients/entities/patient.entity";
+import { MePharmacyFundingController } from "./me-pharmacy-funding.controller";
+import { MeDiagnosticFundingController } from "./me-diagnostic-funding.controller";
+import { DiagnosticFulfillmentFunding } from "../clinical-orders/entities/diagnostic-fulfillment-funding.entity";
+import { DiagnosticQuote } from "../clinical-orders/entities/diagnostic-quote.entity";
+import { GuidedSelfCheck } from "../guided-self-checks/entities/guided-self-check.entity";
+import { WalletTopUp } from "../wallet/entities/wallet-top-up.entity";
+import { WalletModule } from "../wallet/wallet.module";
+import { PartnerModule } from "../partners/partner.module";
+import { MeWalletFundingController } from "./me-wallet-funding.controller";
+import { GuidedSelfCheckHistory } from "../guided-self-checks/entities/guided-self-check-history.entity";
+import { MeGuidedSelfCheckFundingController } from "./me-guided-self-check-funding.controller";
 @Module({
   imports: [
     AuthModule,
@@ -49,6 +61,7 @@ import { MeWalletFundingController } from './me-wallet-funding.controller'; impo
     CommissionsModule,
     CareAppointmentsModule,
     WalletModule,
+    PartnerModule,
     TypeOrmModule.forFeature([
       PaymentAttempt,
       PaymentTransaction,
@@ -56,21 +69,39 @@ import { MeWalletFundingController } from './me-wallet-funding.controller'; impo
       BookingContact,
       BookingFunding,
       BookingStatusHistory,
-      User
-      ,RewardBookingRedemption,
+      User,
+      RewardBookingRedemption,
       RewardConversionRate,
-      RewardPointsLedger
-      ,FastTrackRequest,
-      FastTrackRequestStatusHistory
-      ,CareRequest,
-      CareRequestFunding
-      ,PatientProviderConnection,
+      RewardPointsLedger,
+      FastTrackRequest,
+      FastTrackRequestStatusHistory,
+      CareRequest,
+      CareRequestFunding,
+      PatientProviderConnection,
       PatientProviderConnectionFunding,
-      PatientProviderConnectionHistory
-      ,PharmacyFulfillmentFunding,PharmacyQuote,ClinicalOrderFulfillment,PharmacyDispensing,Patient,GuidedSelfCheck,GuidedSelfCheckHistory,DiagnosticFulfillmentFunding,DiagnosticQuote,WalletTopUp
+      PatientProviderConnectionHistory,
+      PharmacyFulfillmentFunding,
+      PharmacyQuote,
+      ClinicalOrderFulfillment,
+      PharmacyDispensing,
+      Patient,
+      GuidedSelfCheck,
+      GuidedSelfCheckHistory,
+      DiagnosticFulfillmentFunding,
+      DiagnosticQuote,
+      WalletTopUp,
     ]),
   ],
-  controllers: [AdminPaymentFlowController, PaystackWebhookController, OpayWebhookController, MeCareRequestFundingController,MePharmacyFundingController,MeGuidedSelfCheckFundingController,MeDiagnosticFundingController,MeWalletFundingController],
+  controllers: [
+    AdminPaymentFlowController,
+    PaystackWebhookController,
+    OpayWebhookController,
+    MeCareRequestFundingController,
+    MePharmacyFundingController,
+    MeGuidedSelfCheckFundingController,
+    MeDiagnosticFundingController,
+    MeWalletFundingController,
+  ],
   providers: [
     PaymentFlowService,
     TestPaymentProviderAdapter,
@@ -86,12 +117,12 @@ import { MeWalletFundingController } from './me-wallet-funding.controller'; impo
         opay: OpayPaymentProviderAdapter,
       ) =>
         config.payments.provider === "paystack"
-            ? paystack
-            : config.payments.provider === "opay"
-              ? opay
+          ? paystack
+          : config.payments.provider === "opay"
+            ? opay
             : config.payments.provider === "test"
-            ? test
-            : new UnavailablePaymentProviderAdapter(),
+              ? test
+              : new UnavailablePaymentProviderAdapter(),
       inject: [
         appConfig.KEY,
         TestPaymentProviderAdapter,

@@ -1,50 +1,65 @@
-import { plainToInstance, Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, IsUrl, Min, MinLength, validateSync } from 'class-validator';
+import { plainToInstance, Type } from "class-transformer";
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Max,
+  Min,
+  MinLength,
+  validateSync,
+} from "class-validator";
 
 class EnvironmentVariables {
-  @IsIn(['development', 'test', 'production'])
-  NODE_ENV = 'development';
+  @IsIn(["development", "test", "production"])
+  NODE_ENV = "development";
 
   @Type(() => Number)
   @IsInt()
   PORT = 3000;
 
   @IsString()
-  DATABASE_HOST = 'localhost';
+  DATABASE_HOST = "localhost";
 
   @Type(() => Number)
   @IsInt()
   DATABASE_PORT = 5432;
 
   @IsString()
-  DATABASE_USERNAME = 'postgres';
+  DATABASE_USERNAME = "postgres";
 
   @IsOptional()
   @IsString()
-  DATABASE_PASSWORD = '';
+  DATABASE_PASSWORD = "";
 
   @IsString()
-  DATABASE_NAME = 'smartclinic';
+  DATABASE_NAME = "smartclinic";
 
   @IsString()
-  FRONTEND_URL = 'http://localhost:3500';
+  FRONTEND_URL = "http://localhost:3500";
 
   @IsOptional()
-  @IsIn(['true', 'false'])
+  @IsIn(["true", "false"])
   TYPEORM_SYNCHRONIZE?: string;
 
   @IsOptional()
-  @IsIn(['true', 'false'])
+  @IsIn(["true", "false"])
   DATABASE_ENABLED?: string;
 
   @IsString()
   @MinLength(32)
-  JWT_SECRET = process.env.NODE_ENV === 'test' ? 'test-only-jwt-secret-must-not-be-used-in-production' : undefined as never;
+  JWT_SECRET =
+    process.env.NODE_ENV === "test"
+      ? "test-only-jwt-secret-must-not-be-used-in-production"
+      : (undefined as never);
 
   @IsString()
-  JWT_EXPIRES_IN = '15m';
+  JWT_EXPIRES_IN = "15m";
 
-  @Type(() => Number) @IsInt() @Min(5)
+  @Type(() => Number)
+  @IsInt()
+  @Min(5)
   PASSWORD_RESET_TOKEN_TTL_MINUTES = 30;
 
   @Type(() => Number)
@@ -52,84 +67,122 @@ class EnvironmentVariables {
   @Min(1)
   PROVIDER_OFFER_TTL_MINUTES = 30;
 
-  @Type(() => Number) @IsInt() @Min(300)
+  @Type(() => Number)
+  @IsInt()
+  @Min(300)
   PROVIDER_INVITATION_TTL = 604800;
 
-  @Type(() => Number) @IsInt() @Min(300)
+  @Type(() => Number)
+  @IsInt()
+  @Min(300)
   HEALTH_RESULT_ACCESS_TTL = 604800;
 
-  @IsIn(['none', 'openai']) GUIDED_SELF_CHECK_AI_PROVIDER = 'none';
+  @IsIn(["none", "openai"]) GUIDED_SELF_CHECK_AI_PROVIDER = "none";
   @IsOptional() @IsString() OPENAI_API_KEY?: string;
   @IsOptional() @IsString() GUIDED_SELF_CHECK_OPENAI_MODEL?: string;
-  @Type(() => Number) @IsInt() @Min(1000) GUIDED_SELF_CHECK_OPENAI_TIMEOUT_MS = 15000;
+  @Type(() => Number) @IsInt() @Min(1000) GUIDED_SELF_CHECK_OPENAI_TIMEOUT_MS =
+    15000;
   @Type(() => Number) @IsInt() @Min(0) GUIDED_SELF_CHECK_OPENAI_MAX_RETRIES = 1;
 
-  @IsIn(['none', 'cloudinary']) CLINICAL_ATTACHMENT_STORAGE_PROVIDER = 'none';
+  @IsIn(["none", "cloudinary"]) CLINICAL_ATTACHMENT_STORAGE_PROVIDER = "none";
   @IsOptional() @IsString() CLOUDINARY_CLOUD_NAME?: string;
   @IsOptional() @IsString() CLOUDINARY_API_KEY?: string;
   @IsOptional() @IsString() CLOUDINARY_API_SECRET?: string;
-  @Type(() => Number) @IsInt() @Min(60) CLINICAL_ATTACHMENT_ACCESS_TTL_SECONDS = 300;
+  @Type(() => Number) @IsInt() @Min(60) CLINICAL_ATTACHMENT_ACCESS_TTL_SECONDS =
+    300;
 
-  @IsOptional() @IsUrl({ require_tld: false }) PROVIDER_INVITATION_FRONTEND_URL?: string;
-  @IsIn(['none', 'test', 'resend']) EMAIL_PROVIDER = process.env.NODE_ENV === 'test' ? 'test' : 'none';
-  @IsOptional() @IsString() EMAIL_FROM_ADDRESS: string | undefined = process.env.NODE_ENV === 'test' ? 'no-reply@smartclinic.invalid' : undefined;
-  @IsOptional() @IsString() EMAIL_FROM_NAME: string | undefined = process.env.NODE_ENV === 'test' ? 'SmartClinic' : undefined;
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  PROVIDER_INVITATION_FRONTEND_URL?: string;
+  @IsIn(["none", "test", "resend"]) EMAIL_PROVIDER =
+    process.env.NODE_ENV === "test" ? "test" : "none";
+  @IsOptional() @IsString() EMAIL_FROM_ADDRESS: string | undefined =
+    process.env.NODE_ENV === "test"
+      ? "no-reply@smartclinic.invalid"
+      : undefined;
+  @IsOptional() @IsString() EMAIL_FROM_NAME: string | undefined =
+    process.env.NODE_ENV === "test" ? "SmartClinic" : undefined;
   @IsOptional() @IsString() RESEND_API_KEY?: string;
   @IsOptional() @IsUrl({ require_tld: false }) EMAIL_LOGO_URL?: string;
   @Type(() => Number) @IsInt() @Min(1000) EMAIL_SEND_TIMEOUT_MS = 10000;
-  @IsOptional() @IsIn(['true', 'false']) NOTIFICATION_DISPATCHER_ENABLED?: string;
-  @Type(() => Number) @IsInt() @Min(1000) NOTIFICATION_DISPATCH_INTERVAL_MS = 15000;
+  @IsOptional()
+  @IsIn(["true", "false"])
+  NOTIFICATION_DISPATCHER_ENABLED?: string;
+  @Type(() => Number) @IsInt() @Min(1000) NOTIFICATION_DISPATCH_INTERVAL_MS =
+    15000;
   @Type(() => Number) @IsInt() @Min(1) NOTIFICATION_DISPATCH_BATCH_SIZE = 25;
   @Type(() => Number) @IsInt() @Min(1) NOTIFICATION_EMAIL_MAX_ATTEMPTS = 5;
-  @Type(() => Number) @IsInt() @Min(60000) NOTIFICATION_PROCESSING_STALE_AFTER_MS = 300000;
-  @IsOptional() @IsIn(['none', 'firebase']) PUSH_PROVIDER?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(60000)
+  NOTIFICATION_PROCESSING_STALE_AFTER_MS = 300000;
+  @IsOptional() @IsIn(["none", "firebase"]) PUSH_PROVIDER?: string;
   @IsOptional() @IsString() FIREBASE_PROJECT_ID?: string;
   @IsOptional() @IsString() FIREBASE_CLIENT_EMAIL?: string;
   @IsOptional() @IsString() FIREBASE_PRIVATE_KEY?: string;
   @Type(() => Number) @IsInt() @Min(1) NOTIFICATION_PUSH_MAX_ATTEMPTS = 5;
 
-  @IsOptional() @IsIn(['true', 'false']) WHATSAPP_ENABLED?: string;
+  @IsOptional() @IsIn(["true", "false"]) WHATSAPP_ENABLED?: string;
   @IsOptional() @IsString() WHATSAPP_META_ACCESS_TOKEN?: string;
   @IsOptional() @IsString() WHATSAPP_META_PHONE_NUMBER_ID?: string;
   @IsOptional() @IsString() WHATSAPP_WEBHOOK_VERIFY_TOKEN?: string;
   @IsOptional() @IsString() WHATSAPP_META_APP_SECRET?: string;
-  @IsOptional() @IsUrl({ require_tld: false }) WHATSAPP_META_GRAPH_API_BASE_URL?: string;
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  WHATSAPP_META_GRAPH_API_BASE_URL?: string;
   @IsOptional() @IsString() WHATSAPP_META_GRAPH_API_VERSION?: string;
   @Type(() => Number) @IsInt() @Min(1000) WHATSAPP_SEND_TIMEOUT_MS = 10000;
 
-  @Type(() => Number) @IsInt() @Min(60)
+  @Type(() => Number)
+  @IsInt()
+  @Min(60)
   PUBLIC_BOOKING_SESSION_TTL = 604800;
 
-  @IsOptional() @IsIn(['true', 'false'])
+  @IsOptional()
+  @IsIn(["true", "false"])
   PUBLIC_BOOKING_COOKIE_SECURE?: string;
 
-  @IsOptional() @IsIn(['lax', 'strict', 'none'])
+  @IsOptional()
+  @IsIn(["lax", "strict", "none"])
   PUBLIC_BOOKING_COOKIE_SAME_SITE?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   PUBLIC_BOOKING_COOKIE_DOMAIN?: string;
-  @IsIn(['none', 'test', 'paystack', 'opay']) PAYMENT_PROVIDER = process.env.NODE_ENV === 'test' ? 'test' : 'none';
-  @Type(() => Number) @IsInt() @Min(1) PAYMENT_VERIFICATION_MIN_INTERVAL_SECONDS = 30;
+  @IsIn(["none", "test", "paystack", "opay"]) PAYMENT_PROVIDER =
+    process.env.NODE_ENV === "test" ? "test" : "none";
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  PAYMENT_VERIFICATION_MIN_INTERVAL_SECONDS = 30;
   @IsOptional() @IsString() PAYSTACK_SECRET_KEY?: string;
   @IsOptional() @IsString() PAYSTACK_PUBLIC_KEY?: string;
   @IsOptional() @IsString() PAYSTACK_CALLBACK_URL?: string;
-  @IsOptional() @IsUrl({ require_tld: false }) PAYSTACK_PATIENT_CALLBACK_URL?: string;
-  @IsOptional() @IsIn(['true', 'false']) PAYSTACK_WEBHOOK_ENABLED?: string;
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  PAYSTACK_PATIENT_CALLBACK_URL?: string;
+  @IsOptional() @IsIn(["true", "false"]) PAYSTACK_WEBHOOK_ENABLED?: string;
   @IsOptional() @IsUrl({ require_tld: false }) OPAY_BASE_URL?: string;
   @IsOptional() @IsString() OPAY_MERCHANT_ID?: string;
   @IsOptional() @IsString() OPAY_PUBLIC_KEY?: string;
   @IsOptional() @IsString() OPAY_PRIVATE_KEY?: string;
   @IsOptional() @IsUrl({ require_tld: false }) OPAY_CALLBACK_URL?: string;
   @IsOptional() @IsUrl({ require_tld: false }) OPAY_RETURN_URL?: string;
-  @IsOptional() @IsIn(['true', 'false']) OPAY_WEBHOOK_ENABLED?: string;
+  @IsOptional() @IsIn(["true", "false"]) OPAY_WEBHOOK_ENABLED?: string;
+  @Type(() => Number) @IsInt() @Min(0) @Max(10000) PRIMARY_REFERRER_SHARE_BPS =
+    300;
   @IsOptional() @IsString() PAYOUT_ACCOUNT_ENCRYPTION_KEY?: string;
 }
 
-export function validateEnvironment(config: Record<string, unknown>): EnvironmentVariables {
+export function validateEnvironment(
+  config: Record<string, unknown>,
+): EnvironmentVariables {
   const validatedConfig = plainToInstance(EnvironmentVariables, config, {
     enableImplicitConversion: true,
   });
-  const errors = validateSync(validatedConfig, { skipMissingProperties: false });
+  const errors = validateSync(validatedConfig, {
+    skipMissingProperties: false,
+  });
 
   if (errors.length > 0) {
     throw new Error(`Invalid environment configuration: ${errors.toString()}`);
@@ -137,23 +190,110 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
   if (validatedConfig.EMAIL_LOGO_URL) {
     try {
       const logoUrl = new URL(validatedConfig.EMAIL_LOGO_URL);
-      if (logoUrl.protocol !== 'http:' && logoUrl.protocol !== 'https:') throw new Error();
+      if (logoUrl.protocol !== "http:" && logoUrl.protocol !== "https:")
+        throw new Error();
     } catch {
-      throw new Error('Invalid environment configuration: EMAIL_LOGO_URL must use http or https');
+      throw new Error(
+        "Invalid environment configuration: EMAIL_LOGO_URL must use http or https",
+      );
     }
   }
-  if (validatedConfig.NODE_ENV === 'production' && validatedConfig.PAYMENT_PROVIDER === 'paystack' && !validatedConfig.PAYSTACK_SECRET_KEY) throw new Error('Invalid environment configuration: PAYSTACK_SECRET_KEY is required when PAYMENT_PROVIDER=paystack');
-  if (validatedConfig.NODE_ENV === 'production' && validatedConfig.PAYMENT_PROVIDER === 'opay' && (!validatedConfig.OPAY_BASE_URL || !validatedConfig.OPAY_MERCHANT_ID || !validatedConfig.OPAY_PUBLIC_KEY || !validatedConfig.OPAY_PRIVATE_KEY)) throw new Error('Invalid environment configuration: OPAY_BASE_URL, OPAY_MERCHANT_ID, OPAY_PUBLIC_KEY, and OPAY_PRIVATE_KEY are required when PAYMENT_PROVIDER=opay');
-  if (validatedConfig.NODE_ENV === 'production' && validatedConfig.PAYMENT_PROVIDER === 'test') throw new Error('Invalid environment configuration: PAYMENT_PROVIDER=test is not allowed in production');
-  if (validatedConfig.NODE_ENV === 'production' && config.PROVIDER_INVITATION_TTL === undefined) throw new Error('Invalid environment configuration: PROVIDER_INVITATION_TTL is required in production');
-  if (validatedConfig.NODE_ENV === 'production' && !validatedConfig.PROVIDER_INVITATION_FRONTEND_URL) throw new Error('Invalid environment configuration: PROVIDER_INVITATION_FRONTEND_URL is required in production');
-  if (validatedConfig.NODE_ENV === 'production' && validatedConfig.EMAIL_PROVIDER === 'test') throw new Error('Invalid environment configuration: EMAIL_PROVIDER=test is not allowed in production');
-  if (validatedConfig.EMAIL_PROVIDER !== 'none' && !validatedConfig.EMAIL_FROM_ADDRESS) throw new Error('Invalid environment configuration: EMAIL_FROM_ADDRESS is required when email delivery is configured');
-  if (validatedConfig.EMAIL_PROVIDER === 'resend' && !validatedConfig.RESEND_API_KEY) throw new Error('Invalid environment configuration: RESEND_API_KEY is required when EMAIL_PROVIDER=resend');
-  if (validatedConfig.WHATSAPP_ENABLED === 'true' && (!validatedConfig.WHATSAPP_META_ACCESS_TOKEN || !validatedConfig.WHATSAPP_META_PHONE_NUMBER_ID || !validatedConfig.WHATSAPP_WEBHOOK_VERIFY_TOKEN)) throw new Error('Invalid environment configuration: Meta WhatsApp access token, phone number ID, and webhook verify token are required when WhatsApp is enabled');
-  if (validatedConfig.CLINICAL_ATTACHMENT_STORAGE_PROVIDER === 'cloudinary' && (!validatedConfig.CLOUDINARY_CLOUD_NAME || !validatedConfig.CLOUDINARY_API_KEY || !validatedConfig.CLOUDINARY_API_SECRET)) throw new Error('Invalid environment configuration: Cloudinary clinical attachment credentials are required when CLINICAL_ATTACHMENT_STORAGE_PROVIDER=cloudinary');
-  if (validatedConfig.PUSH_PROVIDER === 'firebase' && (!validatedConfig.FIREBASE_PROJECT_ID || !validatedConfig.FIREBASE_CLIENT_EMAIL || !validatedConfig.FIREBASE_PRIVATE_KEY)) throw new Error('Invalid environment configuration: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY are required when PUSH_PROVIDER=firebase');
-  if (validatedConfig.PAYOUT_ACCOUNT_ENCRYPTION_KEY && Buffer.from(validatedConfig.PAYOUT_ACCOUNT_ENCRYPTION_KEY, 'base64').length !== 32) throw new Error('Invalid environment configuration: PAYOUT_ACCOUNT_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
+  if (
+    validatedConfig.NODE_ENV === "production" &&
+    validatedConfig.PAYMENT_PROVIDER === "paystack" &&
+    !validatedConfig.PAYSTACK_SECRET_KEY
+  )
+    throw new Error(
+      "Invalid environment configuration: PAYSTACK_SECRET_KEY is required when PAYMENT_PROVIDER=paystack",
+    );
+  if (
+    validatedConfig.NODE_ENV === "production" &&
+    validatedConfig.PAYMENT_PROVIDER === "opay" &&
+    (!validatedConfig.OPAY_BASE_URL ||
+      !validatedConfig.OPAY_MERCHANT_ID ||
+      !validatedConfig.OPAY_PUBLIC_KEY ||
+      !validatedConfig.OPAY_PRIVATE_KEY)
+  )
+    throw new Error(
+      "Invalid environment configuration: OPAY_BASE_URL, OPAY_MERCHANT_ID, OPAY_PUBLIC_KEY, and OPAY_PRIVATE_KEY are required when PAYMENT_PROVIDER=opay",
+    );
+  if (
+    validatedConfig.NODE_ENV === "production" &&
+    validatedConfig.PAYMENT_PROVIDER === "test"
+  )
+    throw new Error(
+      "Invalid environment configuration: PAYMENT_PROVIDER=test is not allowed in production",
+    );
+  if (
+    validatedConfig.NODE_ENV === "production" &&
+    config.PROVIDER_INVITATION_TTL === undefined
+  )
+    throw new Error(
+      "Invalid environment configuration: PROVIDER_INVITATION_TTL is required in production",
+    );
+  if (
+    validatedConfig.NODE_ENV === "production" &&
+    !validatedConfig.PROVIDER_INVITATION_FRONTEND_URL
+  )
+    throw new Error(
+      "Invalid environment configuration: PROVIDER_INVITATION_FRONTEND_URL is required in production",
+    );
+  if (
+    validatedConfig.NODE_ENV === "production" &&
+    validatedConfig.EMAIL_PROVIDER === "test"
+  )
+    throw new Error(
+      "Invalid environment configuration: EMAIL_PROVIDER=test is not allowed in production",
+    );
+  if (
+    validatedConfig.EMAIL_PROVIDER !== "none" &&
+    !validatedConfig.EMAIL_FROM_ADDRESS
+  )
+    throw new Error(
+      "Invalid environment configuration: EMAIL_FROM_ADDRESS is required when email delivery is configured",
+    );
+  if (
+    validatedConfig.EMAIL_PROVIDER === "resend" &&
+    !validatedConfig.RESEND_API_KEY
+  )
+    throw new Error(
+      "Invalid environment configuration: RESEND_API_KEY is required when EMAIL_PROVIDER=resend",
+    );
+  if (
+    validatedConfig.WHATSAPP_ENABLED === "true" &&
+    (!validatedConfig.WHATSAPP_META_ACCESS_TOKEN ||
+      !validatedConfig.WHATSAPP_META_PHONE_NUMBER_ID ||
+      !validatedConfig.WHATSAPP_WEBHOOK_VERIFY_TOKEN)
+  )
+    throw new Error(
+      "Invalid environment configuration: Meta WhatsApp access token, phone number ID, and webhook verify token are required when WhatsApp is enabled",
+    );
+  if (
+    validatedConfig.CLINICAL_ATTACHMENT_STORAGE_PROVIDER === "cloudinary" &&
+    (!validatedConfig.CLOUDINARY_CLOUD_NAME ||
+      !validatedConfig.CLOUDINARY_API_KEY ||
+      !validatedConfig.CLOUDINARY_API_SECRET)
+  )
+    throw new Error(
+      "Invalid environment configuration: Cloudinary clinical attachment credentials are required when CLINICAL_ATTACHMENT_STORAGE_PROVIDER=cloudinary",
+    );
+  if (
+    validatedConfig.PUSH_PROVIDER === "firebase" &&
+    (!validatedConfig.FIREBASE_PROJECT_ID ||
+      !validatedConfig.FIREBASE_CLIENT_EMAIL ||
+      !validatedConfig.FIREBASE_PRIVATE_KEY)
+  )
+    throw new Error(
+      "Invalid environment configuration: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY are required when PUSH_PROVIDER=firebase",
+    );
+  if (
+    validatedConfig.PAYOUT_ACCOUNT_ENCRYPTION_KEY &&
+    Buffer.from(validatedConfig.PAYOUT_ACCOUNT_ENCRYPTION_KEY, "base64")
+      .length !== 32
+  )
+    throw new Error(
+      "Invalid environment configuration: PAYOUT_ACCOUNT_ENCRYPTION_KEY must be a base64-encoded 32-byte key",
+    );
 
   return validatedConfig;
 }

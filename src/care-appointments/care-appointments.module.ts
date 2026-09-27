@@ -17,14 +17,15 @@ import {
   ProviderCareAppointmentsController,
 } from "./care-appointments.controller";
 import { User } from "../users/entities/user.entity";
-import { CareRequestFunding } from '../care-requests/entities/care-request-funding.entity';
-import { EarningsModule } from '../earnings/earnings.module';
-import { CareServiceDefinition } from '../providers/entities/care-service-definition.entity';
-import { ClinicalRecord } from '../clinical-records/entities/clinical-record.entity';
-import { ClinicalRecordsModule } from '../clinical-records/clinical-records.module';
-import { ClinicalOrdersModule } from '../clinical-orders/clinical-orders.module';
-import { RewardsModule } from '../rewards/rewards.module';
-import { NotificationsModule } from '../notifications/notifications.module';
+import { CareRequestFunding } from "../care-requests/entities/care-request-funding.entity";
+import { EarningsModule } from "../earnings/earnings.module";
+import { CareServiceDefinition } from "../providers/entities/care-service-definition.entity";
+import { ClinicalRecord } from "../clinical-records/entities/clinical-record.entity";
+import { ClinicalRecordsModule } from "../clinical-records/clinical-records.module";
+import { ClinicalOrdersModule } from "../clinical-orders/clinical-orders.module";
+import { RewardsModule } from "../rewards/rewards.module";
+import { NotificationsModule } from "../notifications/notifications.module";
+import { PartnerModule } from "../partners/partner.module";
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ClinicalOrdersModule,
     RewardsModule,
     NotificationsModule,
+    PartnerModule,
     TypeOrmModule.forFeature([
       CareAppointment,
       CareAppointmentStatusHistory,

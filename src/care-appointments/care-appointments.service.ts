@@ -42,12 +42,14 @@ import { ClinicalRecordsService } from "../clinical-records/clinical-records.ser
 import { ProviderType } from "../providers/enums/provider-type.enum";
 import { ProviderPracticeAffiliation } from "../providers/entities/provider-practice-affiliation.entity";
 import { ClinicalOrdersService } from "../clinical-orders/clinical-orders.service";
-import { ReferralsService } from '../rewards/referrals.service';
-import { PatientCareActionSource } from '../rewards/enums/patient-care-action-source.enum';
+import { ReferralsService } from "../rewards/referrals.service";
+import { PatientCareActionSource } from "../rewards/enums/patient-care-action-source.enum";
 import { NotificationActionType } from "../notifications/enums/notification-action-type.enum";
 import { NotificationEntityType } from "../notifications/enums/notification-entity-type.enum";
 import { NotificationType } from "../notifications/enums/notification-type.enum";
 import { NotificationsService } from "../notifications/notifications.service";
+import { ReferralEarningsService } from "../earnings/referral-earnings.service";
+import { PartnerService } from "../partners/partner.service";
 
 const ACTIVE = [
   CareAppointmentStatus.SCHEDULED,
@@ -67,36 +69,36 @@ export class CareAppointmentsService {
     @Optional() private readonly referrals?: ReferralsService,
     @Optional() private readonly clinicalOrders?: ClinicalOrdersService,
     @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly referralEarnings?: ReferralEarningsService,
+    @Optional() private readonly partners?: PartnerService,
   ) {}
 
-async schedule(
-  user: User,
-  careRequestReference: string,
-  dto: ScheduleCareAppointmentDto,
-) {
-  this.validateTime(dto);
-
-  const providerContext = await this.operationalProvider(user);
-
-  for (
-    let attempt = 0;
-    attempt < MAX_CARE_APPOINTMENT_REFERENCE_ATTEMPTS;
-    attempt += 1
+  async schedule(
+    user: User,
+    careRequestReference: string,
+    dto: ScheduleCareAppointmentDto,
   ) {
-    try {
-      return await this.appointments.manager.transaction(async (manager) => {
-        /**
-         * Lock the provider for the duration of scheduling.
-         *
-         * This is important because INDIVIDUAL providers use an
-         * application-level overlap check below.
-         *
-         * Two concurrent scheduling transactions for the same provider
-         * therefore cannot both pass the overlap check simultaneously.
-         */
-        const provider = await manager
-          .getRepository(Provider)
-          .findOne({
+    this.validateTime(dto);
+
+    const providerContext = await this.operationalProvider(user);
+
+    for (
+      let attempt = 0;
+      attempt < MAX_CARE_APPOINTMENT_REFERENCE_ATTEMPTS;
+      attempt += 1
+    ) {
+      try {
+        return await this.appointments.manager.transaction(async (manager) => {
+          /**
+           * Lock the provider for the duration of scheduling.
+           *
+           * This is important because INDIVIDUAL providers use an
+           * application-level overlap check below.
+           *
+           * Two concurrent scheduling transactions for the same provider
+           * therefore cannot both pass the overlap check simultaneously.
+           */
+          const provider = await manager.getRepository(Provider).findOne({
             where: {
               id: providerContext.id,
             },
@@ -106,23 +108,21 @@ async schedule(
             },
           });
 
-        if (
-          !provider ||
-          provider.deletedAt ||
-          provider.status !== ProviderStatus.ACTIVE ||
-          provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED
-        ) {
-          throw new ConflictException(
-            "Provider is no longer eligible to schedule care",
-          );
-        }
+          if (
+            !provider ||
+            provider.deletedAt ||
+            provider.status !== ProviderStatus.ACTIVE ||
+            provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED
+          ) {
+            throw new ConflictException(
+              "Provider is no longer eligible to schedule care",
+            );
+          }
 
-        /**
-         * Lock the Care Request.
-         */
-        const care = await manager
-          .getRepository(CareRequest)
-          .findOne({
+          /**
+           * Lock the Care Request.
+           */
+          const care = await manager.getRepository(CareRequest).findOne({
             where: {
               reference: careRequestReference,
               assignedProviderId: provider.id,
@@ -132,404 +132,469 @@ async schedule(
             },
           });
 
-        if (!care) {
-          throw new NotFoundException(
-            "Care Request was not found",
-          );
-        }
+          if (!care) {
+            throw new NotFoundException("Care Request was not found");
+          }
 
-        if (care.status !== CareRequestStatus.PROVIDER_ACCEPTED) {
-          throw new ConflictException(
-            `Care Request in ${care.status} cannot be scheduled`,
-          );
-        }
+          if (care.status !== CareRequestStatus.PROVIDER_ACCEPTED) {
+            throw new ConflictException(
+              `Care Request in ${care.status} cannot be scheduled`,
+            );
+          }
 
-        if (!care.assignedProviderCareServiceId) {
-          throw new ConflictException(
-            "Care Request has no assigned provider service",
-          );
-        }
+          if (!care.assignedProviderCareServiceId) {
+            throw new ConflictException(
+              "Care Request has no assigned provider service",
+            );
+          }
 
-        /**
-         * Funding must be satisfied before scheduling.
-         */
-        let funding = await manager
-          .getRepository(CareRequestFunding)
-          .findOne({
-            where: {
-              careRequestId: care.id,
-            },
-            lock: {
-              mode: "pessimistic_write",
-            },
-          });
-
-        /**
-         * Zero-priced care does not require Paystack.
-         *
-         * Create the SATISFIED_FREE funding row if it does not already exist.
-         */
-        if (
-          !funding &&
-          care.servicePriceMinor === "0" &&
-          care.serviceCurrency
-        ) {
-          funding = await manager
+          /**
+           * Funding must be satisfied before scheduling.
+           */
+          let funding = await manager
             .getRepository(CareRequestFunding)
-            .save({
+            .findOne({
+              where: {
+                careRequestId: care.id,
+              },
+              lock: {
+                mode: "pessimistic_write",
+              },
+            });
+
+          /**
+           * Zero-priced care does not require Paystack.
+           *
+           * Create the SATISFIED_FREE funding row if it does not already exist.
+           */
+          if (
+            !funding &&
+            care.servicePriceMinor === "0" &&
+            care.serviceCurrency
+          ) {
+            funding = await manager.getRepository(CareRequestFunding).save({
               careRequestId: care.id,
               amountMinor: "0",
               currency: care.serviceCurrency,
               status: CareRequestFundingStatus.SATISFIED_FREE,
               paidAt: null,
             });
-        }
+          }
 
-        if (
-          !funding ||
-          ![
-            CareRequestFundingStatus.PAID,
-            CareRequestFundingStatus.SATISFIED_FREE,
-          ].includes(funding.status)
-        ) {
-          throw new ConflictException(
-            "Care Request funding must be satisfied before scheduling",
-          );
-        }
+          if (
+            !funding ||
+            ![
+              CareRequestFundingStatus.PAID,
+              CareRequestFundingStatus.SATISFIED_FREE,
+            ].includes(funding.status)
+          ) {
+            throw new ConflictException(
+              "Care Request funding must be satisfied before scheduling",
+            );
+          }
 
-        /**
-         * Revalidate the Provider Care Service.
-         */
-        const offering = await manager
-          .getRepository(ProviderCareService)
-          .findOne({
-            where: {
-              id: care.assignedProviderCareServiceId,
-              providerId: provider.id,
-              careServiceDefinitionId: care.careServiceDefinitionId,
-              isActive: true,
-            },
-            relations: {
-              definition: true,
-              deliveryOptions: true,
-            },
-            lock: {
-              mode: "pessimistic_read",
-              tables: ["provider_care_services"],
-            },
-          });
+          /**
+           * Revalidate the Provider Care Service.
+           */
+          const offering = await manager
+            .getRepository(ProviderCareService)
+            .findOne({
+              where: {
+                id: care.assignedProviderCareServiceId,
+                providerId: provider.id,
+                careServiceDefinitionId: care.careServiceDefinitionId,
+                isActive: true,
+              },
+              relations: {
+                definition: true,
+                deliveryOptions: true,
+              },
+              lock: {
+                mode: "pessimistic_read",
+                tables: ["provider_care_services"],
+              },
+            });
 
-        if (
-          !offering ||
-          !offering.definition.isActive ||
-          !offering.supportsAppointmentRequests ||
-          !offering.deliveryOptions.some(
-            (option) =>
-              option.deliveryMode === care.deliveryMode,
-          )
-        ) {
-          throw new ConflictException(
-            "Provider service is no longer eligible for the requested delivery mode",
-          );
-        }
+          if (
+            !offering ||
+            !offering.definition.isActive ||
+            !offering.supportsAppointmentRequests ||
+            !offering.deliveryOptions.some(
+              (option) => option.deliveryMode === care.deliveryMode,
+            )
+          ) {
+            throw new ConflictException(
+              "Provider service is no longer eligible for the requested delivery mode",
+            );
+          }
 
-        /**
-         * ProviderLocation only applies to IN_PERSON appointments.
-         */
-        if (
-          care.deliveryMode !== CareDeliveryMode.IN_PERSON &&
-          dto.providerLocationReference
-        ) {
-          throw new BadRequestException(
-            "Provider location is only valid for an in-person Care Appointment",
-          );
-        }
+          /**
+           * ProviderLocation only applies to IN_PERSON appointments.
+           */
+          if (
+            care.deliveryMode !== CareDeliveryMode.IN_PERSON &&
+            dto.providerLocationReference
+          ) {
+            throw new BadRequestException(
+              "Provider location is only valid for an in-person Care Appointment",
+            );
+          }
 
-        let location = dto.providerLocationReference ? await manager.getRepository(ProviderLocation).findOne({where:{locationReference:dto.providerLocationReference,providerId:provider.id,isActive:true},lock:{mode:"pessimistic_read"}}) : null;
-        if(dto.providerLocationReference && !location){const affiliation=await manager.getRepository(ProviderPracticeAffiliation).createQueryBuilder("affiliation").innerJoinAndSelect("affiliation.hostLocation","hostLocation").where("affiliation.doctorProviderId = :providerId",{providerId:provider.id}).andWhere("affiliation.isActive = true").andWhere("hostLocation.locationReference = :reference",{reference:dto.providerLocationReference}).andWhere("hostLocation.isActive = true").getOne();location=affiliation?.hostLocation??null;}
+          let location = dto.providerLocationReference
+            ? await manager.getRepository(ProviderLocation).findOne({
+                where: {
+                  locationReference: dto.providerLocationReference,
+                  providerId: provider.id,
+                  isActive: true,
+                },
+                lock: { mode: "pessimistic_read" },
+              })
+            : null;
+          if (dto.providerLocationReference && !location) {
+            const affiliation = await manager
+              .getRepository(ProviderPracticeAffiliation)
+              .createQueryBuilder("affiliation")
+              .innerJoinAndSelect("affiliation.hostLocation", "hostLocation")
+              .where("affiliation.doctorProviderId = :providerId", {
+                providerId: provider.id,
+              })
+              .andWhere("affiliation.isActive = true")
+              .andWhere("hostLocation.locationReference = :reference", {
+                reference: dto.providerLocationReference,
+              })
+              .andWhere("hostLocation.isActive = true")
+              .getOne();
+            location = affiliation?.hostLocation ?? null;
+          }
 
-        if (
-          dto.providerLocationReference &&
-          !location
-        ) {
-          throw new ConflictException(
-            "Provider location is not an active owned or approved affiliated practice location",
-          );
-        }
+          if (dto.providerLocationReference && !location) {
+            throw new ConflictException(
+              "Provider location is not an active owned or approved affiliated practice location",
+            );
+          }
 
-        /**
-         * A single Care Request must NEVER have multiple active appointments.
-         *
-         * Keep this protection for every Provider type.
-         */
-        const existingActiveAppointment = await manager
-          .getRepository(CareAppointment)
-          .exists({
-            where: {
+          /**
+           * A single Care Request must NEVER have multiple active appointments.
+           *
+           * Keep this protection for every Provider type.
+           */
+          const existingActiveAppointment = await manager
+            .getRepository(CareAppointment)
+            .exists({
+              where: {
+                careRequestId: care.id,
+                status: In(ACTIVE),
+              },
+            });
+
+          if (existingActiveAppointment) {
+            throw new ConflictException(
+              "Care Request already has an active appointment",
+            );
+          }
+
+          /**
+           * Appointment overlap rules
+           * -------------------------------------------------------
+           *
+           * INDIVIDUAL:
+           * One person cannot attend two appointments simultaneously.
+           *
+           * CLINIC / HOSPITAL / DIAGNOSTIC_CENTRE / PHARMACY / OTHER:
+           * The Provider represents an institution and may have multiple
+           * clinicians/resources serving patients concurrently.
+           *
+           * Resource-level capacity can be introduced later when appointments
+           * are assigned to individual clinicians/rooms/resources.
+           */
+          const requiresExclusiveSlot =
+            provider.providerType === ProviderType.INDIVIDUAL;
+
+          if (requiresExclusiveSlot) {
+            const overlap = await manager
+              .getRepository(CareAppointment)
+              .createQueryBuilder("appointment")
+              .where("appointment.providerId = :providerId", {
+                providerId: provider.id,
+              })
+              .andWhere("appointment.scheduledDate = :date", {
+                date: dto.scheduledDate,
+              })
+              .andWhere("appointment.status IN (:...active)", {
+                active: ACTIVE,
+              })
+              .andWhere(
+                `
+                appointment.scheduledTimeFrom < :timeTo
+                AND appointment.scheduledTimeTo > :timeFrom
+              `,
+                {
+                  timeFrom: dto.scheduledTimeFrom,
+                  timeTo: dto.scheduledTimeTo,
+                },
+              )
+              .getExists();
+
+            if (overlap) {
+              throw new ConflictException(
+                "Provider already has an overlapping care appointment",
+              );
+            }
+          }
+
+          /**
+           * Create appointment.
+           */
+          const repository = manager.getRepository(CareAppointment);
+
+          const appointmentReference = generateCareAppointmentReference();
+          const appointment = await repository.save(
+            repository.create({
+              reference: appointmentReference,
+
               careRequestId: care.id,
-              status: In(ACTIVE),
+
+              patientId: care.patientId,
+
+              providerId: provider.id,
+
+              providerCareServiceId: offering.id,
+
+              providerLocationId: location?.id ?? null,
+
+              scheduledDate: dto.scheduledDate,
+
+              scheduledTimeFrom: dto.scheduledTimeFrom,
+
+              scheduledTimeTo: dto.scheduledTimeTo,
+
+              timezone: dto.timezone,
+
+              deliveryMode: care.deliveryMode,
+
+              meetingUrl:
+                care.deliveryMode === CareDeliveryMode.VIRTUAL
+                  ? this.jitsiMeetingUrl(appointmentReference)
+                  : null,
+
+              status: CareAppointmentStatus.SCHEDULED,
+
+              notes: dto.notes ?? null,
+            }),
+          );
+
+          /**
+           * Appointment history.
+           */
+          await this.appointmentHistory(
+            manager,
+            appointment.id,
+            null,
+            appointment.status,
+            user.id,
+            "PROVIDER_SCHEDULED",
+            null,
+          );
+
+          /**
+           * Move CareRequest:
+           *
+           * PROVIDER_ACCEPTED
+           *       ↓
+           * SCHEDULED
+           */
+          const from = care.status;
+
+          care.status = CareRequestStatus.SCHEDULED;
+
+          await manager.getRepository(CareRequest).save(care);
+
+          await this.requestHistory(
+            manager,
+            care.id,
+            from,
+            care.status,
+            user.id,
+            "CARE_APPOINTMENT_SCHEDULED",
+            null,
+          );
+          await this.notifications?.createTransactionalNotification(manager, {
+            userId: care.userId,
+            type: NotificationType.CARE_APPOINTMENT_SCHEDULED,
+            title: "Care appointment scheduled",
+            message: "Your care appointment has been scheduled.",
+            entityType: NotificationEntityType.CARE_APPOINTMENT,
+            entityReference: appointment.reference,
+            actionType: NotificationActionType.VIEW,
+            metadata: {
+              careRequestReference: care.reference,
+              appointmentStatus: appointment.status,
             },
+            idempotencyKey: `care-appointment:${appointment.reference}:scheduled`,
+            email: { enabled: true },
           });
 
-        if (existingActiveAppointment) {
+          return this.getMapped(manager, appointment.id);
+        });
+      } catch (error) {
+        /**
+         * Retry only generated appointment reference collisions.
+         */
+        if (
+          isCareAppointmentReferenceCollision(error) &&
+          attempt + 1 < MAX_CARE_APPOINTMENT_REFERENCE_ATTEMPTS
+        ) {
+          continue;
+        }
+
+        /**
+         * Database protection against two active appointments
+         * for the SAME Care Request remains.
+         */
+        if (this.isConstraint(error, "UQ_care_appointments_active_request")) {
           throw new ConflictException(
             "Care Request already has an active appointment",
           );
         }
 
         /**
-         * Appointment overlap rules
-         * -------------------------------------------------------
+         * Do NOT handle:
          *
-         * INDIVIDUAL:
-         * One person cannot attend two appointments simultaneously.
+         * EX_care_appointments_provider_overlap
          *
-         * CLINIC / HOSPITAL / DIAGNOSTIC_CENTRE / PHARMACY / OTHER:
-         * The Provider represents an institution and may have multiple
-         * clinicians/resources serving patients concurrently.
+         * anymore.
          *
-         * Resource-level capacity can be introduced later when appointments
-         * are assigned to individual clinicians/rooms/resources.
+         * That provider-wide DB exclusion constraint is removed by
+         * the accompanying migration because institutional providers
+         * are allowed concurrent appointments.
          */
-        const requiresExclusiveSlot =
-          provider.providerType === ProviderType.INDIVIDUAL;
 
-        if (requiresExclusiveSlot) {
-          const overlap = await manager
-            .getRepository(CareAppointment)
-            .createQueryBuilder("appointment")
-            .where(
-              "appointment.providerId = :providerId",
-              {
-                providerId: provider.id,
-              },
-            )
-            .andWhere(
-              "appointment.scheduledDate = :date",
-              {
-                date: dto.scheduledDate,
-              },
-            )
-            .andWhere(
-              "appointment.status IN (:...active)",
-              {
-                active: ACTIVE,
-              },
-            )
-            .andWhere(
-              `
-                appointment.scheduledTimeFrom < :timeTo
-                AND appointment.scheduledTimeTo > :timeFrom
-              `,
-              {
-                timeFrom: dto.scheduledTimeFrom,
-                timeTo: dto.scheduledTimeTo,
-              },
-            )
-            .getExists();
-
-          if (overlap) {
-            throw new ConflictException(
-              "Provider already has an overlapping care appointment",
-            );
-          }
-        }
-
-        /**
-         * Create appointment.
-         */
-        const repository =
-          manager.getRepository(CareAppointment);
-
-        const appointmentReference = generateCareAppointmentReference();
-        const appointment = await repository.save(
-          repository.create({
-            reference:
-              appointmentReference,
-
-            careRequestId: care.id,
-
-            patientId: care.patientId,
-
-            providerId: provider.id,
-
-            providerCareServiceId: offering.id,
-
-            providerLocationId:
-              location?.id ?? null,
-
-            scheduledDate:
-              dto.scheduledDate,
-
-            scheduledTimeFrom:
-              dto.scheduledTimeFrom,
-
-            scheduledTimeTo:
-              dto.scheduledTimeTo,
-
-            timezone:
-              dto.timezone,
-
-            deliveryMode:
-              care.deliveryMode,
-
-            meetingUrl:
-              care.deliveryMode === CareDeliveryMode.VIRTUAL
-                ? this.jitsiMeetingUrl(appointmentReference)
-                : null,
-
-            status:
-              CareAppointmentStatus.SCHEDULED,
-
-            notes:
-              dto.notes ?? null,
-          }),
-        );
-
-        /**
-         * Appointment history.
-         */
-        await this.appointmentHistory(
-          manager,
-          appointment.id,
-          null,
-          appointment.status,
-          user.id,
-          "PROVIDER_SCHEDULED",
-          null,
-        );
-
-        /**
-         * Move CareRequest:
-         *
-         * PROVIDER_ACCEPTED
-         *       ↓
-         * SCHEDULED
-         */
-        const from = care.status;
-
-        care.status =
-          CareRequestStatus.SCHEDULED;
-
-        await manager
-          .getRepository(CareRequest)
-          .save(care);
-
-        await this.requestHistory(
-          manager,
-          care.id,
-          from,
-          care.status,
-          user.id,
-          "CARE_APPOINTMENT_SCHEDULED",
-          null,
-        );
-        await this.notifications?.createTransactionalNotification(manager, {
-          userId: care.userId,
-          type: NotificationType.CARE_APPOINTMENT_SCHEDULED,
-          title: "Care appointment scheduled",
-          message: "Your care appointment has been scheduled.",
-          entityType: NotificationEntityType.CARE_APPOINTMENT,
-          entityReference: appointment.reference,
-          actionType: NotificationActionType.VIEW,
-          metadata: { careRequestReference: care.reference, appointmentStatus: appointment.status },
-          idempotencyKey: `care-appointment:${appointment.reference}:scheduled`,
-          email: { enabled: true },
-        });
-
-        return this.getMapped(
-          manager,
-          appointment.id,
-        );
-      });
-    } catch (error) {
-      /**
-       * Retry only generated appointment reference collisions.
-       */
-      if (
-        isCareAppointmentReferenceCollision(error) &&
-        attempt + 1 <
-          MAX_CARE_APPOINTMENT_REFERENCE_ATTEMPTS
-      ) {
-        continue;
+        throw error;
       }
-
-      /**
-       * Database protection against two active appointments
-       * for the SAME Care Request remains.
-       */
-      if (
-        this.isConstraint(
-          error,
-          "UQ_care_appointments_active_request",
-        )
-      ) {
-        throw new ConflictException(
-          "Care Request already has an active appointment",
-        );
-      }
-
-      /**
-       * Do NOT handle:
-       *
-       * EX_care_appointments_provider_overlap
-       *
-       * anymore.
-       *
-       * That provider-wide DB exclusion constraint is removed by
-       * the accompanying migration because institutional providers
-       * are allowed concurrent appointments.
-       */
-
-      throw error;
     }
+
+    throw new ConflictException(
+      "Unable to allocate a Care Appointment reference",
+    );
   }
 
-  throw new ConflictException(
-    "Unable to allocate a Care Appointment reference",
-  );
-}
-
-  async confirmAgreedSlotAfterPayment(manager: EntityManager, care: CareRequest): Promise<CareAppointment | null> {
-    if (care.deliveryMode !== CareDeliveryMode.VIRTUAL || !care.preferredDate || !care.preferredTime || !care.assignedProviderId || !care.assignedProviderCareServiceId) return null;
-    const existing = await manager.getRepository(CareAppointment).findOne({ where: { careRequestId: care.id, status: In(ACTIVE) } });
+  async confirmAgreedSlotAfterPayment(
+    manager: EntityManager,
+    care: CareRequest,
+  ): Promise<CareAppointment | null> {
+    if (
+      care.deliveryMode !== CareDeliveryMode.VIRTUAL ||
+      !care.preferredDate ||
+      !care.preferredTime ||
+      !care.assignedProviderId ||
+      !care.assignedProviderCareServiceId
+    )
+      return null;
+    const existing = await manager
+      .getRepository(CareAppointment)
+      .findOne({ where: { careRequestId: care.id, status: In(ACTIVE) } });
     if (existing) return existing;
     const appointmentReference = generateCareAppointmentReference();
-    const timezone = care.preferredTimezone || 'Africa/Lagos';
+    const timezone = care.preferredTimezone || "Africa/Lagos";
     let scheduledDate = care.preferredDate;
     let scheduledTimeFrom = care.preferredTime.slice(0, 5);
-    const nowParts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' }).formatToParts(new Date());
-    const part=(type:Intl.DateTimeFormatPartTypes)=>nowParts.find(x=>x.type===type)?.value??'';
-    const localDate=`${part('year')}-${part('month')}-${part('day')}`;
-    const localTime=`${part('hour')}:${part('minute')}`;
-    if (scheduledDate < localDate || (scheduledDate === localDate && scheduledTimeFrom <= localTime)) {
+    const nowParts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date());
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+      nowParts.find((x) => x.type === type)?.value ?? "";
+    const localDate = `${part("year")}-${part("month")}-${part("day")}`;
+    const localTime = `${part("hour")}:${part("minute")}`;
+    if (
+      scheduledDate < localDate ||
+      (scheduledDate === localDate && scheduledTimeFrom <= localTime)
+    ) {
       const soon = new Date(Date.now() + 5 * 60_000);
-      const soonParts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' }).formatToParts(soon);
-      const sp=(type:Intl.DateTimeFormatPartTypes)=>soonParts.find(x=>x.type===type)?.value??'';
-      scheduledDate=`${sp('year')}-${sp('month')}-${sp('day')}`;
-      scheduledTimeFrom=`${sp('hour')}:${sp('minute')}`;
+      const soonParts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }).formatToParts(soon);
+      const sp = (type: Intl.DateTimeFormatPartTypes) =>
+        soonParts.find((x) => x.type === type)?.value ?? "";
+      scheduledDate = `${sp("year")}-${sp("month")}-${sp("day")}`;
+      scheduledTimeFrom = `${sp("hour")}:${sp("minute")}`;
     }
-    const parts = scheduledTimeFrom.split(':').map(Number);
+    const parts = scheduledTimeFrom.split(":").map(Number);
     const endMinutes = parts[0] * 60 + parts[1] + 30;
-    const timeTo = String(Math.floor(endMinutes / 60) % 24).padStart(2, '0') + ':' + String(endMinutes % 60).padStart(2, '0');
+    const timeTo =
+      String(Math.floor(endMinutes / 60) % 24).padStart(2, "0") +
+      ":" +
+      String(endMinutes % 60).padStart(2, "0");
     const repository = manager.getRepository(CareAppointment);
-    const appointment = await repository.save(repository.create({
-      reference: appointmentReference, careRequestId: care.id, patientId: care.patientId,
-      providerId: care.assignedProviderId, providerCareServiceId: care.assignedProviderCareServiceId,
-      providerLocationId: null, scheduledDate, scheduledTimeFrom,
-      scheduledTimeTo: timeTo, timezone, deliveryMode: care.deliveryMode,
-      meetingUrl: care.deliveryMode === CareDeliveryMode.VIRTUAL ? 'https://meet.jit.si/SmartClinic-' + appointmentReference.replace('SC-APT-', '') : null,
-      status: CareAppointmentStatus.SCHEDULED, notes: care.notes ?? null,
-    }));
-    await this.appointmentHistory(manager, appointment.id, null, appointment.status, null, 'PAYMENT_CONFIRMED_AGREED_SLOT', null);
-    const from = care.status; care.status = CareRequestStatus.SCHEDULED; await manager.getRepository(CareRequest).save(care);
-    await this.requestHistory(manager, care.id, from, care.status, null, 'PAYMENT_CONFIRMED_AGREED_SLOT', null);
+    const appointment = await repository.save(
+      repository.create({
+        reference: appointmentReference,
+        careRequestId: care.id,
+        patientId: care.patientId,
+        providerId: care.assignedProviderId,
+        providerCareServiceId: care.assignedProviderCareServiceId,
+        providerLocationId: null,
+        scheduledDate,
+        scheduledTimeFrom,
+        scheduledTimeTo: timeTo,
+        timezone,
+        deliveryMode: care.deliveryMode,
+        meetingUrl:
+          care.deliveryMode === CareDeliveryMode.VIRTUAL
+            ? "https://meet.jit.si/SmartClinic-" +
+              appointmentReference.replace("SC-APT-", "")
+            : null,
+        status: CareAppointmentStatus.SCHEDULED,
+        notes: care.notes ?? null,
+      }),
+    );
+    await this.appointmentHistory(
+      manager,
+      appointment.id,
+      null,
+      appointment.status,
+      null,
+      "PAYMENT_CONFIRMED_AGREED_SLOT",
+      null,
+    );
+    const from = care.status;
+    care.status = CareRequestStatus.SCHEDULED;
+    await manager.getRepository(CareRequest).save(care);
+    await this.requestHistory(
+      manager,
+      care.id,
+      from,
+      care.status,
+      null,
+      "PAYMENT_CONFIRMED_AGREED_SLOT",
+      null,
+    );
     await this.notifications?.createTransactionalNotification(manager, {
-      userId: care.userId, type: NotificationType.CARE_APPOINTMENT_SCHEDULED, title: 'Consultation confirmed',
-      message: 'Payment confirmed. Your consultation is booked.', entityType: NotificationEntityType.CARE_APPOINTMENT,
-      entityReference: appointment.reference, actionType: NotificationActionType.VIEW,
-      metadata: { careRequestReference: care.reference, appointmentStatus: appointment.status },
-      idempotencyKey: 'care-appointment:' + appointment.reference + ':payment-confirmed', email: { enabled: true },
+      userId: care.userId,
+      type: NotificationType.CARE_APPOINTMENT_SCHEDULED,
+      title: "Consultation confirmed",
+      message: "Payment confirmed. Your consultation is booked.",
+      entityType: NotificationEntityType.CARE_APPOINTMENT,
+      entityReference: appointment.reference,
+      actionType: NotificationActionType.VIEW,
+      metadata: {
+        careRequestReference: care.reference,
+        appointmentStatus: appointment.status,
+      },
+      idempotencyKey:
+        "care-appointment:" + appointment.reference + ":payment-confirmed",
+      email: { enabled: true },
     });
     return appointment;
   }
@@ -564,12 +629,10 @@ async schedule(
   ) {
     const provider = await this.operationalProvider(user);
     return this.appointments.manager.transaction(async (manager) => {
-      const appointment = await manager
-        .getRepository(CareAppointment)
-        .findOne({
-          where: { reference, providerId: provider.id },
-          lock: { mode: "pessimistic_write" },
-        });
+      const appointment = await manager.getRepository(CareAppointment).findOne({
+        where: { reference, providerId: provider.id },
+        lock: { mode: "pessimistic_write" },
+      });
       if (!appointment) this.notFound();
       if (appointment.deliveryMode !== CareDeliveryMode.VIRTUAL)
         throw new ConflictException(
@@ -638,10 +701,9 @@ async schedule(
   }
 
   async listMine(user: User, query: CareAppointmentListQueryDto) {
-    const builder = this.readBuilder().where(
-      "careRequest.userId = :userId",
-      { userId: user.id },
-    );
+    const builder = this.readBuilder().where("careRequest.userId = :userId", {
+      userId: user.id,
+    });
     if (query.status)
       builder.andWhere("appointment.status = :status", {
         status: query.status,
@@ -694,7 +756,11 @@ async schedule(
   }
   private async transitionOwned(
     reference: string,
-    owner: { providerId?: string; patientId?: string; careRequestUserId?: string },
+    owner: {
+      providerId?: string;
+      patientId?: string;
+      careRequestUserId?: string;
+    },
     allowed: CareAppointmentStatus[],
     to: CareAppointmentStatus,
     requestTo: CareRequestStatus,
@@ -706,23 +772,19 @@ async schedule(
       const ownerWhere = owner.careRequestUserId
         ? { reference, careRequest: { userId: owner.careRequestUserId } }
         : { reference, ...owner };
-      const appointment = await manager
-        .getRepository(CareAppointment)
-        .findOne({
-          where: ownerWhere,
-          lock: { mode: "pessimistic_write" },
-        });
+      const appointment = await manager.getRepository(CareAppointment).findOne({
+        where: ownerWhere,
+        lock: { mode: "pessimistic_write" },
+      });
       if (!appointment) this.notFound();
       if (!allowed.includes(appointment.status))
         throw new ConflictException(
           `Care Appointment in ${appointment.status} cannot transition to ${to}`,
         );
-      const care = await manager
-        .getRepository(CareRequest)
-        .findOne({
-          where: { id: appointment.careRequestId },
-          lock: { mode: "pessimistic_write" },
-        });
+      const care = await manager.getRepository(CareRequest).findOne({
+        where: { id: appointment.careRequestId },
+        lock: { mode: "pessimistic_write" },
+      });
       if (!care) throw new ConflictException("Care Request is unavailable");
       const expectedCareStatus =
         appointment.status === CareAppointmentStatus.IN_PROGRESS
@@ -755,12 +817,10 @@ async schedule(
         code,
         reason,
       );
-      const funding = await manager
-        .getRepository(CareRequestFunding)
-        .findOne({
-          where: { careRequestId: care.id },
-          lock: { mode: "pessimistic_read" },
-        });
+      const funding = await manager.getRepository(CareRequestFunding).findOne({
+        where: { careRequestId: care.id },
+        lock: { mode: "pessimistic_read" },
+      });
       const entitlementRetained =
         [
           CareAppointmentStatus.CANCELLED,
@@ -797,29 +857,49 @@ async schedule(
           entityType: NotificationEntityType.CARE_APPOINTMENT,
           entityReference: appointment.reference,
           actionType: NotificationActionType.VIEW,
-          metadata: { careRequestReference: care.reference, appointmentStatus: appointment.status },
+          metadata: {
+            careRequestReference: care.reference,
+            appointmentStatus: appointment.status,
+          },
           idempotencyKey: `care-appointment:${appointment.reference}:provider-cancelled`,
           email: { enabled: true },
         });
       }
       if (code === "PATIENT_CANCELLED_APPOINTMENT") {
-        await this.notifications?.createForProviderTransactional(manager, appointment.providerId, {
-          type: NotificationType.CARE_APPOINTMENT_CANCELLED,
-          title: "Care appointment cancelled",
-          message: "A patient cancelled a care appointment.",
-          entityType: NotificationEntityType.CARE_APPOINTMENT,
-          entityReference: appointment.reference,
-          actionType: NotificationActionType.VIEW,
-          metadata: { careRequestReference: care.reference, appointmentStatus: appointment.status },
-          idempotencyKey: `care-appointment:${appointment.reference}:patient-cancelled:${appointment.providerId}`,
-          email: { enabled: true },
-        });
+        await this.notifications?.createForProviderTransactional(
+          manager,
+          appointment.providerId,
+          {
+            type: NotificationType.CARE_APPOINTMENT_CANCELLED,
+            title: "Care appointment cancelled",
+            message: "A patient cancelled a care appointment.",
+            entityType: NotificationEntityType.CARE_APPOINTMENT,
+            entityReference: appointment.reference,
+            actionType: NotificationActionType.VIEW,
+            metadata: {
+              careRequestReference: care.reference,
+              appointmentStatus: appointment.status,
+            },
+            idempotencyKey: `care-appointment:${appointment.reference}:patient-cancelled:${appointment.providerId}`,
+            email: { enabled: true },
+          },
+        );
       }
       if (to === CareAppointmentStatus.COMPLETED)
         await this.earnings.markGeneralCarePayable(
           manager,
           care.reference,
           actor,
+        );
+      if (to === CareAppointmentStatus.COMPLETED)
+        await this.referralEarnings?.markGeneralCarePayable(
+          manager,
+          care.reference,
+        );
+      if (to === CareAppointmentStatus.COMPLETED)
+        await this.partners?.markAttributedPaymentPayable(
+          manager,
+          care.reference,
         );
       if (to === CareAppointmentStatus.COMPLETED && this.referrals)
         await this.referrals.recordPatientFirstCareAction(
@@ -843,12 +923,10 @@ async schedule(
         lock: { mode: "pessimistic_read" },
       });
     if (!definition?.clinicalRecordType) return;
-    const record = await manager
-      .getRepository(ClinicalRecord)
-      .findOne({
-        where: { careAppointmentId: appointment.id },
-        lock: { mode: "pessimistic_read" },
-      });
+    const record = await manager.getRepository(ClinicalRecord).findOne({
+      where: { careAppointmentId: appointment.id },
+      lock: { mode: "pessimistic_read" },
+    });
     if (!record)
       throw new ConflictException(
         `A finalized ${definition.clinicalRecordType} clinical record is required before completion`,
@@ -987,7 +1065,7 @@ async schedule(
   private jitsiMeetingUrl(reference: string) {
     // Jitsi room names are derived from the server-generated appointment reference.
     // The opaque suffix prevents patients/providers from having to exchange or type links.
-    const room = `SmartClinic-${reference.replace(/[^A-Za-z0-9]/g, '')}`;
+    const room = `SmartClinic-${reference.replace(/[^A-Za-z0-9]/g, "")}`;
     return `https://meet.jit.si/${room}`;
   }
   private isHttpsUrl(value: string) {
