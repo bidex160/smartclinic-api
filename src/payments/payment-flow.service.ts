@@ -353,6 +353,58 @@ export class PaymentFlowService {
       );
   }
 
+  private requestedProviderDiffers(
+    active: PaymentAttempt | null,
+    requested?: PaymentProvider,
+  ): boolean {
+    return Boolean(
+      active &&
+        requested &&
+        active.providerCode &&
+        active.providerCode !== requested,
+    );
+  }
+
+  private async cancelCareAttemptForProviderSwitch(
+    attemptId: string,
+    userId: string,
+    requested?: PaymentProvider,
+  ): Promise<boolean> {
+    return this.bookings.manager.transaction(async (manager) => {
+      const attemptRepo = manager.getRepository(PaymentAttempt);
+      const attempt = await attemptRepo.findOne({
+        where: { id: attemptId },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!attempt?.careRequestFundingId) return false;
+      if (!this.requestedProviderDiffers(attempt, requested)) return false;
+      if (
+        ![
+          PaymentAttemptStatus.CREATED,
+          PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION,
+          PaymentAttemptStatus.PENDING_CONFIRMATION,
+        ].includes(attempt.status)
+      )
+        return false;
+
+      const funding = await manager.getRepository(CareRequestFunding).findOne({
+        where: { id: attempt.careRequestFundingId },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!funding || funding.status !== CareRequestFundingStatus.PENDING)
+        return false;
+      const care = await manager.getRepository(CareRequest).findOne({
+        where: { id: funding.careRequestId, userId },
+        lock: { mode: "pessimistic_read" },
+      });
+      if (!care) return false;
+
+      attempt.status = PaymentAttemptStatus.CANCELLED;
+      await attemptRepo.save(attempt);
+      return true;
+    });
+  }
+
   async previewRewardRedemption(reference: string, userId: string) {
     const booking = await this.bookings.findOne({
       where: { bookingReference: reference },
@@ -2690,7 +2742,9 @@ export class PaymentFlowService {
     if (
       prepared.free ||
       prepared.funding.status === CareRequestFundingStatus.PAID ||
-      prepared.funding.status === CareRequestFundingStatus.SATISFIED_FREE
+      prepared.funding.status === CareRequestFundingStatus.SATISFIED_FREE ||
+      prepared.funding.status ===
+        CareRequestFundingStatus.REQUIRES_REFUND_REVIEW
     ) {
       return this.careFundingResponse(prepared.care, prepared.funding, null);
     }
@@ -2708,6 +2762,18 @@ export class PaymentFlowService {
         createdAt: "DESC",
       },
     });
+
+    if (active && !active.providerReference) {
+      if (
+        await this.cancelCareAttemptForProviderSwitch(
+          active.id,
+          userId,
+          paymentProvider,
+        )
+      ) {
+        active = null;
+      }
+    }
 
     if (active && !active.providerReference) {
       this.assertRequestedProvider(active, paymentProvider);
@@ -2744,16 +2810,26 @@ export class PaymentFlowService {
           PaymentAttemptStatus.PENDING_CONFIRMATION,
         ].includes(refreshed.status)
       ) {
-        this.assertRequestedProvider(refreshed, paymentProvider);
+        if (
+          await this.cancelCareAttemptForProviderSwitch(
+            refreshed.id,
+            userId,
+            paymentProvider,
+          )
+        ) {
+          active = null;
+        } else {
+          this.assertRequestedProvider(refreshed, paymentProvider);
 
-        return this.careFundingResponse(
-          prepared.care,
-          prepared.funding,
-          refreshed,
-        );
+          return this.careFundingResponse(
+            prepared.care,
+            prepared.funding,
+            refreshed,
+          );
+        }
       }
 
-      active = null;
+      if (active) active = null;
     }
 
     const customerEmail = this.resolvePaymentEmail(
@@ -2807,6 +2883,7 @@ export class PaymentFlowService {
       });
 
       if (raced) {
+        this.assertRequestedProvider(raced, paymentProvider);
         return this.careFundingResponse(prepared.care, funding, raced);
       }
 
@@ -2946,6 +3023,17 @@ export class PaymentFlowService {
             occurredAt: verified.occurredAt,
           }),
         );
+      if (
+        funding.status === CareRequestFundingStatus.PAID ||
+        funding.status ===
+          CareRequestFundingStatus.REQUIRES_REFUND_REVIEW
+      ) {
+        attempt.status = PaymentAttemptStatus.SUCCEEDED;
+        await attemptRepo.save(attempt);
+        funding.status = CareRequestFundingStatus.REQUIRES_REFUND_REVIEW;
+        await fundingRepo.save(funding);
+        return this.careFundingResponse(care, funding, attempt);
+      }
       if (funding.fundingRoute !== "HMO") {
         const providerEarning =
           await this.earnings!.createHeldGeneralCareEarning(
@@ -3026,7 +3114,9 @@ export class PaymentFlowService {
       fundingStatus: funding?.status ?? null,
       paid:
         funding?.status === CareRequestFundingStatus.PAID ||
-        funding?.status === CareRequestFundingStatus.SATISFIED_FREE,
+        funding?.status === CareRequestFundingStatus.SATISFIED_FREE ||
+        funding?.status ===
+          CareRequestFundingStatus.REQUIRES_REFUND_REVIEW,
       initializationAllowed:
         care.status === CareRequestStatus.PROVIDER_ACCEPTED &&
         (funding?.fundingRoute !== "HMO" ||
