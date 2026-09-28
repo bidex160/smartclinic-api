@@ -2,6 +2,8 @@ import { ConflictException } from '@nestjs/common';
 import { PharmacyFulfillmentService } from './pharmacy-fulfillment.service';
 import { ClinicalOrderFulfillmentStatus } from './enums/clinical-order-fulfillment-status.enum';
 import { PharmacyQuoteItemAvailability } from './enums/pharmacy-quote-status.enum';
+import { PharmacyFulfillmentMethod } from './enums/pharmacy-quote-status.enum';
+import { PharmacyCoordinationAllocation } from './entities/pharmacy-coordination-allocation.entity';
 import { PharmacyQuoteItem } from './entities/pharmacy-quote-item.entity';
 import { PharmacyQuote } from './entities/pharmacy-quote.entity';
 
@@ -58,5 +60,20 @@ describe('PharmacyFulfillmentService quote rules', () => {
         { sortOrder: 1, availability: PharmacyQuoteItemAvailability.UNAVAILABLE, quantitySupplied: 1, unitPriceMinor: 1 },
       ],
     })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('requires unique pharmacy fulfillment options and defaults safely to pickup', () => {
+    expect(subject.fulfillmentOptions({})).toEqual([{ method: PharmacyFulfillmentMethod.PICKUP, feeMinor: 0 }]);
+    expect(() => subject.fulfillmentOptions({ fulfillmentOptions: [
+      { method: PharmacyFulfillmentMethod.PICKUP, feeMinor: 0 },
+      { method: PharmacyFulfillmentMethod.PICKUP, feeMinor: 100 },
+    ] })).toThrow(ConflictException);
+  });
+
+  it('queries coordination earnings only for the authenticated doctor or their provider', async () => {
+    const find=jest.fn().mockResolvedValue([]);
+    const service:any=new PharmacyFulfillmentService({manager:{getRepository:(entity:any)=>entity===PharmacyCoordinationAllocation?{find}:{} }} as any,{} as any,{resolveOperational:jest.fn().mockResolvedValue({id:'provider-own'})} as any,{} as any,{} as any);
+    await service.myCoordinationEarnings({id:'user-own'});
+    expect(find).toHaveBeenCalledWith(expect.objectContaining({where:[{beneficiaryUserId:'user-own'},{beneficiaryProviderId:'provider-own'}]}));
   });
 });

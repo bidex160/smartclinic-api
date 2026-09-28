@@ -269,6 +269,7 @@ export class ProviderEarningsService {
       commissionSource: CommissionRateSource;
       commissionAmountMinor: string;
       providerShareMinor: string;
+      collectedAmountMinor?: string;
       paymentTransaction: PaymentTransaction;
     },
   ) {
@@ -293,7 +294,7 @@ export class ProviderEarningsService {
       input.paymentTransaction.transactionType !==
         PaymentTransactionType.COLLECTION ||
       input.paymentTransaction.currency !== input.currency ||
-      this.toMinor(input.paymentTransaction.amount) !== gross ||
+      this.toMinor(input.paymentTransaction.amount) !== BigInt(input.collectedAmountMinor ?? input.grossAmountMinor) ||
       input.commissionBps < 0 ||
       input.commissionBps > 10000 ||
       commission < 0n ||

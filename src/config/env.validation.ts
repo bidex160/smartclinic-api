@@ -171,6 +171,24 @@ class EnvironmentVariables {
   @IsOptional() @IsIn(["true", "false"]) OPAY_WEBHOOK_ENABLED?: string;
   @Type(() => Number) @IsInt() @Min(0) @Max(10000) PRIMARY_REFERRER_SHARE_BPS =
     300;
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  PHARMACY_DOCTOR_COORDINATION_FEE_BPS = 300;
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  PHARMACY_HOSPITAL_COORDINATION_FEE_BPS = 300;
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  PHARMACY_DOCTOR_COORDINATION_FEE_CAP_MINOR = 100000;
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  PHARMACY_HOSPITAL_COORDINATION_FEE_CAP_MINOR = 100000;
   @IsOptional() @IsString() PAYOUT_ACCOUNT_ENCRYPTION_KEY?: string;
 }
 

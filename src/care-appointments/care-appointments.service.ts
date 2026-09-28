@@ -5,6 +5,7 @@ import {
   NotFoundException,
   Optional,
 } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import { InjectRepository } from "@nestjs/typeorm";
 import { EntityManager, In, Repository } from "typeorm";
 import { isTimeZone } from "class-validator";
@@ -374,7 +375,7 @@ export class CareAppointmentsService {
 
               meetingUrl:
                 care.deliveryMode === CareDeliveryMode.VIRTUAL
-                  ? this.jitsiMeetingUrl(appointmentReference)
+                  ? this.jitsiMeetingUrl()
                   : null,
 
               status: CareAppointmentStatus.SCHEDULED,
@@ -552,8 +553,7 @@ export class CareAppointmentsService {
         deliveryMode: care.deliveryMode,
         meetingUrl:
           care.deliveryMode === CareDeliveryMode.VIRTUAL
-            ? "https://meet.jit.si/SmartClinic-" +
-              appointmentReference.replace("SC-APT-", "")
+            ? this.jitsiMeetingUrl()
             : null,
         status: CareAppointmentStatus.SCHEDULED,
         notes: care.notes ?? null,
@@ -807,6 +807,15 @@ export class CareAppointmentsService {
         await this.clinicalOrders.requireNoDraftOrders(manager, appointment.id);
       const fromAppointment = appointment.status;
       appointment.status = to;
+      if (
+        [
+          CareAppointmentStatus.COMPLETED,
+          CareAppointmentStatus.CANCELLED,
+          CareAppointmentStatus.NO_SHOW,
+        ].includes(to)
+      ) {
+        appointment.meetingUrl = null;
+      }
       await manager.getRepository(CareAppointment).save(appointment);
       await this.appointmentHistory(
         manager,
@@ -1055,17 +1064,17 @@ export class CareAppointmentsService {
       scheduledTimeTo: row.scheduledTimeTo,
       timezone: row.timezone,
       ...(includeMeetingUrl && row.deliveryMode === CareDeliveryMode.VIRTUAL
-        ? { meetingUrl: row.meetingUrl }
+        ? { meetingUrl: ACTIVE.includes(row.status) ? row.meetingUrl : null }
         : {}),
       notes: row.notes,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
   }
-  private jitsiMeetingUrl(reference: string) {
-    // Jitsi room names are derived from the server-generated appointment reference.
-    // The opaque suffix prevents patients/providers from having to exchange or type links.
-    const room = `SmartClinic-${reference.replace(/[^A-Za-z0-9]/g, "")}`;
+  private jitsiMeetingUrl() {
+    // Use a room secret independent from all patient-visible references. The URL is only
+    // projected to the owning patient and assigned provider while the appointment is active.
+    const room = `SmartClinic-${randomUUID().replaceAll("-", "")}`;
     return `https://meet.jit.si/${room}`;
   }
   private isHttpsUrl(value: string) {

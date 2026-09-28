@@ -91,6 +91,12 @@ export interface AppConfiguration {
     };
   };
   referrals: { monetaryShareBps: number };
+  pharmacyCoordination: {
+    doctorFeeBps: number;
+    hospitalFeeBps: number;
+    doctorFeeCapMinor: number;
+    hospitalFeeCapMinor: number;
+  };
   database: {
     enabled: boolean;
     host: string;
@@ -286,6 +292,24 @@ export function createAppConfiguration(
     },
     referrals: {
       monetaryShareBps: getNumber(environment.PRIMARY_REFERRER_SHARE_BPS, 300),
+    },
+    pharmacyCoordination: {
+      doctorFeeBps: getNumber(
+        environment.PHARMACY_DOCTOR_COORDINATION_FEE_BPS,
+        300,
+      ),
+      hospitalFeeBps: getNumber(
+        environment.PHARMACY_HOSPITAL_COORDINATION_FEE_BPS,
+        300,
+      ),
+      doctorFeeCapMinor: getNumber(
+        environment.PHARMACY_DOCTOR_COORDINATION_FEE_CAP_MINOR,
+        100_000,
+      ),
+      hospitalFeeCapMinor: getNumber(
+        environment.PHARMACY_HOSPITAL_COORDINATION_FEE_CAP_MINOR,
+        100_000,
+      ),
     },
     database: {
       enabled: environment.DATABASE_ENABLED !== "false",

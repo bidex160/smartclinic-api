@@ -40,6 +40,7 @@ import { PharmacyFulfillmentFunding } from "../clinical-orders/entities/pharmacy
 import { PharmacyQuote } from "../clinical-orders/entities/pharmacy-quote.entity";
 import { ClinicalOrderFulfillment } from "../clinical-orders/entities/clinical-order-fulfillment.entity";
 import { PharmacyDispensing } from "../clinical-orders/entities/pharmacy-dispensing.entity";
+import { PharmacyCoordinationAllocation } from "../clinical-orders/entities/pharmacy-coordination-allocation.entity";
 import { Patient } from "../patients/entities/patient.entity";
 import { MePharmacyFundingController } from "./me-pharmacy-funding.controller";
 import { MeDiagnosticFundingController } from "./me-diagnostic-funding.controller";
@@ -84,6 +85,7 @@ import { MeGuidedSelfCheckFundingController } from "./me-guided-self-check-fundi
       PharmacyQuote,
       ClinicalOrderFulfillment,
       PharmacyDispensing,
+      PharmacyCoordinationAllocation,
       Patient,
       GuidedSelfCheck,
       GuidedSelfCheckHistory,
