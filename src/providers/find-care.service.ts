@@ -40,7 +40,11 @@ export class FindCareService {
       if (query.deliveryMode !== CareDeliveryMode.VIRTUAL) throw new BadRequestException('Institution-scoped discovery currently supports VIRTUAL care');
       builder.andWhere(`EXISTS (SELECT 1 FROM provider_practice_affiliations affiliation INNER JOIN providers host ON host.id = affiliation.host_provider_id WHERE affiliation.doctor_provider_id = provider.id AND affiliation.is_active = true AND affiliation.status = 'APPROVED' AND affiliation.allows_virtual_care = true AND host.provider_reference = :hostProviderReference AND host.status = :active AND host.onboarding_status = :approved AND host.deleted_at IS NULL)`, { hostProviderReference: query.hostProviderReference, active: ProviderStatus.ACTIVE, approved: ProviderOnboardingStatus.APPROVED });
     }
-    if (query.deliveryMode !== CareDeliveryMode.VIRTUAL) this.applyPlace(builder, query);
+    if (query.deliveryMode === CareDeliveryMode.VIRTUAL && query.countryCode) {
+      builder.andWhere('provider.countryCode = :country', { country: query.countryCode });
+    } else if (query.deliveryMode !== CareDeliveryMode.VIRTUAL) {
+      this.applyPlace(builder, query);
+    }
     builder.orderBy('provider.isPlatformDefault', 'DESC').addOrderBy('provider.platformDefaultPriority', 'ASC', 'NULLS LAST').addOrderBy('provider.displayName', 'ASC').addOrderBy('provider.providerReference', 'ASC').skip((query.page - 1) * query.limit).take(query.limit);
     const [providers, total] = await builder.getManyAndCount();
     return { items: providers.map((provider) => this.mapProvider(provider)), page: query.page, limit: query.limit, total, totalPages: total ? Math.ceil(total / query.limit) : 0 };

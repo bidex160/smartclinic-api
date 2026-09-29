@@ -16,7 +16,10 @@
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/database/data-source.ts",
     "seed": "ts-node -r tsconfig-paths/register src/database/seeds/catalogue.seed.ts",
-    "seed:admin": "ts-node -r tsconfig-paths/register src/database/seeds/admin.seed.ts"
+    "seed:admin": "ts-node -r tsconfig-paths/register src/database/seeds/admin.seed.ts",
+    "seed:staging:hmos": "ts-node -r tsconfig-paths/register src/database/seeds/staging-hmos.seed.ts",
+    "seed:staging:healthy-families": "ts-node -r tsconfig-paths/register src/database/seeds/staging-healthy-families.seed.ts",
+    "seed:staging:acceptance-accounts": "ts-node -r tsconfig-paths/register src/database/seeds/staging-acceptance-accounts.seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

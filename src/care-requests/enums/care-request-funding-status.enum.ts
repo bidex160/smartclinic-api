@@ -1,1 +1,6 @@
-export enum CareRequestFundingStatus { PENDING = 'PENDING', PAID = 'PAID', SATISFIED_FREE = 'SATISFIED_FREE' }
+export enum CareRequestFundingStatus {
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  SATISFIED_FREE = 'SATISFIED_FREE',
+  REQUIRES_REFUND_REVIEW = 'REQUIRES_REFUND_REVIEW',
+}

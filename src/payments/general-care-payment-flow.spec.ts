@@ -6,6 +6,7 @@ import { CareRequestStatus } from "../care-requests/enums/care-request-status.en
 import { PaymentAttempt } from "./entities/payment-attempt.entity";
 import { PaymentTransaction } from "./entities/payment-transaction.entity";
 import { PaymentAttemptStatus } from "./enums/payment-attempt-status.enum";
+import { PaymentProvider } from "./enums/payment-provider.enum";
 import { PaymentFlowService } from "./payment-flow.service";
 
 describe("PaymentFlowService General Care funding", () => {
@@ -213,6 +214,87 @@ describe("PaymentFlowService General Care funding", () => {
     await subject.verifyLatestCareRequestFunding(care.reference, care.userId);
     expect(funding.status).toBe(CareRequestFundingStatus.PENDING);
     expect(earnings.createHeldGeneralCareEarning).not.toHaveBeenCalled();
+  });
+  it("cancels a verified-pending OPay attempt before switching the same obligation to Paystack", async () => {
+    await subject.initializeCareRequestFunding(care.reference, care.userId);
+    attempt.providerCode = PaymentProvider.OPAY;
+    attempt.providerReference = "SC-PAY-OPAY";
+    attempt.status = PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION;
+    adapter.verifyPayment.mockResolvedValue({
+      succeeded: false,
+      status: PaymentAttemptStatus.PENDING_CONFIRMATION,
+      providerReference: "SC-PAY-OPAY",
+      amount: "20000.00",
+      currency: "NGN",
+      occurredAt: new Date(),
+    });
+    attempts.findOne.mockImplementation(async (options: any) => {
+      const statuses = options?.where?.status?._value;
+      if (Array.isArray(statuses) && !statuses.includes(attempt?.status))
+        return null;
+      return attempt;
+    });
+
+    const switched = await subject.initializeCareRequestFunding(
+      care.reference,
+      care.userId,
+      undefined,
+      PaymentProvider.PAYSTACK,
+    );
+
+    expect(attempts.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerCode: PaymentProvider.OPAY,
+        status: PaymentAttemptStatus.CANCELLED,
+      }),
+    );
+    expect(adapter.initializePayment).toHaveBeenCalledTimes(2);
+    expect(switched).toMatchObject({ provider: PaymentProvider.PAYSTACK });
+  });
+  it("records a late success from a replaced rail for refund review without duplicating earnings", async () => {
+    funding = {
+      id: "funding-1",
+      careRequestId: care.id,
+      amountMinor: care.servicePriceMinor,
+      baseAmountMinor: care.servicePriceMinor,
+      programmeSurchargeMinor: "0",
+      partnerFamilyId: null,
+      partnerProgramId: null,
+      fundingRoute: "SELF_PAY",
+      currency: care.serviceCurrency,
+      status: CareRequestFundingStatus.PAID,
+      paidAt: new Date("2026-09-27T12:00:00.000Z"),
+    };
+    attempt = {
+      id: "attempt-opay",
+      careRequestFundingId: funding.id,
+      providerCode: PaymentProvider.OPAY,
+      providerReference: "SC-PAY-OPAY-LATE",
+      amount: "20000.00",
+      currency: "NGN",
+      status: PaymentAttemptStatus.CANCELLED,
+    };
+
+    const result = await subject.applyProviderVerification(
+      PaymentProvider.OPAY,
+      attempt.providerReference,
+      {
+        succeeded: true,
+        status: PaymentAttemptStatus.SUCCEEDED,
+        providerReference: attempt.providerReference,
+        amount: attempt.amount,
+        currency: attempt.currency,
+        occurredAt: new Date("2026-09-27T12:05:00.000Z"),
+      },
+    );
+
+    expect(result).toMatchObject({
+      fundingStatus: CareRequestFundingStatus.REQUIRES_REFUND_REVIEW,
+      paid: true,
+    });
+    expect(transactions.save).toHaveBeenCalledTimes(1);
+    expect(earnings.createHeldGeneralCareEarning).not.toHaveBeenCalled();
+    expect(referralEarnings.createHeldForGeneralCare).not.toHaveBeenCalled();
   });
   it("charges an explicitly selected programme surcharge and allocates it once", async () => {
     partners.preparePaymentAttribution.mockResolvedValue({

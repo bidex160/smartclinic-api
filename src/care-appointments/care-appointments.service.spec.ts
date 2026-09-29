@@ -49,7 +49,7 @@ describe('CareAppointmentsService', () => {
   it('atomically schedules accepted work with the exact offering and owned active location', async () => {
     await expect(subject.schedule(user, care.reference, dto)).resolves.toMatchObject({ appointmentReference: 'SC-APT-ABCDEF123456' });
     expect(appointmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ careRequestId: care.id, patientId: care.patientId, providerId: provider.id, providerCareServiceId: care.assignedProviderCareServiceId, providerLocationId: 'location-id', deliveryMode: CareDeliveryMode.IN_PERSON, meetingUrl: null, status: CareAppointmentStatus.SCHEDULED }));
-    expect((subject as any).jitsiMeetingUrl('SC-APT-ABCDEF123456')).toBe('https://meet.jit.si/SmartClinic-SCAPTABCDEF123456');
+    expect((subject as any).jitsiMeetingUrl()).toMatch(/^https:\/\/meet\.jit\.si\/SmartClinic-[a-f0-9]{32}$/);
     expect(care.status).toBe(CareRequestStatus.SCHEDULED);
     expect(appointmentHistory.save).toHaveBeenCalledWith(expect.objectContaining({ fromStatus: null, toStatus: CareAppointmentStatus.SCHEDULED }));
     expect(requestHistory.save).toHaveBeenCalledWith(expect.objectContaining({ fromStatus: CareRequestStatus.PROVIDER_ACCEPTED, toStatus: CareRequestStatus.SCHEDULED }));
@@ -63,7 +63,7 @@ describe('CareAppointmentsService', () => {
     await expect(subject.schedule(user, care.reference, { ...dto, providerLocationReference: null })).resolves.toBeDefined();
     expect(appointmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({
       deliveryMode: CareDeliveryMode.VIRTUAL,
-      meetingUrl: expect.stringMatching(/^https:\/\/meet\.jit\.si\/SmartClinic-SCAPT[A-Z0-9]{12}$/),
+      meetingUrl: expect.stringMatching(/^https:\/\/meet\.jit\.si\/SmartClinic-[a-f0-9]{32}$/),
     }));
   });
 
@@ -107,6 +107,8 @@ describe('CareAppointmentsService', () => {
     const row: any = { reference: 'SC-APT-ABCDEF123456', status: CareAppointmentStatus.SCHEDULED, deliveryMode: CareDeliveryMode.VIRTUAL, meetingUrl: 'https://meet.example.test/room', careRequest: { reference: care.reference }, providerCareService: { definition: { code: 'CONSULTATION', name: 'Consultation' } }, provider: { providerReference: 'SCPR-ABCDEF0123456789', displayName: 'Clinic', providerType: 'CLINIC' }, providerLocation: null, scheduledDate: '2099-09-10', scheduledTimeFrom: '10:30', scheduledTimeTo: '11:00', timezone: 'Africa/Lagos', notes: null, createdAt: new Date(), updatedAt: new Date() };
     expect((subject as any).map(row, true)).toMatchObject({ deliveryMode: CareDeliveryMode.VIRTUAL, meetingUrl: row.meetingUrl });
     expect((subject as any).map(row, false)).not.toHaveProperty('meetingUrl');
+    row.status = CareAppointmentStatus.COMPLETED;
+    expect((subject as any).map(row, true)).toMatchObject({ meetingUrl: null });
   });
 
   it('rejects unaccepted/cancelled requests and unrelated or inactive locations', async () => {
@@ -125,7 +127,7 @@ describe('CareAppointmentsService', () => {
   });
 
   it('uses patient/provider scoped lookups and strict lifecycle transitions', async () => {
-    const transitionAppointment: any = { id: 'appointment-id', reference: 'SC-APT-ABCDEF123456', careRequestId: care.id, providerId: provider.id, patientId: 'patient-id', status: CareAppointmentStatus.SCHEDULED };
+    const transitionAppointment: any = { id: 'appointment-id', reference: 'SC-APT-ABCDEF123456', careRequestId: care.id, providerId: provider.id, patientId: 'patient-id', status: CareAppointmentStatus.SCHEDULED, meetingUrl: 'https://meet.jit.si/SmartClinic-secret' };
     appointmentRepo.findOne = jest.fn().mockResolvedValue(transitionAppointment); care.status = CareRequestStatus.SCHEDULED;
     await subject.start(user, 'SC-APT-ABCDEF123456');
     expect(transitionAppointment.status).toBe(CareAppointmentStatus.IN_PROGRESS); expect(care.status).toBe(CareRequestStatus.IN_PROGRESS);
@@ -134,6 +136,7 @@ describe('CareAppointmentsService', () => {
     expect((subject as any).clinicalRecords.ensureDraftForStartedAppointment).toHaveBeenCalledTimes(1);
     await subject.complete(user, 'SC-APT-ABCDEF123456');
     expect(transitionAppointment.status).toBe(CareAppointmentStatus.COMPLETED); expect(care.status).toBe(CareRequestStatus.COMPLETED);
+    expect(transitionAppointment.meetingUrl).toBeNull();
     expect((subject as any).earnings.markGeneralCarePayable).toHaveBeenCalledWith(manager, care.reference, user.id);
     expect(referrals.recordPatientFirstCareAction).toHaveBeenCalledWith(care.patientId, 'GENERAL_CARE_COMPLETED', transitionAppointment.reference, manager);
   });
@@ -152,5 +155,5 @@ describe('CareAppointmentsService', () => {
     expect((subject as any).earnings.markGeneralCarePayable).toHaveBeenCalledTimes(1);
   });
 
-  it('retains paid entitlement and HELD earning after cancellation/no-show without creating clinical records', async () => { const transitionAppointment: any = { id: 'appointment-id', careRequestId: care.id, providerId: provider.id, patientId: 'patient-id', status: CareAppointmentStatus.SCHEDULED }; appointmentRepo.findOne = jest.fn().mockResolvedValue(transitionAppointment); care.status = CareRequestStatus.SCHEDULED; await subject.cancelProvider(user, 'SC-APT-ABCDEF123456', 'Reschedule'); expect(care.status).toBe(CareRequestStatus.PROVIDER_ACCEPTED); expect((subject as any).earnings.markGeneralCarePayable).not.toHaveBeenCalled(); transitionAppointment.status = CareAppointmentStatus.SCHEDULED; care.status = CareRequestStatus.SCHEDULED; await subject.noShow(user, 'SC-APT-ABCDEF123456', null); expect(care.status).toBe(CareRequestStatus.PROVIDER_ACCEPTED); expect((subject as any).clinicalRecords.ensureDraftForStartedAppointment).not.toHaveBeenCalled(); });
+  it('retains paid entitlement and HELD earning after cancellation/no-show without retaining the video room', async () => { const transitionAppointment: any = { id: 'appointment-id', careRequestId: care.id, providerId: provider.id, patientId: 'patient-id', status: CareAppointmentStatus.SCHEDULED, meetingUrl: 'https://meet.jit.si/SmartClinic-secret' }; appointmentRepo.findOne = jest.fn().mockResolvedValue(transitionAppointment); care.status = CareRequestStatus.SCHEDULED; await subject.cancelProvider(user, 'SC-APT-ABCDEF123456', 'Reschedule'); expect(care.status).toBe(CareRequestStatus.PROVIDER_ACCEPTED); expect(transitionAppointment.meetingUrl).toBeNull(); expect((subject as any).earnings.markGeneralCarePayable).not.toHaveBeenCalled(); transitionAppointment.status = CareAppointmentStatus.SCHEDULED; transitionAppointment.meetingUrl = 'https://meet.jit.si/SmartClinic-another-secret'; care.status = CareRequestStatus.SCHEDULED; await subject.noShow(user, 'SC-APT-ABCDEF123456', null); expect(care.status).toBe(CareRequestStatus.PROVIDER_ACCEPTED); expect(transitionAppointment.meetingUrl).toBeNull(); expect((subject as any).clinicalRecords.ensureDraftForStartedAppointment).not.toHaveBeenCalled(); });
 });

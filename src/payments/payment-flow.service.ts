@@ -68,9 +68,13 @@ import { PharmacyFulfillmentFunding } from "../clinical-orders/entities/pharmacy
 import { PharmacyQuote } from "../clinical-orders/entities/pharmacy-quote.entity";
 import { ClinicalOrderFulfillment } from "../clinical-orders/entities/clinical-order-fulfillment.entity";
 import { PharmacyDispensing } from "../clinical-orders/entities/pharmacy-dispensing.entity";
+import { PharmacyCoordinationAllocation } from "../clinical-orders/entities/pharmacy-coordination-allocation.entity";
+import {
+  PharmacyCoordinationAllocationStatus,
+  PharmacyCoordinationAllocationType,
+} from "../clinical-orders/enums/pharmacy-coordination-allocation.enum";
 import {
   PharmacyDispensingStatus,
-  PharmacyFulfillmentMethod,
   PharmacyFundingStatus,
 } from "../clinical-orders/enums/pharmacy-quote-status.enum";
 import { Patient } from "../patients/entities/patient.entity";
@@ -351,6 +355,58 @@ export class PaymentFlowService {
       throw new ConflictException(
         "An active payment attempt already uses a different provider",
       );
+  }
+
+  private requestedProviderDiffers(
+    active: PaymentAttempt | null,
+    requested?: PaymentProvider,
+  ): boolean {
+    return Boolean(
+      active &&
+      requested &&
+      active.providerCode &&
+      active.providerCode !== requested,
+    );
+  }
+
+  private async cancelCareAttemptForProviderSwitch(
+    attemptId: string,
+    userId: string,
+    requested?: PaymentProvider,
+  ): Promise<boolean> {
+    return this.bookings.manager.transaction(async (manager) => {
+      const attemptRepo = manager.getRepository(PaymentAttempt);
+      const attempt = await attemptRepo.findOne({
+        where: { id: attemptId },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!attempt?.careRequestFundingId) return false;
+      if (!this.requestedProviderDiffers(attempt, requested)) return false;
+      if (
+        ![
+          PaymentAttemptStatus.CREATED,
+          PaymentAttemptStatus.AWAITING_CUSTOMER_ACTION,
+          PaymentAttemptStatus.PENDING_CONFIRMATION,
+        ].includes(attempt.status)
+      )
+        return false;
+
+      const funding = await manager.getRepository(CareRequestFunding).findOne({
+        where: { id: attempt.careRequestFundingId },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!funding || funding.status !== CareRequestFundingStatus.PENDING)
+        return false;
+      const care = await manager.getRepository(CareRequest).findOne({
+        where: { id: funding.careRequestId, userId },
+        lock: { mode: "pessimistic_read" },
+      });
+      if (!care) return false;
+
+      attempt.status = PaymentAttemptStatus.CANCELLED;
+      await attemptRepo.save(attempt);
+      return true;
+    });
   }
 
   async previewRewardRedemption(reference: string, userId: string) {
@@ -1966,7 +2022,10 @@ export class PaymentFlowService {
       await this.earnings!.createHeldPharmacyFulfillmentEarning(m, {
         providerId: funding.providerId,
         fulfillmentReference: f.reference,
-        grossAmountMinor: funding.grossAmountMinor,
+        grossAmountMinor: (
+          BigInt(funding.medicineAmountMinor) + BigInt(funding.deliveryFeeMinor)
+        ).toString(),
+        collectedAmountMinor: funding.grossAmountMinor,
         currency: funding.currency,
         commissionBps: funding.commissionBps,
         commissionSource: funding.commissionSource,
@@ -1974,6 +2033,78 @@ export class PaymentFlowService {
         providerShareMinor: funding.providerShareMinor,
         paymentTransaction: tx,
       });
+      const allocationRepository = m.getRepository(
+        PharmacyCoordinationAllocation,
+      );
+      if (
+        BigInt(funding.doctorCoordinationAmountMinor) > 0n &&
+        !(await allocationRepository.exists({
+          where: {
+            fundingId: funding.id,
+            type: PharmacyCoordinationAllocationType.DOCTOR,
+          },
+        }))
+      )
+        await allocationRepository.save({
+          fundingId: funding.id,
+          paymentTransactionId: tx.id,
+          walletEntryId: null,
+          type: PharmacyCoordinationAllocationType.DOCTOR,
+          beneficiaryUserId: funding.doctorBeneficiaryUserId,
+          beneficiaryProviderId: null,
+          sourceOrderReference:
+            q.fulfillment?.clinicalOrder?.reference ??
+            (
+              await m.getRepository(ClinicalOrderFulfillment).findOneOrFail({
+                where: { id: f.id },
+                relations: { clinicalOrder: true },
+              })
+            ).clinicalOrder.reference,
+          sourceFulfillmentReference: f.reference,
+          basisAmountMinor: funding.medicineAmountMinor,
+          bpsSnapshot: funding.doctorCoordinationBps,
+          amountMinor: funding.doctorCoordinationAmountMinor,
+          currency: funding.currency,
+          status: PharmacyCoordinationAllocationStatus.HELD,
+          payableAt: null,
+          settledAt: null,
+          reversedAt: null,
+        });
+      if (
+        funding.hospitalBeneficiaryProviderId &&
+        BigInt(funding.hospitalCoordinationAmountMinor) > 0n &&
+        !(await allocationRepository.exists({
+          where: {
+            fundingId: funding.id,
+            type: PharmacyCoordinationAllocationType.HOSPITAL,
+          },
+        }))
+      )
+        await allocationRepository.save({
+          fundingId: funding.id,
+          paymentTransactionId: tx.id,
+          walletEntryId: null,
+          type: PharmacyCoordinationAllocationType.HOSPITAL,
+          beneficiaryUserId: null,
+          beneficiaryProviderId: funding.hospitalBeneficiaryProviderId,
+          sourceOrderReference:
+            q.fulfillment?.clinicalOrder?.reference ??
+            (
+              await m.getRepository(ClinicalOrderFulfillment).findOneOrFail({
+                where: { id: f.id },
+                relations: { clinicalOrder: true },
+              })
+            ).clinicalOrder.reference,
+          sourceFulfillmentReference: f.reference,
+          basisAmountMinor: funding.medicineAmountMinor,
+          bpsSnapshot: funding.hospitalCoordinationBps,
+          amountMinor: funding.hospitalCoordinationAmountMinor,
+          currency: funding.currency,
+          status: PharmacyCoordinationAllocationStatus.HELD,
+          payableAt: null,
+          settledAt: null,
+          reversedAt: null,
+        });
       if (
         !(await m
           .getRepository(PharmacyDispensing)
@@ -1984,7 +2115,7 @@ export class PaymentFlowService {
           quoteId: q.id,
           fundingId: funding.id,
           status: PharmacyDispensingStatus.READY_TO_DISPENSE,
-          fulfillmentMethod: PharmacyFulfillmentMethod.PICKUP,
+          fulfillmentMethod: funding.fulfillmentMethod,
           startedAt: null,
           readyAt: null,
           completedAt: null,
@@ -2001,6 +2132,11 @@ export class PaymentFlowService {
       quoteReference: q.reference,
       fundingRequired: BigInt(f.grossAmountMinor) > 0n,
       amountMinor: Number(f.grossAmountMinor),
+      medicineAmountMinor: Number(f.medicineAmountMinor),
+      deliveryFeeMinor: Number(f.deliveryFeeMinor),
+      doctorCoordinationFeeMinor: Number(f.doctorCoordinationAmountMinor),
+      hospitalCoordinationFeeMinor: Number(f.hospitalCoordinationAmountMinor),
+      fulfillmentMethod: f.fulfillmentMethod,
       currency: f.currency,
       fundingStatus: f.status,
       paid: [
@@ -2690,7 +2826,9 @@ export class PaymentFlowService {
     if (
       prepared.free ||
       prepared.funding.status === CareRequestFundingStatus.PAID ||
-      prepared.funding.status === CareRequestFundingStatus.SATISFIED_FREE
+      prepared.funding.status === CareRequestFundingStatus.SATISFIED_FREE ||
+      prepared.funding.status ===
+        CareRequestFundingStatus.REQUIRES_REFUND_REVIEW
     ) {
       return this.careFundingResponse(prepared.care, prepared.funding, null);
     }
@@ -2708,6 +2846,18 @@ export class PaymentFlowService {
         createdAt: "DESC",
       },
     });
+
+    if (active && !active.providerReference) {
+      if (
+        await this.cancelCareAttemptForProviderSwitch(
+          active.id,
+          userId,
+          paymentProvider,
+        )
+      ) {
+        active = null;
+      }
+    }
 
     if (active && !active.providerReference) {
       this.assertRequestedProvider(active, paymentProvider);
@@ -2744,16 +2894,26 @@ export class PaymentFlowService {
           PaymentAttemptStatus.PENDING_CONFIRMATION,
         ].includes(refreshed.status)
       ) {
-        this.assertRequestedProvider(refreshed, paymentProvider);
+        if (
+          await this.cancelCareAttemptForProviderSwitch(
+            refreshed.id,
+            userId,
+            paymentProvider,
+          )
+        ) {
+          active = null;
+        } else {
+          this.assertRequestedProvider(refreshed, paymentProvider);
 
-        return this.careFundingResponse(
-          prepared.care,
-          prepared.funding,
-          refreshed,
-        );
+          return this.careFundingResponse(
+            prepared.care,
+            prepared.funding,
+            refreshed,
+          );
+        }
       }
 
-      active = null;
+      if (active) active = null;
     }
 
     const customerEmail = this.resolvePaymentEmail(
@@ -2807,6 +2967,7 @@ export class PaymentFlowService {
       });
 
       if (raced) {
+        this.assertRequestedProvider(raced, paymentProvider);
         return this.careFundingResponse(prepared.care, funding, raced);
       }
 
@@ -2946,6 +3107,16 @@ export class PaymentFlowService {
             occurredAt: verified.occurredAt,
           }),
         );
+      if (
+        funding.status === CareRequestFundingStatus.PAID ||
+        funding.status === CareRequestFundingStatus.REQUIRES_REFUND_REVIEW
+      ) {
+        attempt.status = PaymentAttemptStatus.SUCCEEDED;
+        await attemptRepo.save(attempt);
+        funding.status = CareRequestFundingStatus.REQUIRES_REFUND_REVIEW;
+        await fundingRepo.save(funding);
+        return this.careFundingResponse(care, funding, attempt);
+      }
       if (funding.fundingRoute !== "HMO") {
         const providerEarning =
           await this.earnings!.createHeldGeneralCareEarning(
@@ -3026,7 +3197,8 @@ export class PaymentFlowService {
       fundingStatus: funding?.status ?? null,
       paid:
         funding?.status === CareRequestFundingStatus.PAID ||
-        funding?.status === CareRequestFundingStatus.SATISFIED_FREE,
+        funding?.status === CareRequestFundingStatus.SATISFIED_FREE ||
+        funding?.status === CareRequestFundingStatus.REQUIRES_REFUND_REVIEW,
       initializationAllowed:
         care.status === CareRequestStatus.PROVIDER_ACCEPTED &&
         (funding?.fundingRoute !== "HMO" ||

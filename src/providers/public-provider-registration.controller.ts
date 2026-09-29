@@ -8,7 +8,7 @@ import { ProviderOnboardingService } from './provider-onboarding.service';
 export class PublicProviderRegistrationController {
   constructor(private readonly onboarding: ProviderOnboardingService) {}
   @Post('register') @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a pending provider account and submit it for review' })
+  @ApiOperation({ summary: 'Create a provisionally active provider account pending final review' })
   @ApiCreatedResponse({ type: ProviderOnboardingProfileResponseDto }) @ApiConflictResponse()
   register(@Body() dto: RegisterProviderDto) { return this.onboarding.register(dto); }
 }

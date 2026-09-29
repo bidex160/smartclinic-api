@@ -10,11 +10,11 @@ describe('ProviderDashboardService', () => {
     qb.getRawOne = jest.fn().mockResolvedValue({ today: '2', upcoming: '7' });
     const bookings = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
     const encounters = { count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(42) };
-    const currentProvider = { resolve: jest.fn().mockResolvedValue({ id: 'provider-a' }) };
+    const currentProvider = { resolveOperational: jest.fn().mockResolvedValue({ id: 'provider-a' }) };
     const referrals = { summary: jest.fn().mockResolvedValue({ availablePoints: 220, reservedPoints: 30, levelProgress: { currentLevel: null, nextLevel: { code: 'LEVEL_1', name: 'Level 1', ordinal: 1 }, requirements: [{ targetType: 'PATIENT', qualified: 3, required: 10, remaining: 7, completed: false }], highestConfiguredLevelReached: false, qualifiedCounts: { PATIENT: 3, CLINIC: 1, LABORATORY: 0, PHARMACY: 0 } } }) };
     const subject = new ProviderDashboardService(assignments as never, bookings as never, encounters as never, currentProvider as never, referrals as never);
     const result = await subject.summary({ id: 'user-a' } as never, new Date('2026-08-25T08:00:00Z'));
-    expect(currentProvider.resolve).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-a' }));
+    expect(currentProvider.resolveOperational).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-a' }));
     expect(assignments.count).toHaveBeenCalledWith({ where: expect.objectContaining({ providerId: 'provider-a', status: ProviderAssignmentStatus.OFFERED }) });
     expect(qb.innerJoin).toHaveBeenCalledWith('provider_assignments', 'assignment', expect.stringContaining('assignment.provider_id = :providerId'), expect.objectContaining({ providerId: 'provider-a' }));
     expect(qb.select).toHaveBeenCalledWith(expect.stringContaining('AT TIME ZONE booking.scheduledTimezone'), 'today');

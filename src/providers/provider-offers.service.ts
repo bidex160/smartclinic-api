@@ -36,7 +36,7 @@ export class ProviderOffersService {
     user: User,
     status?: ProviderAssignmentStatus,
   ): Promise<ProviderOfferResponseDto[]> {
-    const provider = await this.currentProvider.resolve(user);
+    const provider = await this.currentProvider.resolveOperational(user);
     const where: FindOptionsWhere<ProviderAssignment> = {
       providerId: provider.id,
       status: status ?? In(DEFAULT_OFFER_STATUSES),
@@ -54,7 +54,7 @@ export class ProviderOffersService {
     user: User,
     assignmentId: string,
   ): Promise<ProviderOfferResponseDto> {
-    const provider = await this.currentProvider.resolve(user);
+    const provider = await this.currentProvider.resolveOperational(user);
     return ProviderOfferResponseDto.fromEntity(
       await this.requireOwnedOffer(provider.id, assignmentId),
     );
@@ -64,7 +64,7 @@ export class ProviderOffersService {
     user: User,
     assignmentId: string,
   ): Promise<ProviderOfferResponseDto> {
-    const provider = await this.currentProvider.resolve(user);
+    const provider = await this.currentProvider.resolveOperational(user);
     await this.requireOwnedOffer(provider.id, assignmentId);
     await this.matching.acceptOffer(
       assignmentId,
@@ -82,7 +82,7 @@ export class ProviderOffersService {
     assignmentId: string,
     reason?: string,
   ): Promise<ProviderOfferResponseDto> {
-    const provider = await this.currentProvider.resolve(user);
+    const provider = await this.currentProvider.resolveOperational(user);
     await this.requireOwnedOffer(provider.id, assignmentId);
     await this.matching.declineOffer(assignmentId, provider.id, reason);
     return ProviderOfferResponseDto.fromEntity(

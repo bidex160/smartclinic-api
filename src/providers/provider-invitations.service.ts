@@ -318,9 +318,9 @@ export class ProviderInvitationsService {
           provider.userId = user.id;
           provider.email = provider.email ?? invitation.emailNormalized;
           if (provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED) {
-            provider.status = ProviderStatus.PENDING;
-            provider.onboardingStatus = ProviderOnboardingStatus.DRAFT;
-            provider.submittedAt = null;
+            provider.status = ProviderStatus.ACTIVE;
+            provider.onboardingStatus = ProviderOnboardingStatus.SUBMITTED;
+            provider.submittedAt = now;
             provider.reviewedAt = null;
             provider.reviewedByUserId = null;
             provider.reviewNote = null;

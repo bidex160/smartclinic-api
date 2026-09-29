@@ -27,6 +27,7 @@ import { ProviderBookingReservation } from "./entities/provider-booking-reservat
 import { ProviderBookingReservationStatus } from "./enums/provider-booking-reservation-status.enum";
 import { Provider } from "./entities/provider.entity";
 import { ProviderStatus } from "./enums/provider-status.enum";
+import { ProviderOnboardingStatus } from "./enums/provider-onboarding-status.enum";
 import { AdminBookingSchedulingService } from "./admin-booking-scheduling.service";
 import { HealthCheckPackage } from "../health-checks/entities/health-check-package.entity";
 import { FulfilmentMode } from "../health-checks/entities/fulfilment-mode.entity";
@@ -241,7 +242,7 @@ export class ProviderMatchingService {
       );
     const provider = await this.assignments.manager.getRepository(Provider).findOne({ where: { id: providerId } });
     if (!provider) throw new NotFoundException("Provider not found");
-    if (provider.status !== ProviderStatus.ACTIVE || provider.deletedAt)
+    if (provider.status !== ProviderStatus.ACTIVE || provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED || provider.deletedAt)
       throw new ConflictException("Provider is not operationally active");
     await this.assertCapacityAvailable(providerId, context);
     return this.createOfferForProvider(booking, providerId, null, context, actorUserId, "MANUAL_PROVIDER_OVERRIDE", reasonNote, now, false);
@@ -393,7 +394,7 @@ export class ProviderMatchingService {
               manager.getRepository(Provider).findOne({ where: { id: providerId }, lock: { mode: "pessimistic_read" } }),
               manager.getRepository(ProviderService).findOne({ where: { id: capability.id }, lock: { mode: "pessimistic_read" } }),
             ]);
-            if (!provider || provider.deletedAt || provider.status !== ProviderStatus.ACTIVE)
+            if (!provider || provider.deletedAt || provider.status !== ProviderStatus.ACTIVE || provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED)
               throw new ConflictException("Provider is no longer operationally active");
             if (!lockedCapability?.isActive || lockedCapability.providerId !== providerId)
               throw new ConflictException("Provider capability is no longer active");
@@ -409,7 +410,7 @@ export class ProviderMatchingService {
             }
           } else {
             const provider = await manager.getRepository(Provider).findOne({ where: { id: providerId } });
-            if (!provider || provider.deletedAt || provider.status !== ProviderStatus.ACTIVE)
+            if (!provider || provider.deletedAt || provider.status !== ProviderStatus.ACTIVE || provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED)
               throw new ConflictException("Provider is no longer operationally active");
             if (fulfilmentMode.code === "PROVIDER_LOCATION")
               throw new ConflictException(

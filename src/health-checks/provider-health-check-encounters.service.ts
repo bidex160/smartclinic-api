@@ -55,7 +55,7 @@ export class ProviderHealthCheckEncountersService {
     user: User,
     reference: string,
   ): Promise<ProviderHealthCheckEncounterResponseDto> {
-    const provider = await this.currentProvider.resolve(user);
+    const provider = await this.currentProvider.resolveOperational(user);
     await this.encounters.manager.transaction(async (manager) => {
       const { booking, assignment } = await this.requireConfirmedAssignment(
         manager,
@@ -133,7 +133,7 @@ export class ProviderHealthCheckEncountersService {
     user: User,
     reference: string,
   ): Promise<ProviderHealthCheckEncounterResponseDto> {
-    const provider = await this.currentProvider.resolve(user);
+    const provider = await this.currentProvider.resolveOperational(user);
     const encounter = await this.encounters
       .createQueryBuilder("encounter")
       .innerJoinAndSelect("encounter.booking", "booking")
@@ -162,7 +162,7 @@ export class ProviderHealthCheckEncountersService {
     reference: string,
     dto: SaveHealthCheckMeasurementsDto,
   ): Promise<ProviderHealthCheckEncounterResponseDto> {
-    const provider = await this.currentProvider.resolve(user);
+    const provider = await this.currentProvider.resolveOperational(user);
     await this.encounters.manager.transaction(async (manager) => {
       const encounter = await this.requireOwnedEncounter(
         manager,
@@ -226,7 +226,7 @@ export class ProviderHealthCheckEncountersService {
     user: User,
     reference: string,
   ): Promise<ProviderHealthCheckEncounterResponseDto> {
-    const provider = await this.currentProvider.resolve(user);
+    const provider = await this.currentProvider.resolveOperational(user);
     let completedPatientId: string | null = null;
     await this.encounters.manager.transaction(async (manager) => {
       const encounter = await this.requireOwnedEncounter(

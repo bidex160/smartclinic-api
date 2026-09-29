@@ -1,24 +1,859 @@
-import { ConflictException,Injectable,NotFoundException } from '@nestjs/common';import { InjectRepository } from '@nestjs/typeorm';import { EntityManager,In,Repository } from 'typeorm';import { calculateCommission } from '../commissions/commission-calculator';import { CommissionResolutionService } from '../commissions/commission-resolution.service';import { ProviderEarningsService } from '../earnings/provider-earnings.service';import { Patient } from '../patients/entities/patient.entity';import { PatientStatus } from '../patients/enums/patient-status.enum';import { CurrentProviderService } from '../providers/current-provider.service';import { User } from '../users/entities/user.entity';import { AcceptPharmacyQuoteDto,UpsertPharmacyQuoteDto } from './dto/pharmacy-quote.dto';import { ClinicalOrderFulfillment } from './entities/clinical-order-fulfillment.entity';import { ClinicalOrder } from './entities/clinical-order.entity';import { ClinicalPrescriptionDetail } from './entities/clinical-prescription-detail.entity';import { ClinicalPrescriptionItem } from './entities/clinical-prescription-item.entity';import { PharmacyDispensing } from './entities/pharmacy-dispensing.entity';import { PharmacyFulfillmentFunding } from './entities/pharmacy-fulfillment-funding.entity';import { PharmacyQuoteItem } from './entities/pharmacy-quote-item.entity';import { PharmacyQuote } from './entities/pharmacy-quote.entity';import { ClinicalOrderFulfillmentStatus } from './enums/clinical-order-fulfillment-status.enum';import { ClinicalOrderStatus } from './enums/clinical-order-status.enum';import { ClinicalOrderType } from './enums/clinical-order-type.enum';import { PharmacyDispensingStatus,PharmacyFulfillmentMethod,PharmacyFundingStatus,PharmacyQuoteItemAvailability,PharmacyQuoteStatus } from './enums/pharmacy-quote-status.enum';import { generatePharmacyQuoteReference } from './pharmacy-quote-reference';
-import { ReferralsService } from '../rewards/referrals.service';
-import { PatientCareActionSource } from '../rewards/enums/patient-care-action-source.enum';
-import { Optional } from '@nestjs/common';
-@Injectable()export class PharmacyFulfillmentService{constructor(@InjectRepository(PharmacyQuote)private readonly quotes:Repository<PharmacyQuote>,@InjectRepository(Patient)private readonly patients:Repository<Patient>,private readonly current:CurrentProviderService,private readonly commissions:CommissionResolutionService,private readonly earnings:ProviderEarningsService,@Optional()private readonly referrals?:ReferralsService){}
- async createQuote(user:User,fulfillmentRef:string,d:UpsertPharmacyQuoteDto){const p=await this.current.resolveOperational(user);return this.quotes.manager.transaction(async m=>{const f=await this.lockFulfillment(m,fulfillmentRef,p.id);this.requireAccepted(f);await m.getRepository(PharmacyQuote).createQueryBuilder().update().set({status:PharmacyQuoteStatus.EXPIRED}).where('fulfillment_id=:id AND status=:status AND expires_at<=now()',{id:f.id,status:PharmacyQuoteStatus.SUBMITTED}).execute();const existing=await m.getRepository(PharmacyQuote).findOne({where:{fulfillmentId:f.id,status:PharmacyQuoteStatus.DRAFT},lock:{mode:'pessimistic_write'}});if(existing)throw new ConflictException('A draft pharmacy quote already exists');const q=await m.getRepository(PharmacyQuote).save({reference:generatePharmacyQuoteReference(),fulfillmentId:f.id,pharmacyProviderId:p.id,pharmacyServiceUnitId:f.fulfillmentServiceUnitId,status:PharmacyQuoteStatus.DRAFT,totalMinor:'0',currency:d.currency,expiresAt:new Date(d.expiresAt),submittedAt:null,acceptedAt:null});await this.replaceItems(m,q,d);return this.read(m,q.id);});}
- async updateQuote(user:User,ref:string,d:UpsertPharmacyQuoteDto){const p=await this.current.resolveOperational(user);return this.quotes.manager.transaction(async m=>{const q=await this.lockQuote(m,ref,p.id);if(q.status!==PharmacyQuoteStatus.DRAFT)throw new ConflictException('Submitted pharmacy quotes are immutable');q.currency=d.currency;q.expiresAt=new Date(d.expiresAt);await m.save(q);await this.replaceItems(m,q,d);return this.read(m,q.id);});}
- async submitQuote(user:User,ref:string){const p=await this.current.resolveOperational(user);return this.quotes.manager.transaction(async m=>{const q=await this.lockQuote(m,ref,p.id);if(q.status===PharmacyQuoteStatus.SUBMITTED)return this.read(m,q.id);if(q.status!==PharmacyQuoteStatus.DRAFT)throw new ConflictException('Pharmacy quote cannot be submitted');if(q.expiresAt<=new Date())throw new ConflictException('Pharmacy quote expiry must be in the future');const items=await m.getRepository(PharmacyQuoteItem).find({where:{quoteId:q.id}});const rx=await this.prescriptionItems(m,q.fulfillmentId);if(items.length!==rx.length||new Set(items.map(i=>i.prescriptionItemId)).size!==rx.length)throw new ConflictException('Every prescription item requires an availability response');q.totalMinor=items.reduce((n,i)=>n+BigInt(i.lineTotalMinor),0n).toString();q.status=PharmacyQuoteStatus.SUBMITTED;q.submittedAt=new Date();await m.save(q);return this.read(m,q.id);});}
- async listQuotes(user:User,fulfillmentRef:string){const p=await this.current.resolveOperational(user);const f=await this.quotes.manager.getRepository(ClinicalOrderFulfillment).findOne({where:{reference:fulfillmentRef,fulfillmentProviderId:p.id}});if(!f)this.notFound();return Promise.all((await this.quotes.find({where:{fulfillmentId:f.id},order:{createdAt:'DESC'}})).map(q=>this.read(this.quotes.manager,q.id)));}
- async getProviderQuote(user:User,ref:string){const p=await this.current.resolveOperational(user);const q=await this.quotes.findOne({where:{reference:ref,pharmacyProviderId:p.id}});if(!q)this.notFound();return this.read(this.quotes.manager,q.id);}
- async acceptQuote(user:User,ref:string,d:AcceptPharmacyQuoteDto){const patient=await this.patient(user.id);return this.quotes.manager.transaction(async m=>{const q=await m.getRepository(PharmacyQuote).findOne({where:{reference:ref},lock:{mode:'pessimistic_write'}});if(!q)this.notFound();const f=await m.getRepository(ClinicalOrderFulfillment).findOne({where:{id:q.fulfillmentId},lock:{mode:'pessimistic_write'}});const order=f&&await m.getRepository(ClinicalOrder).findOne({where:{id:f.clinicalOrderId},lock:{mode:'pessimistic_read'}});if(!f||!order||f.patientId!==patient.id)this.notFound();if(q.status===PharmacyQuoteStatus.ACCEPTED_BY_PATIENT){const funding=await m.getRepository(PharmacyFulfillmentFunding).findOneByOrFail({quoteId:q.id});return this.patientView(m,f.id,funding);};if(q.status!==PharmacyQuoteStatus.SUBMITTED||q.expiresAt<=new Date())throw new ConflictException('Pharmacy quote is not available for acceptance');if(f.status!==ClinicalOrderFulfillmentStatus.ACCEPTED||order.status!==ClinicalOrderStatus.ISSUED)throw new ConflictException('Prescription fulfillment is not actionable');const items=await m.getRepository(PharmacyQuoteItem).find({where:{quoteId:q.id}});if(items.some(i=>i.availability===PharmacyQuoteItemAvailability.UNAVAILABLE)&&!d.acknowledgeUnavailableItems)throw new ConflictException('Unavailable prescription items must be explicitly acknowledged');if(await m.getRepository(PharmacyFulfillmentFunding).exists({where:{fulfillmentId:f.id,status:In([PharmacyFundingStatus.PENDING,PharmacyFundingStatus.PAID,PharmacyFundingStatus.SATISFIED_FREE])}}))throw new ConflictException('A pharmacy quote is already commercially accepted');const resolution=await this.commissions.requireForProvider(f.fulfillmentProviderId,m);const calc=calculateCommission(BigInt(q.totalMinor),resolution.rateBasisPoints);const free=BigInt(q.totalMinor)===0n;const funding=await m.getRepository(PharmacyFulfillmentFunding).save({quoteId:q.id,fulfillmentId:f.id,providerId:f.fulfillmentProviderId,grossAmountMinor:q.totalMinor,currency:q.currency,commissionBps:resolution.rateBasisPoints,commissionSource:resolution.source,commissionAmountMinor:calc.commissionAmountMinor.toString(),providerShareMinor:calc.providerShareMinor.toString(),status:free?PharmacyFundingStatus.SATISFIED_FREE:PharmacyFundingStatus.PENDING,paidAt:null});q.status=PharmacyQuoteStatus.ACCEPTED_BY_PATIENT;q.acceptedAt=new Date();await m.save(q);if(free)await m.getRepository(PharmacyDispensing).save({fulfillmentId:f.id,quoteId:q.id,fundingId:funding.id,status:PharmacyDispensingStatus.READY_TO_DISPENSE,fulfillmentMethod:PharmacyFulfillmentMethod.PICKUP,startedAt:null,readyAt:null,completedAt:null});return this.patientView(m,f.id,funding);});}
- async getPatientFulfillment(user:User,ref:string){const patient=await this.patient(user.id);const f=await this.quotes.manager.getRepository(ClinicalOrderFulfillment).findOne({where:{reference:ref,patientId:patient.id}});if(!f)this.notFound();const funding=await this.quotes.manager.getRepository(PharmacyFulfillmentFunding).findOne({where:{fulfillmentId:f.id},order:{createdAt:'DESC'}});return this.patientView(this.quotes.manager,f.id,funding);}
- async cancelMine(user:User,ref:string){const patient=await this.patient(user.id);return this.quotes.manager.transaction(async m=>{const f=await m.getRepository(ClinicalOrderFulfillment).findOne({where:{reference:ref,patientId:patient.id},lock:{mode:'pessimistic_write'}});if(!f)this.notFound();const funding=await m.getRepository(PharmacyFulfillmentFunding).findOne({where:{fulfillmentId:f.id},order:{createdAt:'DESC'},lock:{mode:'pessimistic_write'}});if(funding?.status===PharmacyFundingStatus.PAID)throw new ConflictException('Paid pharmacy fulfillment requires refund review and cannot be reassigned');await this.cancelBeforePayment(m,f,'PATIENT_CANCELLED_BEFORE_PAYMENT');return this.patientView(m,f.id,funding);});}
- async startDispensing(u:User,r:string){return this.transition(u,r,[PharmacyDispensingStatus.READY_TO_DISPENSE],PharmacyDispensingStatus.DISPENSING,'startedAt');}async readyForPickup(u:User,r:string){return this.transition(u,r,[PharmacyDispensingStatus.DISPENSING],PharmacyDispensingStatus.READY_FOR_PICKUP,'readyAt');}async complete(u:User,r:string){return this.transition(u,r,[PharmacyDispensingStatus.READY_FOR_PICKUP],PharmacyDispensingStatus.COMPLETED,'completedAt',true);}
- async cannotFulfill(u:User,r:string){const p=await this.current.resolveOperational(u);return this.quotes.manager.transaction(async m=>{const f=await this.lockFulfillment(m,r,p.id);const funding=await m.getRepository(PharmacyFulfillmentFunding).findOne({where:{fulfillmentId:f.id},order:{createdAt:'DESC'},lock:{mode:'pessimistic_write'}});if(funding?.status===PharmacyFundingStatus.PAID){funding.status=PharmacyFundingStatus.REQUIRES_REFUND_REVIEW;await m.save(funding);const d=await m.getRepository(PharmacyDispensing).findOne({where:{fulfillmentId:f.id},lock:{mode:'pessimistic_write'}});if(d){d.status=PharmacyDispensingStatus.REQUIRES_REFUND_REVIEW;await m.save(d);}return this.patientView(m,f.id,funding);}await this.cancelBeforePayment(m,f,'PHARMACY_CANNOT_FULFILL');return this.patientView(m,f.id,funding);});}
- private async transition(u:User,r:string,from:PharmacyDispensingStatus[],to:PharmacyDispensingStatus,date:'startedAt'|'readyAt'|'completedAt',payable=false){const p=await this.current.resolveOperational(u);return this.quotes.manager.transaction(async m=>{const f=await this.lockFulfillment(m,r,p.id);const d=await m.getRepository(PharmacyDispensing).findOne({where:{fulfillmentId:f.id},lock:{mode:'pessimistic_write'}});if(!d)throw new ConflictException('Satisfied pharmacy funding is required');if(d.status===to)return this.patientView(m,f.id,await m.getRepository(PharmacyFulfillmentFunding).findOneByOrFail({id:d.fundingId}));if(!from.includes(d.status))throw new ConflictException(`Dispensing cannot move from ${d.status} to ${to}`);d.status=to;d[date]=new Date();await m.save(d);if(payable){await this.earnings.markPharmacyFulfillmentPayable(m,f.reference,u.id);await this.referrals?.recordPatientFirstCareAction(f.patientId,PatientCareActionSource.PHARMACY_DISPENSING_COMPLETED,f.reference,m);}return this.patientView(m,f.id,await m.getRepository(PharmacyFulfillmentFunding).findOneByOrFail({id:d.fundingId}));});}
- private async replaceItems(m:EntityManager,q:PharmacyQuote,d:UpsertPharmacyQuoteDto){const rx=await this.prescriptionItems(m,q.fulfillmentId);if(d.items.length!==rx.length||new Set(d.items.map(i=>i.sortOrder)).size!==rx.length)throw new ConflictException('Every prescription item must be quoted exactly once');const byOrder=new Map(rx.map(i=>[i.sortOrder,i]));const rows=d.items.map(i=>{const p=byOrder.get(i.sortOrder);if(!p)throw new ConflictException('Quote item does not belong to this prescription');if(i.availability===PharmacyQuoteItemAvailability.UNAVAILABLE&&(i.quantitySupplied!==0||i.unitPriceMinor!==0))throw new ConflictException('Unavailable items cannot carry payable amounts');return m.getRepository(PharmacyQuoteItem).create({quoteId:q.id,prescriptionItemId:p.id,availability:i.availability,quotedMedicationLabel:p.medicationName,quantitySupplied:i.quantitySupplied,unitPriceMinor:String(i.unitPriceMinor),lineTotalMinor:String(BigInt(i.quantitySupplied)*BigInt(i.unitPriceMinor)),note:i.note??null,sortOrder:i.sortOrder});});await m.getRepository(PharmacyQuoteItem).delete({quoteId:q.id});await m.getRepository(PharmacyQuoteItem).save(rows);q.totalMinor=rows.reduce((n,i)=>n+BigInt(i.lineTotalMinor),0n).toString();await m.getRepository(PharmacyQuote).save(q);}
- private async prescriptionItems(m:EntityManager,fid:string){const f=await m.getRepository(ClinicalOrderFulfillment).findOneByOrFail({id:fid});const detail=await m.getRepository(ClinicalPrescriptionDetail).findOneByOrFail({clinicalOrderId:f.clinicalOrderId});return m.getRepository(ClinicalPrescriptionItem).find({where:{prescriptionDetailId:detail.id},order:{sortOrder:'ASC'}});}
- private async lockFulfillment(m:EntityManager,r:string,pid:string){const f=await m.getRepository(ClinicalOrderFulfillment).findOne({where:{reference:r,fulfillmentProviderId:pid},lock:{mode:'pessimistic_write'}});if(!f)this.notFound();return f;}private async lockQuote(m:EntityManager,r:string,pid:string){const q=await m.getRepository(PharmacyQuote).findOne({where:{reference:r,pharmacyProviderId:pid},lock:{mode:'pessimistic_write'}});if(!q)this.notFound();return q;}private requireAccepted(f:ClinicalOrderFulfillment){if(f.status!==ClinicalOrderFulfillmentStatus.ACCEPTED)throw new ConflictException('Pharmacy must accept the fulfillment before quoting');}
- private async cancelBeforePayment(m:EntityManager,f:ClinicalOrderFulfillment,reason:string){for(const q of await m.getRepository(PharmacyQuote).find({where:{fulfillmentId:f.id,status:In([PharmacyQuoteStatus.DRAFT,PharmacyQuoteStatus.SUBMITTED,PharmacyQuoteStatus.ACCEPTED_BY_PATIENT])}})){q.status=PharmacyQuoteStatus.CANCELLED;await m.save(q);}const funding=await m.getRepository(PharmacyFulfillmentFunding).findOne({where:{fulfillmentId:f.id},order:{createdAt:'DESC'}});if(funding&&funding.status!==PharmacyFundingStatus.PAID){funding.status=PharmacyFundingStatus.CANCELLED;await m.save(funding);}f.status=ClinicalOrderFulfillmentStatus.CANCELLED;f.cancelledAt=new Date();f.cancellationReason=reason;await m.save(f);}
- private async patient(uid:string){const p=await this.patients.findOne({where:{userId:uid},withDeleted:true});if(!p||p.deletedAt||p.status!==PatientStatus.ACTIVE)throw new NotFoundException('Patient profile was not found');return p;}
- private async read(m:EntityManager,id:string){const q=await m.getRepository(PharmacyQuote).findOneOrFail({where:{id},relations:{items:{prescriptionItem:true},pharmacyProvider:true,pharmacyServiceUnit:true}});return{reference:q.reference,status:q.status,totalMinor:Number(q.totalMinor),currency:q.currency,expiresAt:q.expiresAt,submittedAt:q.submittedAt,acceptedAt:q.acceptedAt,pharmacy:{providerReference:q.pharmacyProvider.providerReference,displayName:q.pharmacyProvider.displayName,serviceUnitReference:q.pharmacyServiceUnit.reference,serviceUnitName:q.pharmacyServiceUnit.name},items:q.items.sort((a,b)=>a.sortOrder-b.sortOrder).map(i=>({prescriptionItem:{medicationName:i.prescriptionItem.medicationName,strength:i.prescriptionItem.strength,dosage:i.prescriptionItem.dosage,frequency:i.prescriptionItem.frequency,route:i.prescriptionItem.route,instructions:i.prescriptionItem.instructions,sortOrder:i.prescriptionItem.sortOrder},availability:i.availability,quotedMedicationLabel:i.quotedMedicationLabel,quantitySupplied:i.quantitySupplied,unitPriceMinor:Number(i.unitPriceMinor),lineTotalMinor:Number(i.lineTotalMinor),note:i.note}))};}
- private async patientView(m:EntityManager,fid:string,funding:PharmacyFulfillmentFunding|null){const f=await m.getRepository(ClinicalOrderFulfillment).findOneOrFail({where:{id:fid},relations:{clinicalOrder:{prescription:{items:true}},fulfillmentProvider:true,fulfillmentServiceUnit:true}});const q=funding?await this.read(m,funding.quoteId):null;const d=await m.getRepository(PharmacyDispensing).findOne({where:{fulfillmentId:fid}});return{reference:f.reference,status:f.status,clinicalOrder:{reference:f.clinicalOrder.reference,type:f.clinicalOrder.type,status:f.clinicalOrder.status,prescription:f.clinicalOrder.prescription},pharmacy:{providerReference:f.fulfillmentProvider.providerReference,displayName:f.fulfillmentProvider.displayName,serviceUnitReference:f.fulfillmentServiceUnit.reference,serviceUnitName:f.fulfillmentServiceUnit.name},quote:q,funding:funding?{status:funding.status,amountMinor:Number(funding.grossAmountMinor),currency:funding.currency,satisfied:[PharmacyFundingStatus.PAID,PharmacyFundingStatus.SATISFIED_FREE].includes(funding.status)}:null,dispensing:d?{status:d.status,fulfillmentMethod:d.fulfillmentMethod,startedAt:d.startedAt,readyAt:d.readyAt,completedAt:d.completedAt}:null};}
- private notFound():never{throw new NotFoundException('Pharmacy fulfillment resource was not found');}}
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { EntityManager, In, Repository } from "typeorm";
+import { calculateCommission } from "../commissions/commission-calculator";
+import { CommissionResolutionService } from "../commissions/commission-resolution.service";
+import { ProviderEarningsService } from "../earnings/provider-earnings.service";
+import { Patient } from "../patients/entities/patient.entity";
+import { PatientStatus } from "../patients/enums/patient-status.enum";
+import { CurrentProviderService } from "../providers/current-provider.service";
+import { User } from "../users/entities/user.entity";
+import {
+  AcceptPharmacyQuoteDto,
+  UpsertPharmacyQuoteDto,
+} from "./dto/pharmacy-quote.dto";
+import { ClinicalOrderFulfillment } from "./entities/clinical-order-fulfillment.entity";
+import { ClinicalOrder } from "./entities/clinical-order.entity";
+import { ClinicalPrescriptionDetail } from "./entities/clinical-prescription-detail.entity";
+import { ClinicalPrescriptionItem } from "./entities/clinical-prescription-item.entity";
+import { PharmacyDispensing } from "./entities/pharmacy-dispensing.entity";
+import { PharmacyFulfillmentFunding } from "./entities/pharmacy-fulfillment-funding.entity";
+import { PharmacyQuoteItem } from "./entities/pharmacy-quote-item.entity";
+import { PharmacyQuote } from "./entities/pharmacy-quote.entity";
+import { ClinicalOrderFulfillmentStatus } from "./enums/clinical-order-fulfillment-status.enum";
+import { ClinicalOrderStatus } from "./enums/clinical-order-status.enum";
+import { ClinicalOrderType } from "./enums/clinical-order-type.enum";
+import {
+  PharmacyDispensingStatus,
+  PharmacyFulfillmentMethod,
+  PharmacyFundingStatus,
+  PharmacyQuoteItemAvailability,
+  PharmacyQuoteStatus,
+} from "./enums/pharmacy-quote-status.enum";
+import { generatePharmacyQuoteReference } from "./pharmacy-quote-reference";
+import { ReferralsService } from "../rewards/referrals.service";
+import { PatientCareActionSource } from "../rewards/enums/patient-care-action-source.enum";
+import { Optional } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { Provider } from "../providers/entities/provider.entity";
+import { ProviderType } from "../providers/enums/provider-type.enum";
+import {
+  ProviderPracticeAffiliation,
+  ProviderPracticeAffiliationStatus,
+} from "../providers/entities/provider-practice-affiliation.entity";
+import { PharmacyCoordinationAllocation } from "./entities/pharmacy-coordination-allocation.entity";
+import { PharmacyCoordinationAllocationStatus } from "./enums/pharmacy-coordination-allocation.enum";
+import { calculatePharmacyCoordinationFees } from "./pharmacy-coordination-calculator";
+@Injectable()
+export class PharmacyFulfillmentService {
+  constructor(
+    @InjectRepository(PharmacyQuote)
+    private readonly quotes: Repository<PharmacyQuote>,
+    @InjectRepository(Patient) private readonly patients: Repository<Patient>,
+    private readonly current: CurrentProviderService,
+    private readonly commissions: CommissionResolutionService,
+    private readonly earnings: ProviderEarningsService,
+    @Optional() private readonly referrals?: ReferralsService,
+    @Optional() private readonly config?: ConfigService,
+  ) {}
+  async myCoordinationEarnings(user: User) {
+    const provider = await this.current.resolveOperational(user);
+    const rows = await this.quotes.manager
+      .getRepository(PharmacyCoordinationAllocation)
+      .find({
+        where: [
+          { beneficiaryUserId: user.id },
+          { beneficiaryProviderId: provider.id },
+        ],
+        order: { createdAt: "DESC" },
+        take: 100,
+      });
+    const totals = new Map<
+      string,
+      {
+        total: bigint;
+        held: bigint;
+        payable: bigint;
+        settled: bigint;
+        reversed: bigint;
+      }
+    >();
+    for (const row of rows) {
+      const total = totals.get(row.currency) ?? {
+        total: 0n,
+        held: 0n,
+        payable: 0n,
+        settled: 0n,
+        reversed: 0n,
+      };
+      const amount = BigInt(row.amountMinor);
+      total.total += amount;
+      if (row.status === PharmacyCoordinationAllocationStatus.HELD)
+        total.held += amount;
+      if (row.status === PharmacyCoordinationAllocationStatus.PAYABLE)
+        total.payable += amount;
+      if (row.status === PharmacyCoordinationAllocationStatus.SETTLED)
+        total.settled += amount;
+      if (row.status === PharmacyCoordinationAllocationStatus.REVERSED)
+        total.reversed += amount;
+      totals.set(row.currency, total);
+    }
+    return {
+      totals: [...totals.entries()].map(([currency, value]) => ({
+        currency,
+        total: Number(value.total),
+        held: Number(value.held),
+        payable: Number(value.payable),
+        settled: Number(value.settled),
+        reversed: Number(value.reversed),
+      })),
+      items: rows.map((row) => ({
+        id: row.id,
+        type: row.type,
+        sourceOrderReference: row.sourceOrderReference,
+        sourceFulfillmentReference: row.sourceFulfillmentReference,
+        basisAmountMinor: Number(row.basisAmountMinor),
+        bpsSnapshot: row.bpsSnapshot,
+        amountMinor: Number(row.amountMinor),
+        currency: row.currency,
+        status: row.status,
+        payableAt: row.payableAt,
+        settledAt: row.settledAt,
+        reversedAt: row.reversedAt,
+        createdAt: row.createdAt,
+      })),
+    };
+  }
+  async createQuote(
+    user: User,
+    fulfillmentRef: string,
+    d: UpsertPharmacyQuoteDto,
+  ) {
+    const p = await this.current.resolveOperational(user);
+    return this.quotes.manager.transaction(async (m) => {
+      const f = await this.lockFulfillment(m, fulfillmentRef, p.id);
+      this.requireAccepted(f);
+      await m
+        .getRepository(PharmacyQuote)
+        .createQueryBuilder()
+        .update()
+        .set({ status: PharmacyQuoteStatus.EXPIRED })
+        .where("fulfillment_id=:id AND status=:status AND expires_at<=now()", {
+          id: f.id,
+          status: PharmacyQuoteStatus.SUBMITTED,
+        })
+        .execute();
+      const existing = await m.getRepository(PharmacyQuote).findOne({
+        where: { fulfillmentId: f.id, status: PharmacyQuoteStatus.DRAFT },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (existing)
+        throw new ConflictException("A draft pharmacy quote already exists");
+      const q = await m.getRepository(PharmacyQuote).save({
+        reference: generatePharmacyQuoteReference(),
+        fulfillmentId: f.id,
+        pharmacyProviderId: p.id,
+        pharmacyServiceUnitId: f.fulfillmentServiceUnitId,
+        status: PharmacyQuoteStatus.DRAFT,
+        totalMinor: "0",
+        fulfillmentOptionsSnapshot: this.fulfillmentOptions(d),
+        currency: d.currency,
+        expiresAt: new Date(d.expiresAt),
+        submittedAt: null,
+        acceptedAt: null,
+      });
+      await this.replaceItems(m, q, d);
+      return this.read(m, q.id);
+    });
+  }
+  async updateQuote(user: User, ref: string, d: UpsertPharmacyQuoteDto) {
+    const p = await this.current.resolveOperational(user);
+    return this.quotes.manager.transaction(async (m) => {
+      const q = await this.lockQuote(m, ref, p.id);
+      if (q.status !== PharmacyQuoteStatus.DRAFT)
+        throw new ConflictException("Submitted pharmacy quotes are immutable");
+      q.currency = d.currency;
+      q.expiresAt = new Date(d.expiresAt);
+      q.fulfillmentOptionsSnapshot = this.fulfillmentOptions(d);
+      await m.save(q);
+      await this.replaceItems(m, q, d);
+      return this.read(m, q.id);
+    });
+  }
+  async submitQuote(user: User, ref: string) {
+    const p = await this.current.resolveOperational(user);
+    return this.quotes.manager.transaction(async (m) => {
+      const q = await this.lockQuote(m, ref, p.id);
+      if (q.status === PharmacyQuoteStatus.SUBMITTED) return this.read(m, q.id);
+      if (q.status !== PharmacyQuoteStatus.DRAFT)
+        throw new ConflictException("Pharmacy quote cannot be submitted");
+      if (q.expiresAt <= new Date())
+        throw new ConflictException(
+          "Pharmacy quote expiry must be in the future",
+        );
+      const items = await m
+        .getRepository(PharmacyQuoteItem)
+        .find({ where: { quoteId: q.id } });
+      const rx = await this.prescriptionItems(m, q.fulfillmentId);
+      if (
+        items.length !== rx.length ||
+        new Set(items.map((i) => i.prescriptionItemId)).size !== rx.length
+      )
+        throw new ConflictException(
+          "Every prescription item requires an availability response",
+        );
+      q.totalMinor = items
+        .reduce((n, i) => n + BigInt(i.lineTotalMinor), 0n)
+        .toString();
+      q.status = PharmacyQuoteStatus.SUBMITTED;
+      q.submittedAt = new Date();
+      await m.save(q);
+      return this.read(m, q.id);
+    });
+  }
+  async listQuotes(user: User, fulfillmentRef: string) {
+    const p = await this.current.resolveOperational(user);
+    const f = await this.quotes.manager
+      .getRepository(ClinicalOrderFulfillment)
+      .findOne({
+        where: { reference: fulfillmentRef, fulfillmentProviderId: p.id },
+      });
+    if (!f) this.notFound();
+    return Promise.all(
+      (
+        await this.quotes.find({
+          where: { fulfillmentId: f.id },
+          order: { createdAt: "DESC" },
+        })
+      ).map((q) => this.read(this.quotes.manager, q.id)),
+    );
+  }
+  async getProviderQuote(user: User, ref: string) {
+    const p = await this.current.resolveOperational(user);
+    const q = await this.quotes.findOne({
+      where: { reference: ref, pharmacyProviderId: p.id },
+    });
+    if (!q) this.notFound();
+    return this.read(this.quotes.manager, q.id);
+  }
+  async acceptQuote(user: User, ref: string, d: AcceptPharmacyQuoteDto) {
+    const patient = await this.patient(user.id);
+    return this.quotes.manager.transaction(async (m) => {
+      const q = await m.getRepository(PharmacyQuote).findOne({
+        where: { reference: ref },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!q) this.notFound();
+      const f = await m.getRepository(ClinicalOrderFulfillment).findOne({
+        where: { id: q.fulfillmentId },
+        lock: { mode: "pessimistic_write" },
+      });
+      const order =
+        f &&
+        (await m.getRepository(ClinicalOrder).findOne({
+          where: { id: f.clinicalOrderId },
+          lock: { mode: "pessimistic_read" },
+        }));
+      if (!f || !order || f.patientId !== patient.id) this.notFound();
+      if (q.status === PharmacyQuoteStatus.ACCEPTED_BY_PATIENT) {
+        const funding = await m
+          .getRepository(PharmacyFulfillmentFunding)
+          .findOneByOrFail({ quoteId: q.id });
+        return this.patientView(m, f.id, funding);
+      }
+      if (
+        q.status !== PharmacyQuoteStatus.SUBMITTED ||
+        q.expiresAt <= new Date()
+      )
+        throw new ConflictException(
+          "Pharmacy quote is not available for acceptance",
+        );
+      if (
+        f.status !== ClinicalOrderFulfillmentStatus.ACCEPTED ||
+        order.status !== ClinicalOrderStatus.ISSUED
+      )
+        throw new ConflictException(
+          "Prescription fulfillment is not actionable",
+        );
+      if (
+        d.fulfillmentMethod === PharmacyFulfillmentMethod.HOME_DELIVERY &&
+        !d.deliveryAddress
+      )
+        throw new ConflictException(
+          "A delivery address is required for home delivery",
+        );
+      if (
+        d.fulfillmentMethod !== PharmacyFulfillmentMethod.HOME_DELIVERY &&
+        d.deliveryAddress
+      )
+        throw new ConflictException(
+          "A delivery address is only accepted for home delivery",
+        );
+      const items = await m
+        .getRepository(PharmacyQuoteItem)
+        .find({ where: { quoteId: q.id } });
+      if (
+        items.some(
+          (i) => i.availability === PharmacyQuoteItemAvailability.UNAVAILABLE,
+        ) &&
+        !d.acknowledgeUnavailableItems
+      )
+        throw new ConflictException(
+          "Unavailable prescription items must be explicitly acknowledged",
+        );
+      if (
+        await m.getRepository(PharmacyFulfillmentFunding).exists({
+          where: {
+            fulfillmentId: f.id,
+            status: In([
+              PharmacyFundingStatus.PENDING,
+              PharmacyFundingStatus.PAID,
+              PharmacyFundingStatus.SATISFIED_FREE,
+            ]),
+          },
+        })
+      )
+        throw new ConflictException(
+          "A pharmacy quote is already commercially accepted",
+        );
+      const option = q.fulfillmentOptionsSnapshot.find(
+        (item) => item.method === d.fulfillmentMethod,
+      );
+      if (!option)
+        throw new ConflictException(
+          "The pharmacy does not offer the selected fulfillment method",
+        );
+      const resolution = await this.commissions.requireForProvider(
+        f.fulfillmentProviderId,
+        m,
+      );
+      const medicineAmount = BigInt(q.totalMinor);
+      const deliveryFee = BigInt(option.feeMinor);
+      const pharmacyAmount = medicineAmount + deliveryFee;
+      const calc = calculateCommission(
+        pharmacyAmount,
+        resolution.rateBasisPoints,
+      );
+      const sourceProvider = await m
+        .getRepository(Provider)
+        .findOneByOrFail({ id: order.orderingProviderId });
+      let hospitalBeneficiaryId: string | null = null;
+      if (sourceProvider.providerType === ProviderType.HOSPITAL)
+        hospitalBeneficiaryId = sourceProvider.id;
+      else {
+        const affiliation = await m
+          .getRepository(ProviderPracticeAffiliation)
+          .findOne({
+            where: {
+              doctorProviderId: sourceProvider.id,
+              status: ProviderPracticeAffiliationStatus.APPROVED,
+              isActive: true,
+            },
+            order: { isDefault: "DESC", createdAt: "ASC" },
+          });
+        hospitalBeneficiaryId = affiliation?.hostProviderId ?? null;
+      }
+      const fees = calculatePharmacyCoordinationFees(medicineAmount, {
+        doctorBps: this.coordinationNumber(
+          "pharmacyCoordination.doctorFeeBps",
+          300,
+        ),
+        hospitalBps: this.coordinationNumber(
+          "pharmacyCoordination.hospitalFeeBps",
+          300,
+        ),
+        doctorCapMinor: BigInt(
+          this.coordinationNumber(
+            "pharmacyCoordination.doctorFeeCapMinor",
+            100000,
+          ),
+        ),
+        hospitalCapMinor: BigInt(
+          this.coordinationNumber(
+            "pharmacyCoordination.hospitalFeeCapMinor",
+            100000,
+          ),
+        ),
+        hospitalEligible: hospitalBeneficiaryId !== null,
+      });
+      const totalPayable = fees.totalPayableMinor + deliveryFee;
+      const free = totalPayable === 0n;
+      const funding = await m.getRepository(PharmacyFulfillmentFunding).save({
+        quoteId: q.id,
+        fulfillmentId: f.id,
+        providerId: f.fulfillmentProviderId,
+        medicineAmountMinor: medicineAmount.toString(),
+        deliveryFeeMinor: deliveryFee.toString(),
+        doctorCoordinationBps: this.coordinationNumber(
+          "pharmacyCoordination.doctorFeeBps",
+          300,
+        ),
+        doctorCoordinationAmountMinor: fees.doctorAmountMinor.toString(),
+        doctorBeneficiaryUserId: order.orderingUserId,
+        hospitalCoordinationBps: hospitalBeneficiaryId
+          ? this.coordinationNumber("pharmacyCoordination.hospitalFeeBps", 300)
+          : 0,
+        hospitalCoordinationAmountMinor: fees.hospitalAmountMinor.toString(),
+        hospitalBeneficiaryProviderId: hospitalBeneficiaryId,
+        fulfillmentMethod: d.fulfillmentMethod,
+        deliveryAddressSnapshot: d.deliveryAddress ?? null,
+        grossAmountMinor: totalPayable.toString(),
+        currency: q.currency,
+        commissionBps: resolution.rateBasisPoints,
+        commissionSource: resolution.source,
+        commissionAmountMinor: calc.commissionAmountMinor.toString(),
+        providerShareMinor: calc.providerShareMinor.toString(),
+        status: free
+          ? PharmacyFundingStatus.SATISFIED_FREE
+          : PharmacyFundingStatus.PENDING,
+        paidAt: null,
+      });
+      q.status = PharmacyQuoteStatus.ACCEPTED_BY_PATIENT;
+      q.acceptedAt = new Date();
+      await m.save(q);
+      if (free)
+        await m.getRepository(PharmacyDispensing).save({
+          fulfillmentId: f.id,
+          quoteId: q.id,
+          fundingId: funding.id,
+          status: PharmacyDispensingStatus.READY_TO_DISPENSE,
+          fulfillmentMethod: funding.fulfillmentMethod,
+          startedAt: null,
+          readyAt: null,
+          completedAt: null,
+        });
+      return this.patientView(m, f.id, funding);
+    });
+  }
+  async getPatientFulfillment(user: User, ref: string) {
+    const patient = await this.patient(user.id);
+    const f = await this.quotes.manager
+      .getRepository(ClinicalOrderFulfillment)
+      .findOne({ where: { reference: ref, patientId: patient.id } });
+    if (!f) this.notFound();
+    const funding = await this.quotes.manager
+      .getRepository(PharmacyFulfillmentFunding)
+      .findOne({
+        where: { fulfillmentId: f.id },
+        order: { createdAt: "DESC" },
+      });
+    return this.patientView(this.quotes.manager, f.id, funding);
+  }
+  async cancelMine(user: User, ref: string) {
+    const patient = await this.patient(user.id);
+    return this.quotes.manager.transaction(async (m) => {
+      const f = await m.getRepository(ClinicalOrderFulfillment).findOne({
+        where: { reference: ref, patientId: patient.id },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!f) this.notFound();
+      const funding = await m
+        .getRepository(PharmacyFulfillmentFunding)
+        .findOne({
+          where: { fulfillmentId: f.id },
+          order: { createdAt: "DESC" },
+          lock: { mode: "pessimistic_write" },
+        });
+      if (funding?.status === PharmacyFundingStatus.PAID)
+        throw new ConflictException(
+          "Paid pharmacy fulfillment requires refund review and cannot be reassigned",
+        );
+      await this.cancelBeforePayment(m, f, "PATIENT_CANCELLED_BEFORE_PAYMENT");
+      return this.patientView(m, f.id, funding);
+    });
+  }
+  async startDispensing(u: User, r: string) {
+    return this.transition(
+      u,
+      r,
+      [PharmacyDispensingStatus.READY_TO_DISPENSE],
+      PharmacyDispensingStatus.DISPENSING,
+      "startedAt",
+    );
+  }
+  async readyForPickup(u: User, r: string) {
+    return this.transition(
+      u,
+      r,
+      [PharmacyDispensingStatus.DISPENSING],
+      PharmacyDispensingStatus.READY_FOR_PICKUP,
+      "readyAt",
+    );
+  }
+  async complete(u: User, r: string) {
+    return this.transition(
+      u,
+      r,
+      [PharmacyDispensingStatus.READY_FOR_PICKUP],
+      PharmacyDispensingStatus.COMPLETED,
+      "completedAt",
+      true,
+    );
+  }
+  async cannotFulfill(u: User, r: string) {
+    const p = await this.current.resolveOperational(u);
+    return this.quotes.manager.transaction(async (m) => {
+      const f = await this.lockFulfillment(m, r, p.id);
+      const funding = await m
+        .getRepository(PharmacyFulfillmentFunding)
+        .findOne({
+          where: { fulfillmentId: f.id },
+          order: { createdAt: "DESC" },
+          lock: { mode: "pessimistic_write" },
+        });
+      if (funding?.status === PharmacyFundingStatus.PAID) {
+        funding.status = PharmacyFundingStatus.REQUIRES_REFUND_REVIEW;
+        await m.save(funding);
+        const d = await m.getRepository(PharmacyDispensing).findOne({
+          where: { fulfillmentId: f.id },
+          lock: { mode: "pessimistic_write" },
+        });
+        if (d) {
+          d.status = PharmacyDispensingStatus.REQUIRES_REFUND_REVIEW;
+          await m.save(d);
+        }
+        const allocations = await m
+          .getRepository(PharmacyCoordinationAllocation)
+          .find({
+            where: {
+              fundingId: funding.id,
+              status: In([
+                PharmacyCoordinationAllocationStatus.HELD,
+                PharmacyCoordinationAllocationStatus.PAYABLE,
+              ]),
+            },
+            lock: { mode: "pessimistic_write" },
+          });
+        for (const allocation of allocations) {
+          allocation.status = PharmacyCoordinationAllocationStatus.REVERSED;
+          allocation.reversedAt = new Date();
+          await m.save(allocation);
+        }
+        return this.patientView(m, f.id, funding);
+      }
+      await this.cancelBeforePayment(m, f, "PHARMACY_CANNOT_FULFILL");
+      return this.patientView(m, f.id, funding);
+    });
+  }
+  private async transition(
+    u: User,
+    r: string,
+    from: PharmacyDispensingStatus[],
+    to: PharmacyDispensingStatus,
+    date: "startedAt" | "readyAt" | "completedAt",
+    payable = false,
+  ) {
+    const p = await this.current.resolveOperational(u);
+    return this.quotes.manager.transaction(async (m) => {
+      const f = await this.lockFulfillment(m, r, p.id);
+      const d = await m.getRepository(PharmacyDispensing).findOne({
+        where: { fulfillmentId: f.id },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!d)
+        throw new ConflictException("Satisfied pharmacy funding is required");
+      if (d.status === to)
+        return this.patientView(
+          m,
+          f.id,
+          await m
+            .getRepository(PharmacyFulfillmentFunding)
+            .findOneByOrFail({ id: d.fundingId }),
+        );
+      if (!from.includes(d.status))
+        throw new ConflictException(
+          `Dispensing cannot move from ${d.status} to ${to}`,
+        );
+      d.status = to;
+      d[date] = new Date();
+      await m.save(d);
+      if (payable) {
+        await this.earnings.markPharmacyFulfillmentPayable(
+          m,
+          f.reference,
+          u.id,
+        );
+        const held = await m
+          .getRepository(PharmacyCoordinationAllocation)
+          .find({
+            where: {
+              fundingId: d.fundingId,
+              status: PharmacyCoordinationAllocationStatus.HELD,
+            },
+            lock: { mode: "pessimistic_write" },
+          });
+        for (const allocation of held) {
+          allocation.status = PharmacyCoordinationAllocationStatus.PAYABLE;
+          allocation.payableAt = new Date();
+          await m.save(allocation);
+        }
+        await this.referrals?.recordPatientFirstCareAction(
+          f.patientId,
+          PatientCareActionSource.PHARMACY_DISPENSING_COMPLETED,
+          f.reference,
+          m,
+        );
+      }
+      return this.patientView(
+        m,
+        f.id,
+        await m
+          .getRepository(PharmacyFulfillmentFunding)
+          .findOneByOrFail({ id: d.fundingId }),
+      );
+    });
+  }
+  private async replaceItems(
+    m: EntityManager,
+    q: PharmacyQuote,
+    d: UpsertPharmacyQuoteDto,
+  ) {
+    const rx = await this.prescriptionItems(m, q.fulfillmentId);
+    if (
+      d.items.length !== rx.length ||
+      new Set(d.items.map((i) => i.sortOrder)).size !== rx.length
+    )
+      throw new ConflictException(
+        "Every prescription item must be quoted exactly once",
+      );
+    const byOrder = new Map(rx.map((i) => [i.sortOrder, i]));
+    const rows = d.items.map((i) => {
+      const p = byOrder.get(i.sortOrder);
+      if (!p)
+        throw new ConflictException(
+          "Quote item does not belong to this prescription",
+        );
+      if (
+        i.availability === PharmacyQuoteItemAvailability.UNAVAILABLE &&
+        (i.quantitySupplied !== 0 || i.unitPriceMinor !== 0)
+      )
+        throw new ConflictException(
+          "Unavailable items cannot carry payable amounts",
+        );
+      return m.getRepository(PharmacyQuoteItem).create({
+        quoteId: q.id,
+        prescriptionItemId: p.id,
+        availability: i.availability,
+        quotedMedicationLabel: p.medicationName,
+        quantitySupplied: i.quantitySupplied,
+        unitPriceMinor: String(i.unitPriceMinor),
+        lineTotalMinor: String(
+          BigInt(i.quantitySupplied) * BigInt(i.unitPriceMinor),
+        ),
+        note: i.note ?? null,
+        sortOrder: i.sortOrder,
+      });
+    });
+    await m.getRepository(PharmacyQuoteItem).delete({ quoteId: q.id });
+    await m.getRepository(PharmacyQuoteItem).save(rows);
+    q.totalMinor = rows
+      .reduce((n, i) => n + BigInt(i.lineTotalMinor), 0n)
+      .toString();
+    await m.getRepository(PharmacyQuote).save(q);
+  }
+  private async prescriptionItems(m: EntityManager, fid: string) {
+    const f = await m
+      .getRepository(ClinicalOrderFulfillment)
+      .findOneByOrFail({ id: fid });
+    const detail = await m
+      .getRepository(ClinicalPrescriptionDetail)
+      .findOneByOrFail({ clinicalOrderId: f.clinicalOrderId });
+    return m.getRepository(ClinicalPrescriptionItem).find({
+      where: { prescriptionDetailId: detail.id },
+      order: { sortOrder: "ASC" },
+    });
+  }
+  private async lockFulfillment(m: EntityManager, r: string, pid: string) {
+    const f = await m.getRepository(ClinicalOrderFulfillment).findOne({
+      where: { reference: r, fulfillmentProviderId: pid },
+      lock: { mode: "pessimistic_write" },
+    });
+    if (!f) this.notFound();
+    return f;
+  }
+  private async lockQuote(m: EntityManager, r: string, pid: string) {
+    const q = await m.getRepository(PharmacyQuote).findOne({
+      where: { reference: r, pharmacyProviderId: pid },
+      lock: { mode: "pessimistic_write" },
+    });
+    if (!q) this.notFound();
+    return q;
+  }
+  private requireAccepted(f: ClinicalOrderFulfillment) {
+    if (f.status !== ClinicalOrderFulfillmentStatus.ACCEPTED)
+      throw new ConflictException(
+        "Pharmacy must accept the fulfillment before quoting",
+      );
+  }
+  private async cancelBeforePayment(
+    m: EntityManager,
+    f: ClinicalOrderFulfillment,
+    reason: string,
+  ) {
+    for (const q of await m.getRepository(PharmacyQuote).find({
+      where: {
+        fulfillmentId: f.id,
+        status: In([
+          PharmacyQuoteStatus.DRAFT,
+          PharmacyQuoteStatus.SUBMITTED,
+          PharmacyQuoteStatus.ACCEPTED_BY_PATIENT,
+        ]),
+      },
+    })) {
+      q.status = PharmacyQuoteStatus.CANCELLED;
+      await m.save(q);
+    }
+    const funding = await m.getRepository(PharmacyFulfillmentFunding).findOne({
+      where: { fulfillmentId: f.id },
+      order: { createdAt: "DESC" },
+    });
+    if (funding && funding.status !== PharmacyFundingStatus.PAID) {
+      funding.status = PharmacyFundingStatus.CANCELLED;
+      await m.save(funding);
+    }
+    f.status = ClinicalOrderFulfillmentStatus.CANCELLED;
+    f.cancelledAt = new Date();
+    f.cancellationReason = reason;
+    await m.save(f);
+  }
+  private async patient(uid: string) {
+    const p = await this.patients.findOne({
+      where: { userId: uid },
+      withDeleted: true,
+    });
+    if (!p || p.deletedAt || p.status !== PatientStatus.ACTIVE)
+      throw new NotFoundException("Patient profile was not found");
+    return p;
+  }
+  private async read(m: EntityManager, id: string) {
+    const q = await m.getRepository(PharmacyQuote).findOneOrFail({
+      where: { id },
+      relations: {
+        items: { prescriptionItem: true },
+        pharmacyProvider: true,
+        pharmacyServiceUnit: true,
+      },
+    });
+    return {
+      reference: q.reference,
+      status: q.status,
+      totalMinor: Number(q.totalMinor),
+      fulfillmentOptions: q.fulfillmentOptionsSnapshot,
+      currency: q.currency,
+      expiresAt: q.expiresAt,
+      submittedAt: q.submittedAt,
+      acceptedAt: q.acceptedAt,
+      pharmacy: {
+        providerReference: q.pharmacyProvider.providerReference,
+        displayName: q.pharmacyProvider.displayName,
+        serviceUnitReference: q.pharmacyServiceUnit.reference,
+        serviceUnitName: q.pharmacyServiceUnit.name,
+      },
+      items: q.items
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((i) => ({
+          prescriptionItem: {
+            medicationName: i.prescriptionItem.medicationName,
+            strength: i.prescriptionItem.strength,
+            dosage: i.prescriptionItem.dosage,
+            frequency: i.prescriptionItem.frequency,
+            route: i.prescriptionItem.route,
+            instructions: i.prescriptionItem.instructions,
+            sortOrder: i.prescriptionItem.sortOrder,
+          },
+          availability: i.availability,
+          quotedMedicationLabel: i.quotedMedicationLabel,
+          quantitySupplied: i.quantitySupplied,
+          unitPriceMinor: Number(i.unitPriceMinor),
+          lineTotalMinor: Number(i.lineTotalMinor),
+          note: i.note,
+        })),
+    };
+  }
+  private async patientView(
+    m: EntityManager,
+    fid: string,
+    funding: PharmacyFulfillmentFunding | null,
+  ) {
+    const f = await m.getRepository(ClinicalOrderFulfillment).findOneOrFail({
+      where: { id: fid },
+      relations: {
+        clinicalOrder: { prescription: { items: true } },
+        fulfillmentProvider: true,
+        fulfillmentServiceUnit: true,
+      },
+    });
+    const q = funding ? await this.read(m, funding.quoteId) : null;
+    const d = await m
+      .getRepository(PharmacyDispensing)
+      .findOne({ where: { fulfillmentId: fid } });
+    return {
+      reference: f.reference,
+      status: f.status,
+      clinicalOrder: {
+        reference: f.clinicalOrder.reference,
+        type: f.clinicalOrder.type,
+        status: f.clinicalOrder.status,
+        prescription: f.clinicalOrder.prescription,
+      },
+      pharmacy: {
+        providerReference: f.fulfillmentProvider.providerReference,
+        displayName: f.fulfillmentProvider.displayName,
+        serviceUnitReference: f.fulfillmentServiceUnit.reference,
+        serviceUnitName: f.fulfillmentServiceUnit.name,
+      },
+      quote: q,
+      funding: funding
+        ? {
+            status: funding.status,
+            amountMinor: Number(funding.grossAmountMinor),
+            medicineAmountMinor: Number(funding.medicineAmountMinor),
+            deliveryFeeMinor: Number(funding.deliveryFeeMinor),
+            doctorCoordinationFeeMinor: Number(
+              funding.doctorCoordinationAmountMinor,
+            ),
+            hospitalCoordinationFeeMinor: Number(
+              funding.hospitalCoordinationAmountMinor,
+            ),
+            fulfillmentMethod: funding.fulfillmentMethod,
+            currency: funding.currency,
+            satisfied: [
+              PharmacyFundingStatus.PAID,
+              PharmacyFundingStatus.SATISFIED_FREE,
+            ].includes(funding.status),
+          }
+        : null,
+      dispensing: d
+        ? {
+            status: d.status,
+            fulfillmentMethod: d.fulfillmentMethod,
+            startedAt: d.startedAt,
+            readyAt: d.readyAt,
+            completedAt: d.completedAt,
+          }
+        : null,
+    };
+  }
+  private coordinationNumber(key: string, fallback: number) {
+    const value = this.config?.get<number>(key);
+    return Number.isInteger(value) && value! >= 0 ? value! : fallback;
+  }
+  private fulfillmentOptions(d: UpsertPharmacyQuoteDto) {
+    const options = d.fulfillmentOptions?.length
+      ? d.fulfillmentOptions
+      : [{ method: PharmacyFulfillmentMethod.PICKUP, feeMinor: 0 }];
+    if (new Set(options.map((option) => option.method)).size !== options.length)
+      throw new ConflictException("Fulfillment methods must be unique");
+    return options.map((option) => ({
+      method: option.method,
+      feeMinor: option.feeMinor,
+    }));
+  }
+  private notFound(): never {
+    throw new NotFoundException("Pharmacy fulfillment resource was not found");
+  }
+}

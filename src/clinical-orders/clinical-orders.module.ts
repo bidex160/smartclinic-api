@@ -16,26 +16,43 @@ import { ClinicalDiagnosticOrderItem } from "./entities/clinical-diagnostic-orde
 import { ClinicalPrescriptionDetail } from "./entities/clinical-prescription-detail.entity";
 import { ClinicalPrescriptionItem } from "./entities/clinical-prescription-item.entity";
 import { User } from "../users/entities/user.entity";
-import { SmartClinicServiceCatalogueItem } from './entities/smartclinic-service-catalogue-item.entity';
-import { SmartClinicServiceCatalogueService } from './smartclinic-service-catalogue.service';
-import { SmartClinicServiceCatalogueController } from './smartclinic-service-catalogue.controller';
-import { ProviderCatalogueOffering } from './entities/provider-catalogue-offering.entity';
-import { ClinicalDecisionSupportRule } from './entities/clinical-decision-support-rule.entity';
-import { ClinicalDecisionSupportService } from './clinical-decision-support.service';
-import { ClinicalDecisionSupportController } from './clinical-decision-support.controller';
-import { ProviderServiceUnitsModule } from '../provider-service-units/provider-service-units.module';
-import { RewardsModule } from '../rewards/rewards.module';
-import { ClinicalOrderFulfillment } from './entities/clinical-order-fulfillment.entity';
-import { ClinicalOrderFulfillmentHistory } from './entities/clinical-order-fulfillment-history.entity';
-import { ClinicalOrderFulfillmentsService } from './clinical-order-fulfillments.service';
-import { MeOrderFulfillmentsController, ProviderOrderFulfillmentsController } from './clinical-order-fulfillments.controller';
-import { PharmacyQuote } from './entities/pharmacy-quote.entity';import { PharmacyQuoteItem } from './entities/pharmacy-quote-item.entity';import { PharmacyFulfillmentFunding } from './entities/pharmacy-fulfillment-funding.entity';import { PharmacyDispensing } from './entities/pharmacy-dispensing.entity';import { PharmacyFulfillmentService } from './pharmacy-fulfillment.service';import { MePharmacyFulfillmentController,ProviderPharmacyFulfillmentController } from './pharmacy-fulfillment.controller';import { CommissionsModule } from '../commissions/commissions.module';import { EarningsModule } from '../earnings/earnings.module';
+import { SmartClinicServiceCatalogueItem } from "./entities/smartclinic-service-catalogue-item.entity";
+import { SmartClinicServiceCatalogueService } from "./smartclinic-service-catalogue.service";
+import { SmartClinicServiceCatalogueController } from "./smartclinic-service-catalogue.controller";
+import { ProviderCatalogueOffering } from "./entities/provider-catalogue-offering.entity";
+import { ClinicalDecisionSupportRule } from "./entities/clinical-decision-support-rule.entity";
+import { ClinicalDecisionSupportService } from "./clinical-decision-support.service";
+import { ClinicalDecisionSupportController } from "./clinical-decision-support.controller";
+import { ProviderServiceUnitsModule } from "../provider-service-units/provider-service-units.module";
+import { RewardsModule } from "../rewards/rewards.module";
+import { ClinicalOrderFulfillment } from "./entities/clinical-order-fulfillment.entity";
+import { ClinicalOrderFulfillmentHistory } from "./entities/clinical-order-fulfillment-history.entity";
+import { ClinicalOrderFulfillmentsService } from "./clinical-order-fulfillments.service";
+import {
+  MeOrderFulfillmentsController,
+  ProviderOrderFulfillmentsController,
+} from "./clinical-order-fulfillments.controller";
+import { PharmacyQuote } from "./entities/pharmacy-quote.entity";
+import { PharmacyQuoteItem } from "./entities/pharmacy-quote-item.entity";
+import { PharmacyFulfillmentFunding } from "./entities/pharmacy-fulfillment-funding.entity";
+import { PharmacyDispensing } from "./entities/pharmacy-dispensing.entity";
+import { PharmacyFulfillmentService } from "./pharmacy-fulfillment.service";
+import {
+  MePharmacyFulfillmentController,
+  ProviderPharmacyFulfillmentController,
+} from "./pharmacy-fulfillment.controller";
+import { CommissionsModule } from "../commissions/commissions.module";
+import { EarningsModule } from "../earnings/earnings.module";
+import { PharmacyCoordinationAllocation } from "./entities/pharmacy-coordination-allocation.entity";
+import { ProviderPracticeAffiliation } from "../providers/entities/provider-practice-affiliation.entity";
+import { Provider } from "../providers/entities/provider.entity";
 @Module({
   imports: [
     AuthModule,
     ProvidersModule,
     ProviderServiceUnitsModule,
-    CommissionsModule,EarningsModule,
+    CommissionsModule,
+    EarningsModule,
     RewardsModule,
     TypeOrmModule.forFeature([
       ClinicalOrder,
@@ -49,12 +66,35 @@ import { PharmacyQuote } from './entities/pharmacy-quote.entity';import { Pharma
       User,
       ClinicalOrderFulfillment,
       ClinicalOrderFulfillmentHistory,
-      PharmacyQuote,PharmacyQuoteItem,PharmacyFulfillmentFunding,PharmacyDispensing,
-      SmartClinicServiceCatalogueItem,ProviderCatalogueOffering,ClinicalDecisionSupportRule,
+      PharmacyQuote,
+      PharmacyQuoteItem,
+      PharmacyFulfillmentFunding,
+      PharmacyDispensing,
+      PharmacyCoordinationAllocation,
+      ProviderPracticeAffiliation,
+      Provider,
+      SmartClinicServiceCatalogueItem,
+      ProviderCatalogueOffering,
+      ClinicalDecisionSupportRule,
     ]),
   ],
-  controllers: [ProviderClinicalOrdersController, MeClinicalOrdersController, ProviderOrderFulfillmentsController, MeOrderFulfillmentsController,ProviderPharmacyFulfillmentController,MePharmacyFulfillmentController,SmartClinicServiceCatalogueController,ClinicalDecisionSupportController],
-  providers: [ClinicalOrdersService, ClinicalOrderFulfillmentsService,PharmacyFulfillmentService,SmartClinicServiceCatalogueService,ClinicalDecisionSupportService],
+  controllers: [
+    ProviderClinicalOrdersController,
+    MeClinicalOrdersController,
+    ProviderOrderFulfillmentsController,
+    MeOrderFulfillmentsController,
+    ProviderPharmacyFulfillmentController,
+    MePharmacyFulfillmentController,
+    SmartClinicServiceCatalogueController,
+    ClinicalDecisionSupportController,
+  ],
+  providers: [
+    ClinicalOrdersService,
+    ClinicalOrderFulfillmentsService,
+    PharmacyFulfillmentService,
+    SmartClinicServiceCatalogueService,
+    ClinicalDecisionSupportService,
+  ],
   exports: [ClinicalOrdersService],
 })
 export class ClinicalOrdersModule {}

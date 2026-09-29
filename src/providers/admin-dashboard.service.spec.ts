@@ -25,6 +25,6 @@ describe('AdminDashboardService', () => {
     expect(encounters.count).toHaveBeenNthCalledWith(1, { where: { status: HealthCheckEncounterStatus.IN_PROGRESS } });
     expect(encounters.count).toHaveBeenNthCalledWith(2, { where: { status: HealthCheckEncounterStatus.COMPLETED } });
     expect(providerQb.where).toHaveBeenCalledWith('provider.deletedAt IS NULL');
-    expect(providerQb.setParameters).toHaveBeenCalledWith({ submitted: ProviderOnboardingStatus.SUBMITTED, pending: ProviderStatus.PENDING, active: ProviderStatus.ACTIVE });
+    expect(providerQb.setParameters).toHaveBeenCalledWith({ submitted: ProviderOnboardingStatus.SUBMITTED, active: ProviderStatus.ACTIVE, approved: ProviderOnboardingStatus.APPROVED });
   });
 });
