@@ -14,7 +14,7 @@ describe('ProviderOffersService', () => {
   beforeEach(() => {
     const own: any = offer();
     repository = { find: jest.fn(async ({ where }) => where.providerId === providerId ? [own] : []), findOne: jest.fn(async ({ where }) => where.id === assignmentId && where.providerId === providerId ? own : null) };
-    current = { resolve: jest.fn().mockResolvedValue({ id: providerId }) };
+    current = { resolveOperational: jest.fn().mockResolvedValue({ id: providerId }) };
     matching = { acceptOffer: jest.fn(async () => { own.status = ProviderAssignmentStatus.CONFIRMED; own.respondedAt = new Date(); own.acceptedAt = new Date(); own.confirmedAt = new Date(); }), declineOffer: jest.fn(async (_id, _provider, reason) => { own.status = ProviderAssignmentStatus.DECLINED; own.respondedAt = new Date(); own.reasonNote = reason; }) };
     subject = new ProviderOffersService(repository, current, matching);
   });
@@ -25,5 +25,5 @@ describe('ProviderOffersService', () => {
   it('declines an owned offer using resolved provider identity', async () => { const result = await subject.decline(user, assignmentId, 'Unavailable'); expect(matching.declineOffer).toHaveBeenCalledWith(assignmentId, providerId, 'Unavailable'); expect(result).toMatchObject({ status: ProviderAssignmentStatus.DECLINED, responseReason: 'Unavailable' }); });
   it('propagates predictable expired-offer conflicts without reviving the offer', async () => { matching.acceptOffer.mockRejectedValue(new ConflictException('Offer has expired')); await expect(subject.accept(user, assignmentId)).rejects.toBeInstanceOf(ConflictException); expect((await subject.get(user, assignmentId)).status).toBe(ProviderAssignmentStatus.OFFERED); });
   it('returns a minimized response without internal identities or patient details', async () => { const response = await subject.get(user, assignmentId); expect(response).not.toHaveProperty('providerId'); expect(response).not.toHaveProperty('bookingId'); expect(response).not.toHaveProperty('locationNote'); expect(response.participant).toEqual({ givenName: 'Ada', familyName: 'Okafor' }); expect(response.participant).not.toHaveProperty('dateOfBirth'); expect(response.participant).not.toHaveProperty('phone'); });
-  it('cannot list another provider even if unrelated data exists', async () => { current.resolve.mockResolvedValue({ id: otherProviderId }); await expect(subject.list(user)).resolves.toEqual([]); });
+  it('cannot list another provider even if unrelated data exists', async () => { current.resolveOperational.mockResolvedValue({ id: otherProviderId }); await expect(subject.list(user)).resolves.toEqual([]); });
 });

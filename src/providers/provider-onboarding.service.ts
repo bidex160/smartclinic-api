@@ -43,7 +43,7 @@ export class ProviderOnboardingService {
         const providerRepository = manager.getRepository(Provider);
         const user = await userRepository.save(userRepository.create({ email, emailNormalized: email, displayName: dto.displayName.trim(), status: UserStatus.ACTIVE, roles: [UserRole.PROVIDER] }));
         await manager.getRepository(UserCredential).save(manager.getRepository(UserCredential).create({ userId: user.id, passwordHash }));
-        const provider = await providerRepository.save(providerRepository.create({ userId: user.id, displayName: dto.displayName.trim(), email, phone: dto.phone.trim(), professionalReference: dto.professionalReference?.trim() || null, providerType: dto.providerType, countryCode: dto.countryCode.toUpperCase(), stateOrRegion: dto.stateOrRegion.trim(), city: dto.city.trim(), status: ProviderStatus.PENDING, onboardingStatus: ProviderOnboardingStatus.DRAFT, submittedAt: null, reviewedAt: null, reviewedByUserId: null, reviewNote: null }));
+        const provider = await providerRepository.save(providerRepository.create({ userId: user.id, displayName: dto.displayName.trim(), email, phone: dto.phone.trim(), professionalReference: dto.professionalReference?.trim() || null, providerType: dto.providerType, countryCode: dto.countryCode.toUpperCase(), stateOrRegion: dto.stateOrRegion.trim(), city: dto.city.trim(), status: ProviderStatus.ACTIVE, onboardingStatus: ProviderOnboardingStatus.SUBMITTED, submittedAt: new Date(), reviewedAt: null, reviewedByUserId: null, reviewNote: null }));
         await this.referrals.ensureReferralCode(user.id, manager);
         if (dto.referralCode) await this.referrals.captureProvider(manager, dto.referralCode, provider, dto.intendedReferralType);
         if (dto.inviteToken && this.growthInvites) await this.growthInvites.claim(manager, dto.inviteToken, provider.id);
@@ -91,8 +91,9 @@ export class ProviderOnboardingService {
       const readiness = await this.readiness.evaluateAccountReadiness(provider.id, manager);
       if (readiness.blockers.length) throw new ConflictException({ message: 'Provider onboarding configuration is incomplete', blockers: readiness.blockers, readiness });
       if (provider.onboardingStatus === ProviderOnboardingStatus.APPROVED) throw new ConflictException('Provider onboarding is already approved');
+      if (provider.onboardingStatus === ProviderOnboardingStatus.SUBMITTED) throw new ConflictException('Provider onboarding is already under final review');
       provider.onboardingStatus = ProviderOnboardingStatus.SUBMITTED;
-      provider.status = ProviderStatus.PENDING;
+      provider.status = ProviderStatus.ACTIVE;
       provider.submittedAt = new Date();
       provider.reviewedAt = null;
       provider.reviewedByUserId = null;
@@ -101,8 +102,8 @@ export class ProviderOnboardingService {
       await this.notifications?.createTransactionalNotification(manager, {
         userId: user.id,
         type: NotificationType.PROVIDER_ONBOARDING_SUBMITTED,
-        title: 'Provider onboarding submitted',
-        message: 'Your provider onboarding has been submitted for review.',
+        title: 'Provisional provider access is ready',
+        message: 'You can continue setting up your provider workspace while SmartClinic completes final verification.',
         entityType: NotificationEntityType.PROVIDER_PROFILE,
         entityReference: provider.providerReference,
         actionType: NotificationActionType.VIEW,

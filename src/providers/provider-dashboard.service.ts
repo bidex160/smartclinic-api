@@ -23,7 +23,7 @@ export class ProviderDashboardService {
   ) {}
 
   async summary(user: User, now = new Date()): Promise<ProviderDashboardSummaryDto> {
-    const provider = await this.currentProvider.resolve(user);
+    const provider = await this.currentProvider.resolveOperational(user);
     const [newOffers, appointmentCounts, inProgress, completed, referralSummary] = await Promise.all([
       this.assignments.count({ where: { providerId: provider.id, status: ProviderAssignmentStatus.OFFERED, expiresAt: MoreThan(now) } }),
       this.appointmentCounts(provider.id),

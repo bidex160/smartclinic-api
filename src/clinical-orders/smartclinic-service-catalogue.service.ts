@@ -56,7 +56,7 @@ export class SmartClinicServiceCatalogueService {
   }
 
   async providerOfferings(user: User, category?: SmartClinicCatalogueCategory) {
-    const provider=await this.currentProvider.resolveOperational(user);
+    const provider=await this.currentProvider.resolve(user);
     const b=this.repo.createQueryBuilder('item')
       .leftJoinAndMapOne('item.providerOffering',ProviderCatalogueOffering,'offering','offering.catalogueItemId=item.id AND offering.providerId=:providerId',{providerId:provider.id})
       .leftJoinAndMapOne('offering.providerServiceUnit',ProviderServiceUnit,'unit','unit.id=offering.providerServiceUnitId')
@@ -67,7 +67,7 @@ export class SmartClinicServiceCatalogueService {
   }
 
   async setProviderOffering(user:User,code:string,body:{selected:boolean;providerServiceUnitReference?:string;priceOverrideMinor?:number|null}) {
-    const provider=await this.currentProvider.resolveOperational(user);
+    const provider=await this.currentProvider.resolve(user);
     const item=await this.repo.findOne({where:{code:code.toUpperCase(),isActive:true}});
     if(!item)throw new NotFoundException('Catalogue item was not found');
     const expected=item.category===SmartClinicCatalogueCategory.LAB_TEST?ProviderServiceUnitType.LABORATORY:item.category===SmartClinicCatalogueCategory.IMAGING_STUDY?ProviderServiceUnitType.RADIOLOGY:ProviderServiceUnitType.PHARMACY;

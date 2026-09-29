@@ -11,6 +11,7 @@ import { Provider } from './entities/provider.entity';
 import { ProviderAssignmentStatus } from './enums/provider-assignment-status.enum';
 import { ProviderBookingReservationStatus } from './enums/provider-booking-reservation-status.enum';
 import { ProviderStatus } from './enums/provider-status.enum';
+import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 import { AdminBookingSchedulingService } from './admin-booking-scheduling.service';
 
 describe('AdminBookingSchedulingService', () => {
@@ -20,7 +21,7 @@ describe('AdminBookingSchedulingService', () => {
   beforeEach(() => {
     booking = { id: ids.booking, bookingReference: 'SC-2026-ABCDEF123456', status: BookingStatus.PROVIDER_ASSIGNED, healthCheckPackageId: ids.package, fulfilmentModeId: ids.mode, preferredDate: '2026-08-24', preferredTimeWindowStart: '08:00', preferredTimeWindowEnd: '09:00', preferredTimezone: 'Africa/Lagos', scheduledDate: null, scheduledTimeFrom: null, scheduledTimeTo: null, scheduledTimezone: null, providerLocationId: null, visitAddress: { countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', postalCode: null } };
     assignment = { id: ids.assignment, bookingId: ids.booking, providerId: ids.provider, status: ProviderAssignmentStatus.CONFIRMED };
-    provider = { id: ids.provider, displayName: 'SmartClinic Ikeja', status: ProviderStatus.ACTIVE, deletedAt: null };
+    provider = { id: ids.provider, displayName: 'SmartClinic Ikeja', status: ProviderStatus.ACTIVE, onboardingStatus: ProviderOnboardingStatus.APPROVED, deletedAt: null };
     mode = { id: ids.mode, code: 'HOME_VISIT', isActive: true }; reservation = { id: 'reservation-1', bookingId: ids.booking, providerId: ids.provider, providerAssignmentId: ids.assignment, status: ProviderBookingReservationStatus.CONFIRMED, scheduledDate: '2026-08-24', startTime: '08:00', endTime: '09:00', timezone: 'Africa/Lagos', providerLocationId: null };
     location = { id: ids.location, providerId: ids.provider, name: 'Ikeja Clinic', addressLine1: '1 Clinic Road', addressLine2: null, city: 'Ikeja', state: 'Lagos', countryCode: 'NG', isActive: true };
     histories = [];

@@ -20,6 +20,7 @@ import { Provider } from "./entities/provider.entity";
 import { ProviderAssignmentStatus } from "./enums/provider-assignment-status.enum";
 import { ProviderBookingReservationStatus } from "./enums/provider-booking-reservation-status.enum";
 import { ProviderStatus } from "./enums/provider-status.enum";
+import { ProviderOnboardingStatus } from "./enums/provider-onboarding-status.enum";
 import { ProviderCapabilitiesService } from "./provider-capabilities.service";
 import { BookingVisitAddress } from "../bookings/entities/booking-visit-address.entity";
 
@@ -66,7 +67,8 @@ export class AdminBookingSchedulingService {
         if (
           !provider ||
           provider.deletedAt ||
-          provider.status !== ProviderStatus.ACTIVE
+          provider.status !== ProviderStatus.ACTIVE ||
+          provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED
         )
           throw new ConflictException(
             "Confirmed provider is not operationally active",

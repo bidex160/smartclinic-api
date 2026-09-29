@@ -55,10 +55,10 @@ export class AdminDashboardService {
 
   private async providerCounts() {
     const row = await this.providers.createQueryBuilder('provider')
-      .select(`COUNT(*) FILTER (WHERE provider.onboardingStatus = :submitted AND provider.status = :pending)`, 'pendingReview')
-      .addSelect(`COUNT(*) FILTER (WHERE provider.status = :active)`, 'active')
+      .select(`COUNT(*) FILTER (WHERE provider.onboardingStatus = :submitted)`, 'pendingReview')
+      .addSelect(`COUNT(*) FILTER (WHERE provider.status = :active AND provider.onboardingStatus = :approved)`, 'active')
       .where('provider.deletedAt IS NULL')
-      .setParameters({ submitted: ProviderOnboardingStatus.SUBMITTED, pending: ProviderStatus.PENDING, active: ProviderStatus.ACTIVE })
+      .setParameters({ submitted: ProviderOnboardingStatus.SUBMITTED, active: ProviderStatus.ACTIVE, approved: ProviderOnboardingStatus.APPROVED })
       .getRawOne<{ pendingReview: string; active: string }>();
     return { pendingReview: Number(row?.pendingReview ?? 0), active: Number(row?.active ?? 0) };
   }
