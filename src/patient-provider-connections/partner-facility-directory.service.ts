@@ -29,9 +29,9 @@ export class PartnerFacilityDirectoryService {
     if (query.stateOrRegion) qb.andWhere('listing.stateOrRegion ILIKE :state', { state: query.stateOrRegion });
     if (query.city) qb.andWhere('listing.city ILIKE :city', { city: query.city });
     if (query.q) qb.andWhere('(listing.displayName ILIKE :q OR listing.city ILIKE :q OR listing.stateOrRegion ILIKE :q)', { q: `%${query.q}%` });
-    qb.orderBy('listing.stateOrRegion', 'ASC', 'NULLS LAST')
+    qb.orderBy('listing.displayName', 'ASC')
+      .addOrderBy('listing.stateOrRegion', 'ASC', 'NULLS LAST')
       .addOrderBy('listing.city', 'ASC', 'NULLS LAST')
-      .addOrderBy('listing.displayName', 'ASC')
       .skip((query.page - 1) * query.limit).take(query.limit);
     const [rows, total] = await qb.getManyAndCount();
     return { items: rows.map(row => this.view(row)), page: query.page, limit: query.limit, total, totalPages: total ? Math.ceil(total / query.limit) : 0 };

@@ -17,12 +17,12 @@ describe('PartnerFacilityDirectoryService', () => {
     subject = new PartnerFacilityDirectoryService(listings, interests, patients, { resolveOperational: jest.fn().mockResolvedValue({ id: 'provider-id' }) } as any);
   });
 
-  it('filters by type and location and returns location-first, alphabetical directory rows', async () => {
+  it('filters by type and location and returns an alphabetical directory', async () => {
     const result: any = await subject.directory(user, { page: 1, limit: 20, facilityType: PartnerFacilityType.HOSPITAL, stateOrRegion: 'Lagos' });
     const qb = listings.createQueryBuilder();
     expect(qb.andWhere).toHaveBeenCalledWith('listing.facilityType = :type', { type: 'HOSPITAL' });
     expect(qb.andWhere).toHaveBeenCalledWith('listing.stateOrRegion ILIKE :state', { state: 'Lagos' });
-    expect(qb.addOrderBy).toHaveBeenCalledWith('listing.displayName', 'ASC');
+    expect(qb.orderBy).toHaveBeenCalledWith('listing.displayName', 'ASC');
     expect(result.items[0]).toMatchObject({ readiness: 'AVAILABLE_TO_JOIN', availableForConnection: false });
   });
 

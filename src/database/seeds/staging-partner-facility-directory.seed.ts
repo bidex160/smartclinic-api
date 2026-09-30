@@ -6,7 +6,7 @@ import { PartnerFacilityListing, PartnerFacilityReadiness, PartnerFacilityType }
 export const STAGING_FACILITY_DIRECTORY_CONFIRMATION = 'SMARTCLINIC_STAGING_ONLY';
 
 export interface FacilityDirectoryImportRow {
-  sourceReference: string;
+  sourceReference?: string;
   displayName: string;
   facilityType: PartnerFacilityType;
   countryCode: string;
@@ -31,10 +31,13 @@ export async function seedStagingPartnerFacilityDirectory(connection: DataSource
   const repo = connection.getRepository(PartnerFacilityListing);
   let imported = 0;
   for (const row of rows) {
-    if (!row.sourceReference?.trim() || !row.displayName?.trim() || !Object.values(PartnerFacilityType).includes(row.facilityType) || !/^[A-Z]{2}$/.test(row.countryCode)) {
+    if (!row.displayName?.trim() || !Object.values(PartnerFacilityType).includes(row.facilityType) || !/^[A-Z]{2}$/.test(row.countryCode)) {
       throw new Error(`Invalid facility directory row: ${JSON.stringify(row)}`);
     }
-    const sourceReference = row.sourceReference.trim();
+    // Ministry list pages do not publish registry IDs. Use a stable key derived
+    // from the official display name until an NHFR code is available.
+    const sourceReference = (row.sourceReference?.trim() || `${source}-${row.displayName.trim().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '-')}`).replace(/^-|-$/g, '');
+    if (!sourceReference || sourceReference.length > 100) throw new Error(`Invalid facility source reference: ${sourceReference}`);
     const current = await repo.findOneBy({ source, sourceReference });
     const values = {
       sourceReference,
