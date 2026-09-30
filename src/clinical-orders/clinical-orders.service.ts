@@ -9,6 +9,8 @@ import { CareAppointment } from "../care-appointments/entities/care-appointment.
 import { CareAppointmentStatus } from "../care-appointments/enums/care-appointment-status.enum";
 import { ClinicalRecord } from "../clinical-records/entities/clinical-record.entity";
 import { Patient } from "../patients/entities/patient.entity";
+import { PatientRelationship } from "../patients/entities/patient-relationship.entity";
+import { PatientRelationshipRole, PatientRelationshipStatus } from "../patients/enums/patient-relationship.enum";
 import { PatientStatus } from "../patients/enums/patient-status.enum";
 import { CurrentProviderService } from "../providers/current-provider.service";
 import { User } from "../users/entities/user.entity";
@@ -340,8 +342,9 @@ export class ClinicalOrdersService {
   }
   async listMine(user: User, q: ClinicalOrderListQueryDto) {
     const patient = await this.patient(user.id);
+    const patientIds = await this.accessiblePatientIds(user.id, patient.id);
     const b = this.readBuilder()
-      .where("order.patientId=:patientId", { patientId: patient.id })
+      .where(patientIds.length > 1 ? "order.patientId IN (:...patientIds)" : "order.patientId=:patientId", patientIds.length > 1 ? { patientIds } : { patientId: patient.id })
       .andWhere(
         `(order.status='ISSUED' OR (order.status='CANCELLED' AND order.issuedAt IS NOT NULL))`,
       );
@@ -349,16 +352,28 @@ export class ClinicalOrdersService {
   }
   async getMine(user: User, reference: string) {
     const patient = await this.patient(user.id);
-    const row = await this.readBuilder()
+    const patientIds = await this.accessiblePatientIds(user.id, patient.id);
+    const b = this.readBuilder()
       .where("order.reference=:reference", { reference })
-      .andWhere("order.patientId=:patientId", { patientId: patient.id })
+      .andWhere(patientIds.length > 1 ? "order.patientId IN (:...patientIds)" : "order.patientId=:patientId", patientIds.length > 1 ? { patientIds } : { patientId: patient.id })
       .andWhere(
         `(order.status='ISSUED' OR (order.status='CANCELLED' AND order.issuedAt IS NOT NULL))`,
-      )
-      .getOne();
+      );
+    const row = await b.getOne();
     if (!row) this.notFound();
     const summaries = await this.fulfillments?.summaries([row.id]);
     return this.map(row, summaries?.get(row.id) ?? null);
+  }
+  private async accessiblePatientIds(userId: string, selfPatientId: string): Promise<string[]> {
+    const relationships = await this.orders.manager
+      .getRepository(PatientRelationship)
+      .find({
+        where: { relatedUserId: userId, role: PatientRelationshipRole.GUARDIAN, status: PatientRelationshipStatus.ACTIVE },
+        relations: { patient: true },
+      });
+    return [...new Set([selfPatientId, ...relationships
+      .filter(row => !row.endedAt && row.patient && !row.patient.deletedAt && row.patient.status === PatientStatus.ACTIVE)
+      .map(row => row.patientId)])];
   }
   async requireNoDraftOrders(manager: EntityManager, appointmentId: string) {
     if (
@@ -451,6 +466,7 @@ export class ClinicalOrdersService {
     return m
       .getRepository(ClinicalOrder)
       .createQueryBuilder("order")
+      .innerJoinAndSelect("order.patient", "patient")
       .innerJoinAndSelect("order.orderingProvider", "provider")
       .innerJoinAndSelect("order.careAppointment", "appointment")
       .innerJoinAndSelect("order.careRequest", "careRequest")
@@ -474,6 +490,7 @@ export class ClinicalOrdersService {
   private map(o: ClinicalOrder, fulfillment: unknown = undefined) {
     return {
       reference: o.reference,
+      patient: o.patient ? { patientReference: o.patient.patientReference, displayName: `${o.patient.givenName} ${o.patient.familyName}`.trim() } : undefined,
       type: o.type,
       status: o.status,
       clinicalNote: o.clinicalNote,

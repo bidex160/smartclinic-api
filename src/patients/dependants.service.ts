@@ -69,6 +69,22 @@ export class DependantsService {
     return this.project(patient, relationship);
   }
 
+  async remove(actor: User, patientReference: string): Promise<void> {
+    const patient = await this.access.resolveAccessiblePatient(actor.id, patientReference);
+    if (!patient) throw new NotFoundException('Dependant was not found');
+    await this.relationships.manager.transaction(async manager => {
+      const repository = manager.getRepository(PatientRelationship);
+      const relationship = await repository.findOne({
+        where: { relatedUserId: actor.id, patientId: patient.id, role: PatientRelationshipRole.GUARDIAN, status: PatientRelationshipStatus.ACTIVE },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!relationship || relationship.endedAt) throw new NotFoundException('Dependant was not found');
+      relationship.status = PatientRelationshipStatus.INACTIVE;
+      relationship.endedAt = new Date();
+      await repository.save(relationship);
+    });
+  }
+
   private project(patient: Patient, relationship: PatientRelationship): DependantResponseDto {
     return { patientReference: patient.patientReference, firstName: patient.givenName, lastName: patient.familyName,
       displayName: `${patient.givenName} ${patient.familyName}`.trim(), dateOfBirth: patient.dateOfBirth!,

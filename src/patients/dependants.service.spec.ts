@@ -15,12 +15,12 @@ describe('DependantsService', () => {
     const repo = (entity: any): any => {
       if (entity === User) return { findOne: jest.fn().mockResolvedValue(actor) };
       if (entity === Patient) return { create: (v: any) => v, save: jest.fn(async (v: any) => { const row = { id: `patient-${patientRows.length + 1}`, deletedAt: null, ...v }; patientRows.push(row); return row; }) };
-      if (entity === PatientRelationship) return { create: (v: any) => v, save: jest.fn(async (v: any) => { const row = { id: `relationship-${relationshipRows.length + 1}`, ...v }; relationshipRows.push(row); return row; }) };
+      if (entity === PatientRelationship) return { create: (v: any) => v, findOne: jest.fn(async ({ where }: any) => relationshipRows.find(row => Object.entries(where).every(([key, value]) => row[key] === value)) ?? null), save: jest.fn(async (v: any) => { const existing = relationshipRows.find(row => row.id === v.id); if (existing) { Object.assign(existing, v); return existing; } const row = { id: `relationship-${relationshipRows.length + 1}`, ...v }; relationshipRows.push(row); return row; }) };
       if (entity === DependantRewardProvenance) return provenanceRepository;
       return {};
     };
     manager = { getRepository: jest.fn(repo), transaction: jest.fn(async (work: any) => { const lengths = [patientRows.length, relationshipRows.length, provenanceRows.length]; try { return await work(manager); } catch (error) { patientRows.length = lengths[0]; relationshipRows.length = lengths[1]; provenanceRows.length = lengths[2]; throw error; } }) };
-    patients = { manager }; relationships = { findOne: jest.fn() };
+    patients = { manager }; relationships = { manager, findOne: jest.fn() };
     service = new DependantsService(patients, relationships, { listAccessiblePatients: jest.fn(), resolveAccessiblePatient: jest.fn() } as never);
   });
 
@@ -36,6 +36,18 @@ describe('DependantsService', () => {
   it('supports multiple dependants for one guardian', async () => {
     await service.create(actor, dto); await service.create(actor, { ...dto, firstName: 'Zainab' });
     expect(patientRows).toHaveLength(2); expect(relationshipRows.map(row => row.relatedUserId)).toEqual([actor.id, actor.id]);
+  });
+
+  it('removes guardian access while preserving the dependant Patient identity and records', async () => {
+    await service.create(actor, dto);
+    const [patient] = patientRows;
+    const [relationship] = relationshipRows;
+    (service as any).access.resolveAccessiblePatient = jest.fn().mockResolvedValue(patient);
+    await service.remove(actor, patient.patientReference);
+    expect(relationship).toMatchObject({ status: 'INACTIVE', relatedUserId: actor.id, patientId: patient.id });
+    expect(relationship.endedAt).toBeInstanceOf(Date);
+    expect(patientRows).toContain(patient);
+    expect(patient.deletedAt).toBeNull();
   });
 
   it('rolls the Patient and relationship back if provenance persistence fails', async () => {

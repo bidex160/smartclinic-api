@@ -4,6 +4,7 @@ import { AuthModule } from "../auth/auth.module";
 import { CareAppointment } from "../care-appointments/entities/care-appointment.entity";
 import { ClinicalRecord } from "../clinical-records/entities/clinical-record.entity";
 import { Patient } from "../patients/entities/patient.entity";
+import { PatientRelationship } from "../patients/entities/patient-relationship.entity";
 import { ProvidersModule } from "../providers/providers.module";
 import { ClinicalOrdersService } from "./clinical-orders.service";
 import {
@@ -63,6 +64,7 @@ import { Provider } from "../providers/entities/provider.entity";
       CareAppointment,
       ClinicalRecord,
       Patient,
+      PatientRelationship,
       User,
       ClinicalOrderFulfillment,
       ClinicalOrderFulfillmentHistory,
