@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -34,6 +35,8 @@ import { PatientProviderConnectionsService } from "./patient-provider-connection
 import { HospitalCompanionService } from "./hospital-companion.service";
 import { HospitalServicePassService } from './hospital-service-pass.service';
 import { HospitalWalletSettlementService } from './hospital-wallet-settlement.service';
+import { PartnerFacilityDirectoryService } from './partner-facility-directory.service';
+import { PartnerFacilityDirectoryQueryDto, RequestFacilityContactDto } from './dto/partner-facility-directory.dto';
 
 @ApiTags("My Patient Provider Connections")
 @ApiBearerAuth()
@@ -47,7 +50,17 @@ export class MePatientProviderConnectionsController {
     private readonly companion: HospitalCompanionService,
     private readonly walletSettlement: HospitalWalletSettlementService,
     private readonly servicePasses: HospitalServicePassService,
+    private readonly partnerDirectoryService: PartnerFacilityDirectoryService,
   ) {}
+  @Get('partner-facility-directory') partnerDirectory(
+    @Req() r: { user: User },
+    @Query() q: PartnerFacilityDirectoryQueryDto,
+  ) { return this.partnerDirectoryService.directory(r.user, q); }
+  @Post('partner-facility-directory/:id/interests') requestFacilityContact(
+    @Req() r: { user: User },
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() d: RequestFacilityContactDto,
+  ) { return this.partnerDirectoryService.requestContact(r.user, id, d.consentAcknowledged); }
   @Get("patient-provider-connection-providers") directory(
     @Req() r: { user: User },
     @Query() q: ConnectionListQueryDto,
@@ -150,6 +163,26 @@ export class MePatientProviderConnectionsController {
       r.user.id,
     );
   }
+}
+
+@ApiTags('Partner Facility Directory Admin')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.OPERATIONS)
+@Controller('admin/partner-facility-directory')
+export class AdminPartnerFacilityDirectoryController {
+  constructor(private readonly service: PartnerFacilityDirectoryService) {}
+  @Get('demand') demand() { return this.service.adminDemand(); }
+}
+
+@ApiTags('Provider Facility Demand')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.PROVIDER)
+@Controller('provider/partner-facility-directory')
+export class ProviderPartnerFacilityDirectoryController {
+  constructor(private readonly service: PartnerFacilityDirectoryService) {}
+  @Get('demand') demand(@Req() r: { user: User }) { return this.service.providerDemand(r.user); }
 }
 @ApiTags("Provider Patient Connections")
 @ApiBearerAuth()
