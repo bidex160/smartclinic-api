@@ -176,6 +176,7 @@ export class CareAppointmentsService {
             funding = await manager.getRepository(CareRequestFunding).save({
               careRequestId: care.id,
               amountMinor: "0",
+              baseAmountMinor: "0",
               currency: care.serviceCurrency,
               status: CareRequestFundingStatus.SATISFIED_FREE,
               paidAt: null,

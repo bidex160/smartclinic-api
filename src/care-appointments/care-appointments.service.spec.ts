@@ -56,7 +56,7 @@ describe('CareAppointmentsService', () => {
     expect(notifications.createTransactionalNotification).toHaveBeenCalledWith(manager, expect.objectContaining({ userId: care.userId, type: 'CARE_APPOINTMENT_SCHEDULED', email: { enabled: true } }));
   });
 
-  it('gates paid scheduling on authoritative funding and permits explicit free satisfaction', async () => { fundingRepo.findOne.mockResolvedValueOnce({ status: CareRequestFundingStatus.PENDING }); await expect(subject.schedule(user, care.reference, dto)).rejects.toBeInstanceOf(ConflictException); care.servicePriceMinor = '0'; fundingRepo.findOne.mockResolvedValueOnce(null); await expect(subject.schedule(user, care.reference, dto)).resolves.toBeDefined(); expect(fundingRepo.save).toHaveBeenCalledWith(expect.objectContaining({ status: CareRequestFundingStatus.SATISFIED_FREE, amountMinor: '0' })); care.servicePriceMinor = '2000000'; });
+  it('gates paid scheduling on authoritative funding and permits explicit free satisfaction', async () => { fundingRepo.findOne.mockResolvedValueOnce({ status: CareRequestFundingStatus.PENDING }); await expect(subject.schedule(user, care.reference, dto)).rejects.toBeInstanceOf(ConflictException); care.servicePriceMinor = '0'; fundingRepo.findOne.mockResolvedValueOnce(null); await expect(subject.schedule(user, care.reference, dto)).resolves.toBeDefined(); expect(fundingRepo.save).toHaveBeenCalledWith(expect.objectContaining({ status: CareRequestFundingStatus.SATISFIED_FREE, amountMinor: '0', baseAmountMinor: '0' })); care.servicePriceMinor = '2000000'; });
 
   it('automatically creates a Jitsi room for virtual appointments', async () => {
     care.deliveryMode = CareDeliveryMode.VIRTUAL;
