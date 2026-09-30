@@ -34,6 +34,7 @@ import {
   RecordClaimPaymentDto,
   ReconcileClaimDto,
   CreateHmoEnrollmentLeadDto,
+  UpdateHmoEnrollmentLeadDto,
 } from "./hmo.dto";
 @Injectable()
 export class HmoService {
@@ -57,6 +58,13 @@ export class HmoService {
   listHmos() {
     return this.hmos.find({ where: { active: true }, order: { name: "ASC" } });
   }
+  listPlans(hmoId?: string) {
+    return this.plans.find({
+      where: hmoId ? { hmoId, active: true } : { active: true },
+      relations: { hmo: true },
+      order: { name: "ASC" },
+    }).then(rows => rows.filter(plan => plan.hmo?.active && plan.amountMinor !== null));
+  }
   createHmo(d: CreateHmoDto) {
     return this.hmos.save(
       this.hmos.create({ ...d, code: d.code.trim().toUpperCase() }),
@@ -64,7 +72,7 @@ export class HmoService {
   }
   createPlan(d: CreateHmoPlanDto) {
     return this.plans.save(
-      this.plans.create({ ...d, code: d.code.trim().toUpperCase() }),
+      this.plans.create({ ...d, amountMinor: d.amountMinor == null ? null : String(d.amountMinor), currency: d.currency ?? 'NGN', billingPeriod: d.billingPeriod ?? 'MONTHLY', code: d.code.trim().toUpperCase() }),
     );
   }
   async addCoverage(d: UpsertCoverageDto) {
@@ -113,25 +121,44 @@ export class HmoService {
     patientReference: string,
     d: CreateHmoEnrollmentLeadDto,
   ) {
+    if (!d.consentAcknowledged) throw new BadRequestException('Consent is required before SmartClinic contacts an HMO on your behalf');
     const patient = await this.patientAccess.resolveAccessiblePatient(
       userId,
       patientReference,
     );
-    if (
-      d.preferredHmoId &&
-      !(await this.hmos.findOneBy({ id: d.preferredHmoId, active: true }))
-    )
+    let selectedPlan: HmoPlan | null = null;
+    if (d.planId) {
+      selectedPlan = await this.plans.findOne({ where: { id: d.planId, active: true }, relations: { hmo: true } });
+      if (!selectedPlan || !selectedPlan.hmo?.active || selectedPlan.amountMinor === null) throw new NotFoundException("Priced HMO plan not found");
+      if (d.preferredHmoId && d.preferredHmoId !== selectedPlan.hmoId) throw new BadRequestException('Selected plan does not belong to the preferred HMO');
+    } else if (d.preferredHmoId && !(await this.hmos.findOneBy({ id: d.preferredHmoId, active: true }))) {
       throw new NotFoundException("HMO not found");
+    }
     const existing = await this.enrollmentLeads.findOne({
       where: { userId, patientId: patient.id, status: "NEW" },
       order: { createdAt: "DESC" },
     });
-    if (existing) return existing;
+    if (existing) {
+      Object.assign(existing, {
+        preferredHmoId: selectedPlan?.hmoId ?? d.preferredHmoId ?? null,
+        planId: selectedPlan?.id ?? null,
+        quotedAmountMinor: selectedPlan?.amountMinor ?? null,
+        quotedCurrency: selectedPlan?.currency ?? null,
+        employerOrganisation: d.employerOrganisation?.trim() || existing.employerOrganisation,
+        notes: d.notes?.trim() || existing.notes,
+        consentCapturedAt: new Date(),
+      });
+      return this.enrollmentLeads.save(existing);
+    }
     return this.enrollmentLeads.save(
       this.enrollmentLeads.create({
         userId,
         patientId: patient.id,
-        preferredHmoId: d.preferredHmoId ?? null,
+        preferredHmoId: selectedPlan?.hmoId ?? d.preferredHmoId ?? null,
+        planId: selectedPlan?.id ?? null,
+        quotedAmountMinor: selectedPlan?.amountMinor ?? null,
+        quotedCurrency: selectedPlan?.currency ?? null,
+        consentCapturedAt: new Date(),
         employerOrganisation: d.employerOrganisation?.trim() || null,
         notes: d.notes?.trim() || null,
         status: "NEW",
@@ -139,10 +166,20 @@ export class HmoService {
     );
   }
   listEnrollmentLeads() {
-    return this.enrollmentLeads.find({
-      order: { createdAt: "DESC" },
-      take: 200,
-    });
+    return this.enrollmentLeads.createQueryBuilder('lead')
+      .leftJoinAndSelect('lead.patient', 'patient')
+      .leftJoinAndSelect('lead.preferredHmo', 'hmo')
+      .leftJoinAndSelect('lead.plan', 'plan')
+      .select(['lead.id', 'lead.status', 'lead.employerOrganisation', 'lead.notes', 'lead.quotedAmountMinor', 'lead.quotedCurrency', 'lead.consentCapturedAt', 'lead.createdAt', 'patient.patientReference', 'patient.givenName', 'patient.familyName', 'patient.phone', 'patient.email', 'hmo.id', 'hmo.name', 'plan.id', 'plan.name', 'plan.billingPeriod'])
+      .orderBy('lead.createdAt', 'DESC')
+      .take(200)
+      .getMany();
+  }
+  async updateEnrollmentLead(id: string, dto: UpdateHmoEnrollmentLeadDto) {
+    const lead = await this.enrollmentLeads.findOneBy({ id });
+    if (!lead) throw new NotFoundException('HMO enrollment request was not found');
+    lead.status = dto.status;
+    return this.enrollmentLeads.save(lead);
   }
   async createCase(d: CreateHmoCaseDto, user: User) {
     await this.assertHospitalAccess(user, d.hospitalProviderId);

@@ -3,6 +3,8 @@ import {
   Controller,
   Get,
   Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   Req,
@@ -29,6 +31,7 @@ import {
   ReconcileClaimDto,
   CreateHmoEnrollmentLeadDto,
   SelectEncounterHmoDto,
+  UpdateHmoEnrollmentLeadDto,
 } from "./hmo.dto";
 @ApiTags("HMO")
 @ApiBearerAuth()
@@ -47,6 +50,8 @@ export class HmoController {
   ) {
     return this.s.listMine(r.user.id, p);
   }
+  @Get('plans') @Roles(UserRole.USER, UserRole.ADMIN, UserRole.OPERATIONS, UserRole.PROVIDER)
+  plans(@Query('hmoId') hmoId?: string) { return this.s.listPlans(hmoId); }
   @Post("me/coverages/:patientReference") @Roles(UserRole.USER) addMine(
     @Req() r: { user: User },
     @Param("patientReference") p: string,
@@ -107,6 +112,8 @@ export class HmoController {
   enrollmentLeads() {
     return this.s.listEnrollmentLeads();
   }
+  @Patch('admin/enrollment-leads/:id') @Roles(UserRole.ADMIN, UserRole.OPERATIONS)
+  updateEnrollmentLead(@Param('id', new ParseUUIDPipe()) id: string, @Body() d: UpdateHmoEnrollmentLeadDto) { return this.s.updateEnrollmentLead(id, d); }
   @Post("admin/cases")
   @Roles(UserRole.ADMIN, UserRole.OPERATIONS, UserRole.PROVIDER)
   hmoCase(@Req() r: { user: User }, @Body() d: CreateHmoCaseDto) {

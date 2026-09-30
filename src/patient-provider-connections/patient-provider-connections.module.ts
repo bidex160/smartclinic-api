@@ -35,6 +35,7 @@ import {
 import { PatientProviderConnectionsService } from "./patient-provider-connections.service";
 import { PartnerFacilityListing } from './entities/partner-facility-listing.entity';
 import { PartnerFacilityInterest } from './entities/partner-facility-interest.entity';
+import { PartnerFacilityRequest } from './entities/partner-facility-request.entity';
 import { PartnerFacilityDirectoryService } from './partner-facility-directory.service';
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { PartnerFacilityDirectoryService } from './partner-facility-directory.se
       HospitalServicePass,
       PartnerFacilityListing,
       PartnerFacilityInterest,
+      PartnerFacilityRequest,
     ]),
   ],
   controllers: [

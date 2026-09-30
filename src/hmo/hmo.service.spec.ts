@@ -14,6 +14,8 @@ describe("HmoService Phase 1 gates", () => {
   };
   const plans: any = {
     findOneBy: jest.fn(),
+    findOne: jest.fn(),
+    find: jest.fn(),
     save: jest.fn(async (x: any) => x),
     create: (x: any) => x,
   };
@@ -176,6 +178,7 @@ describe("HmoService Phase 1 gates", () => {
     enrollmentLeads.findOne.mockResolvedValue(null);
     await expect(
       s.createEnrollmentLead("user-1", "SCP-1", {
+        consentAcknowledged: true,
         preferredHmoId: "h1",
         employerOrganisation: "Example Employer",
       }),
@@ -191,9 +194,25 @@ describe("HmoService Phase 1 gates", () => {
     access.resolveAccessiblePatient.mockResolvedValue({ id: "patient-1" });
     enrollmentLeads.findOne.mockResolvedValue({ id: "lead-1", status: "NEW" });
     await expect(
-      s.createEnrollmentLead("user-1", "SCP-1", {}),
+      s.createEnrollmentLead("user-1", "SCP-1", { consentAcknowledged: true }),
     ).resolves.toMatchObject({ id: "lead-1" });
-    expect(enrollmentLeads.save).not.toHaveBeenCalled();
+    expect(enrollmentLeads.save).toHaveBeenCalledWith(expect.objectContaining({ consentCapturedAt: expect.any(Date) }));
+  });
+  it("snapshots the selected priced plan on an enrollment follow-up lead", async () => {
+    access.resolveAccessiblePatient.mockResolvedValue({ id: "patient-1" });
+    enrollmentLeads.findOne.mockResolvedValue(null);
+    plans.findOne.mockResolvedValue({ id: 'plan-1', hmoId: 'h1', amountMinor: '800000', currency: 'NGN', active: true, hmo: { active: true } });
+    await expect(s.createEnrollmentLead("user-1", "SCP-1", { consentAcknowledged: true, planId: 'plan-1' })).resolves.toMatchObject({
+      preferredHmoId: 'h1', planId: 'plan-1', quotedAmountMinor: '800000', quotedCurrency: 'NGN', status: 'NEW',
+    });
+  });
+  it('only lists active priced plans from active HMOs to patients', async () => {
+    plans.find.mockResolvedValue([
+      { id: 'priced', amountMinor: '800000', active: true, hmo: { active: true } },
+      { id: 'unpriced', amountMinor: null, active: true, hmo: { active: true } },
+      { id: 'inactive-hmo', amountMinor: '800000', active: true, hmo: { active: false } },
+    ]);
+    await expect(s.listPlans()).resolves.toEqual([{ id: 'priced', amountMinor: '800000', active: true, hmo: { active: true } }]);
   });
   it("keeps payment and reconciliation as separate finance states", async () => {
     const claim: any = {
