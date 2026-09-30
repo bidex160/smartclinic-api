@@ -29,8 +29,13 @@ import { PatientProviderConnection } from "./entities/patient-provider-connectio
 import {
   MePatientProviderConnectionsController,
   ProviderPatientConnectionsController,
+  AdminPartnerFacilityDirectoryController,
+  ProviderPartnerFacilityDirectoryController,
 } from "./patient-provider-connections.controller";
 import { PatientProviderConnectionsService } from "./patient-provider-connections.service";
+import { PartnerFacilityListing } from './entities/partner-facility-listing.entity';
+import { PartnerFacilityInterest } from './entities/partner-facility-interest.entity';
+import { PartnerFacilityDirectoryService } from './partner-facility-directory.service';
 @Module({
   imports: [
     AuthModule,
@@ -54,17 +59,22 @@ import { PatientProviderConnectionsService } from "./patient-provider-connection
       DiagnosticExecution,
       PharmacyDispensing,
       HospitalServicePass,
+      PartnerFacilityListing,
+      PartnerFacilityInterest,
     ]),
   ],
   controllers: [
     MePatientProviderConnectionsController,
     ProviderPatientConnectionsController,
+    AdminPartnerFacilityDirectoryController,
+    ProviderPartnerFacilityDirectoryController,
   ],
   providers: [
     PatientProviderConnectionsService,
     HospitalCompanionService,
     HospitalServicePassService,
     HospitalWalletSettlementService,
+    PartnerFacilityDirectoryService,
   ],
   exports: [PatientProviderConnectionsService, HospitalServicePassService],
 })

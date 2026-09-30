@@ -19,7 +19,8 @@
     "seed:admin": "ts-node -r tsconfig-paths/register src/database/seeds/admin.seed.ts",
     "seed:staging:hmos": "ts-node -r tsconfig-paths/register src/database/seeds/staging-hmos.seed.ts",
     "seed:staging:healthy-families": "ts-node -r tsconfig-paths/register src/database/seeds/staging-healthy-families.seed.ts",
-    "seed:staging:acceptance-accounts": "ts-node -r tsconfig-paths/register src/database/seeds/staging-acceptance-accounts.seed.ts"
+    "seed:staging:acceptance-accounts": "ts-node -r tsconfig-paths/register src/database/seeds/staging-acceptance-accounts.seed.ts",
+    "seed:staging:facility-directory": "ts-node -r tsconfig-paths/register src/database/seeds/staging-partner-facility-directory.seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

@@ -278,6 +278,12 @@ export class PatientProviderConnectionsService {
       const row = await this.lockPatient(manager, patient.id, reference);
       if (row.status === PatientProviderConnectionStatus.CANCELLED)
         return this.map(row);
+      const paidFunding = await manager.getRepository(PatientProviderConnectionFunding).findOne({
+        where: { connectionId: row.id, status: PatientProviderConnectionFundingStatus.PAID },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (paidFunding)
+        throw new ConflictException("A paid connection request cannot be cancelled here. Contact SmartClinic support to coordinate with the hospital.");
       if (
         [
           PatientProviderConnectionStatus.CONNECTED,
