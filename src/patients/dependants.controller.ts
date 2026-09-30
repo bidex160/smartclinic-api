@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -17,4 +17,6 @@ export class MeDependantsController {
   list(@Req() request: { user: User }) { return this.dependants.list(request.user); }
   @Get(':patientReference') @ApiOperation({ summary: 'Get one authorized dependant' }) @ApiOkResponse({ type: DependantResponseDto })
   get(@Req() request: { user: User }, @Param() params: PatientReferenceParamsDto) { return this.dependants.get(request.user, params.patientReference); }
+  @Delete(':patientReference') @HttpCode(HttpStatus.NO_CONTENT) @ApiOperation({ summary: 'End this guardian relationship without deleting the Patient identity or clinical record' })
+  remove(@Req() request: { user: User }, @Param() params: PatientReferenceParamsDto) { return this.dependants.remove(request.user, params.patientReference); }
 }

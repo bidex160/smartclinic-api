@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { CareRequestsService } from './care-requests.service';
 import { CareRequest } from './entities/care-request.entity';
+import { CareRequestFunding } from './entities/care-request-funding.entity';
 import { CareRequestStatusHistory } from './entities/care-request-status-history.entity';
 import { Patient } from '../patients/entities/patient.entity';
 import { CareServiceDefinition } from '../providers/entities/care-service-definition.entity';
@@ -8,13 +9,14 @@ import { CareRequestStatus } from './enums/care-request-status.enum';
 import { CareRequestContactMethod } from './enums/care-request-contact-method.enum';
 import { CareAppointmentStatus } from '../care-appointments/enums/care-appointment-status.enum';
 import { CareDeliveryMode } from '../providers/enums/care-delivery-mode.enum';
+import { CareRequestFundingStatus } from './enums/care-request-funding-status.enum';
 
 describe('CareRequestsService', () => {
   const user: any = { id: 'user-1' }; const patient: any = { id: 'patient-1', userId: user.id, status: 'ACTIVE', deletedAt: null };
   const definition: any = { id: 'definition-1', code: 'GENERAL_CONSULTATION', name: 'General consultation', isActive: true };
   const provider: any = { id: 'provider-1', providerReference: 'SCPR-ABCDEF0123456789', displayName: 'Ada Clinic', providerType: 'CLINIC', city: 'Ikeja', stateOrRegion: 'Lagos', countryCode: 'NG', onboardingStatus: 'APPROVED' };
   const dto: any = { serviceCode: definition.code, countryCode: 'NG', stateOrRegion: 'Lagos', city: 'Ikeja', contactMethod: CareRequestContactMethod.WHATSAPP };
-  let rows: any[]; let histories: any[]; let manager: any; let requests: any; let eligibility: any; let current: any; let access: any; let notifications: any; let readQb: any; let subject: CareRequestsService;
+  let rows: any[]; let histories: any[]; let manager: any; let requests: any; let eligibility: any; let current: any; let access: any; let notifications: any; let readQb: any; let fundingRepo: any; let subject: CareRequestsService;
   beforeEach(() => {
     rows = []; histories = [];
     const patientRepo = { findOne: jest.fn().mockResolvedValue(patient) };
@@ -22,7 +24,8 @@ describe('CareRequestsService', () => {
     readQb = {}; for (const method of ['innerJoinAndSelect', 'leftJoinAndSelect', 'where', 'andWhere', 'orderBy', 'addOrderBy', 'skip', 'take']) readQb[method] = jest.fn().mockReturnValue(readQb); readQb.getManyAndCount = jest.fn().mockResolvedValue([[], 0]); readQb.getOne = jest.fn().mockResolvedValue(null);
     const requestRepo = { create: jest.fn((value) => value), save: jest.fn(async (value) => { if (!value.id) { value.id = `request-${rows.length + 1}`; value.createdAt = new Date(); value.updatedAt = new Date(); rows.push(value); } return value; }), findOne: jest.fn(), createQueryBuilder: jest.fn().mockReturnValue(readQb) };
     const historyRepo = { create: jest.fn((value) => value), save: jest.fn(async (value) => { histories.push(value); return value; }) };
-    const repositories = new Map<any, any>([[Patient, patientRepo], [CareServiceDefinition, definitionRepo], [CareRequest, requestRepo], [CareRequestStatusHistory, historyRepo]]);
+    fundingRepo = { findOne: jest.fn().mockResolvedValue(null), save: jest.fn(async (value) => value) };
+    const repositories = new Map<any, any>([[Patient, patientRepo], [CareServiceDefinition, definitionRepo], [CareRequest, requestRepo], [CareRequestStatusHistory, historyRepo], [CareRequestFunding, fundingRepo]]);
     manager = { getRepository: (entity: any) => repositories.get(entity), transaction: jest.fn(async (fn) => fn(manager)) };
     (patientRepo as any).manager = manager;
     requests = { manager };
@@ -107,6 +110,21 @@ describe('CareRequestsService', () => {
     await expect(subject.providerRespond(user, request.reference, true, null)).resolves.toMatchObject({ status: CareRequestStatus.PROVIDER_ACCEPTED });
     expect(eligibility.requireEligible).toHaveBeenCalledWith(expect.objectContaining({ providerId: provider.id, deliveryMode: CareDeliveryMode.VIRTUAL }), manager); expect(histories.at(-1)).toMatchObject({ toStatus: CareRequestStatus.PROVIDER_ACCEPTED, reasonCode: 'PROVIDER_ACCEPTED' });
     expect(notifications.createTransactionalNotification).toHaveBeenCalledWith(manager, expect.objectContaining({ userId: request.userId, type: 'CARE_REQUEST_ACCEPTED', email: { enabled: true } }));
+  });
+  it('accepts free care and writes the complete funding snapshot required by the HMO funding schema', async () => {
+    const request: any = { id: 'request-free', reference: 'SC-CARE-FREE123456', userId: user.id, status: CareRequestStatus.AWAITING_PROVIDER_RESPONSE, assignedProviderId: provider.id, careServiceDefinitionId: definition.id, deliveryMode: CareDeliveryMode.VIRTUAL, servicePriceMinor: '0', serviceCurrency: 'NGN', countryCode: null, stateOrRegion: null, city: null };
+    rows.push(request);
+    manager.getRepository(CareRequest).findOne.mockResolvedValue(request);
+
+    await expect(subject.providerRespond(user, request.reference, true, null)).resolves.toMatchObject({ status: CareRequestStatus.PROVIDER_ACCEPTED });
+
+    expect(fundingRepo.save).toHaveBeenCalledWith(expect.objectContaining({
+      careRequestId: request.id,
+      amountMinor: '0',
+      baseAmountMinor: '0',
+      currency: 'NGN',
+      status: CareRequestFundingStatus.SATISFIED_FREE,
+    }));
   });
   it('hides requests from unrelated providers', async () => { manager.getRepository(CareRequest).findOne.mockResolvedValue(null); await expect(subject.providerRespond(user, 'SC-CARE-ABCDEF123456', true, null)).rejects.toBeInstanceOf(NotFoundException); });
   it('provider queues are scoped only to the currently assigned provider', async () => { await subject.listForProvider(user, { page: 1, limit: 20 }); expect(readQb.where).toHaveBeenCalledWith('request.assignedProviderId = :providerId', { providerId: provider.id }); });
