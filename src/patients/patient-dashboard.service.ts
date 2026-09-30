@@ -1,20 +1,21 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { In, Not, Repository } from 'typeorm';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { In, Not, Repository } from "typeorm";
 
-import { Booking } from '../bookings/entities/booking.entity';
-import { BookingStatus } from '../bookings/enums/booking-status.enum';
-import { CareRequest } from '../care-requests/entities/care-request.entity';
-import { PatientProviderConnection } from '../patient-provider-connections/entities/patient-provider-connection.entity';
-import { PatientProviderConnectionStatus } from '../patient-provider-connections/enums/patient-provider-connection-status.enum';
-import { User } from '../users/entities/user.entity';
+import { Booking } from "../bookings/entities/booking.entity";
+import { BookingStatus } from "../bookings/enums/booking-status.enum";
+import { CareRequest } from "../care-requests/entities/care-request.entity";
+import { PatientProviderConnection } from "../patient-provider-connections/entities/patient-provider-connection.entity";
+import { PatientProviderConnectionStatus } from "../patient-provider-connections/enums/patient-provider-connection-status.enum";
+import { User } from "../users/entities/user.entity";
 import {
   PatientDashboardDto,
   PatientDashboardMode,
-} from './dto/patient-dashboard.dto';
-import { Patient } from './entities/patient.entity';
-import { PatientStatus } from './enums/patient-status.enum';
-import { PatientDashboardActionProjectionService } from './patient-dashboard-action-projection.service';
+} from "./dto/patient-dashboard.dto";
+import { Patient } from "./entities/patient.entity";
+import { PatientStatus } from "./enums/patient-status.enum";
+import { PatientDashboardActionProjectionService } from "./patient-dashboard-action-projection.service";
+import { PatientDailyRoutinesService } from "./patient-daily-routines.service";
 
 const MEANINGFUL_CONNECTION_STATUSES = [
   PatientProviderConnectionStatus.AWAITING_FUNDING,
@@ -23,7 +24,7 @@ const MEANINGFUL_CONNECTION_STATUSES = [
   PatientProviderConnectionStatus.CONNECTED,
 ];
 
-type ProfileField = 'givenName' | 'familyName';
+type ProfileField = "givenName" | "familyName";
 
 @Injectable()
 export class PatientDashboardService {
@@ -37,6 +38,7 @@ export class PatientDashboardService {
     @InjectRepository(Booking)
     private readonly bookings: Repository<Booking>,
     private readonly actions: PatientDashboardActionProjectionService,
+    private readonly dailyRoutines: PatientDailyRoutinesService,
   ) {}
 
   async get(user: User): Promise<PatientDashboardDto> {
@@ -52,43 +54,58 @@ export class PatientDashboardService {
       where: { userId: user.id },
       withDeleted: true,
     });
-    if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE) {
-      throw new NotFoundException('Patient profile was not found for the authenticated user');
+    if (
+      !patient ||
+      patient.deletedAt ||
+      patient.status !== PatientStatus.ACTIVE
+    ) {
+      throw new NotFoundException(
+        "Patient profile was not found for the authenticated user",
+      );
     }
 
-    const [hasProviderConnection, hasConnectedProvider, hasCareRequest, hasHealthCheckBooking] =
-      await Promise.all([
-        this.connections.exists({
-          where: {
-            patientId: patient.id,
-            status: In(MEANINGFUL_CONNECTION_STATUSES),
-          },
-        }),
-        this.connections.exists({
-          where: {
-            patientId: patient.id,
-            status: PatientProviderConnectionStatus.CONNECTED,
-          },
-        }),
-        this.careRequests.exists({ where: { patientId: patient.id } }),
-        this.bookings.exists({
-          where: {
-            participantPatientId: patient.id,
-            status: Not(BookingStatus.DRAFT),
-          },
-        }),
-      ]);
+    const [
+      hasProviderConnection,
+      hasConnectedProvider,
+      hasCareRequest,
+      hasHealthCheckBooking,
+    ] = await Promise.all([
+      this.connections.exists({
+        where: {
+          patientId: patient.id,
+          status: In(MEANINGFUL_CONNECTION_STATUSES),
+        },
+      }),
+      this.connections.exists({
+        where: {
+          patientId: patient.id,
+          status: PatientProviderConnectionStatus.CONNECTED,
+        },
+      }),
+      this.careRequests.exists({ where: { patientId: patient.id } }),
+      this.bookings.exists({
+        where: {
+          participantPatientId: patient.id,
+          status: Not(BookingStatus.DRAFT),
+        },
+      }),
+    ]);
 
     const missingProfileFields = this.missingProfileFields(patient);
     const profileComplete = missingProfileFields.length === 0;
     const hasStartedCareJourney = hasCareRequest || hasHealthCheckBooking;
-    const recommendedActionDetail = await this.actions.project(patient.id, profileComplete);
+    const [recommendedActionDetail, todayRoutines] = await Promise.all([
+      this.actions.project(patient.id, profileComplete),
+      this.dailyRoutines.today(patient.id),
+    ]);
 
     return {
       patient: {
         patientReference: patient.patientReference,
         firstName: patient.givenName,
-        displayName: [patient.givenName, patient.familyName].filter(Boolean).join(' '),
+        displayName: [patient.givenName, patient.familyName]
+          .filter(Boolean)
+          .join(" "),
       },
       setup: {
         accountCreated: true,
@@ -106,14 +123,16 @@ export class PatientDashboardService {
         hasStartedCareJourney || hasConnectedProvider
           ? PatientDashboardMode.ESTABLISHED
           : PatientDashboardMode.GETTING_STARTED,
+      todayRoutines,
     };
   }
 
-  private missingProfileFields(patient: Pick<Patient, ProfileField>): ProfileField[] {
+  private missingProfileFields(
+    patient: Pick<Patient, ProfileField>,
+  ): ProfileField[] {
     const missing: ProfileField[] = [];
-    if (!patient.givenName.trim()) missing.push('givenName');
-    if (!patient.familyName.trim()) missing.push('familyName');
+    if (!patient.givenName.trim()) missing.push("givenName");
+    if (!patient.familyName.trim()) missing.push("familyName");
     return missing;
   }
-
 }

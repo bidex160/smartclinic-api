@@ -12,7 +12,7 @@ import { UserRole } from '../src/users/enums/user-role.enum';
 describe('Registered patient payment boundary (e2e)', () => {
   let app: INestApplication;
   const reference = 'SC-2026-ABCDEF123456';
-  const bookings = { requireSelfBooking: jest.fn() };
+  const bookings = { requireOwnedBooking: jest.fn() };
   const payments = {
     initializeFunding: jest.fn().mockResolvedValue({ bookingReference: reference, fundingStatus: 'PENDING', checkoutOption: 'PAY_NOW', amount: '12500.00', currency: 'NGN' }),
     initiatePatientPayment: jest.fn().mockResolvedValue({ bookingReference: reference, fundingStatus: 'PENDING', checkoutOption: 'PAY_NOW', attemptStatus: 'AWAITING_CUSTOMER_ACTION', amount: '12500.00', currency: 'NGN', paymentReference: 'SC-PAY-safe', checkoutUrl: 'https://checkout.test/safe', accessCode: 'access' }),
@@ -24,7 +24,7 @@ describe('Registered patient payment boundary (e2e)', () => {
   };
 
   beforeAll(async () => {
-    bookings.requireSelfBooking.mockImplementation((_user: unknown, requested: string) => {
+    bookings.requireOwnedBooking.mockImplementation((_user: unknown, requested: string) => {
       if (requested !== reference) throw new NotFoundException();
       return Promise.resolve({ bookingReference: requested });
     });
@@ -56,7 +56,7 @@ describe('Registered patient payment boundary (e2e)', () => {
       expect(response.body).toMatchObject({ bookingReference: reference, amount: '12500.00', currency: 'NGN', accessCode: 'access' });
       expect(response.body).not.toHaveProperty('attemptId');
     });
-    expect(bookings.requireSelfBooking).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-a' }), reference);
+    expect(bookings.requireOwnedBooking).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-a' }), reference);
     expect(payments.initializeFunding).toHaveBeenCalledWith(reference, 'user-a', 'PAY_NOW');
   });
 
