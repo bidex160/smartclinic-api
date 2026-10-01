@@ -21,6 +21,8 @@ import { PUSH_PROVIDER } from './push/push-provider';
 import { FirebasePushProvider } from './push/firebase-push.provider';
 import { UnavailablePushProvider } from './push/unavailable-push.provider';
 import { PushNotificationDispatcherService } from './push/push-notification-dispatcher.service';
+import { RoutingPushProvider, WebPushProvider } from './push/web-push.provider';
+import { WebPushController } from './push/web-push.controller';
 
 @Module({
   imports: [
@@ -29,7 +31,7 @@ import { PushNotificationDispatcherService } from './push/push-notification-disp
     AuthModule,
     TypeOrmModule.forFeature([Notification, NotificationOutbox, NotificationPushOutbox, UserPushDevice, User, Provider]),
   ],
-  controllers: [NotificationsController, PushDevicesController],
+  controllers: [NotificationsController, PushDevicesController, WebPushController],
   providers: [
     NotificationsService,
     NotificationDispatcherService,
@@ -37,11 +39,13 @@ import { PushNotificationDispatcherService } from './push/push-notification-disp
     PushDevicesService,
     FirebasePushProvider,
     UnavailablePushProvider,
+    WebPushProvider,
     PushNotificationDispatcherService,
     {
       provide: PUSH_PROVIDER,
-      inject: [appConfig.KEY, FirebasePushProvider, UnavailablePushProvider],
-      useFactory: (config: any, firebase: FirebasePushProvider, unavailable: UnavailablePushProvider) => config.notifications.push.provider === 'firebase' ? firebase : unavailable,
+      inject: [appConfig.KEY, FirebasePushProvider, UnavailablePushProvider, WebPushProvider],
+      useFactory: (config: any, firebase: FirebasePushProvider, unavailable: UnavailablePushProvider, web: WebPushProvider) =>
+        new RoutingPushProvider(config.notifications.push.provider === 'firebase' ? firebase : unavailable, web),
     },
   ],
   exports: [NotificationsService, NotificationDispatcherService, NotificationRealtimeService, PushDevicesService],

@@ -121,6 +121,9 @@ class EnvironmentVariables {
   @IsOptional() @IsString() FIREBASE_CLIENT_EMAIL?: string;
   @IsOptional() @IsString() FIREBASE_PRIVATE_KEY?: string;
   @Type(() => Number) @IsInt() @Min(1) NOTIFICATION_PUSH_MAX_ATTEMPTS = 5;
+  @IsOptional() @IsString() WEB_PUSH_VAPID_PUBLIC_KEY?: string;
+  @IsOptional() @IsString() WEB_PUSH_VAPID_PRIVATE_KEY?: string;
+  @IsOptional() @IsString() WEB_PUSH_VAPID_SUBJECT?: string;
 
   @IsOptional() @IsIn(["true", "false"]) WHATSAPP_ENABLED?: string;
   @IsOptional() @IsString() WHATSAPP_META_ACCESS_TOKEN?: string;
@@ -303,6 +306,15 @@ export function validateEnvironment(
   )
     throw new Error(
       "Invalid environment configuration: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY are required when PUSH_PROVIDER=firebase",
+    );
+  const webPushKeys = [
+    validatedConfig.WEB_PUSH_VAPID_PUBLIC_KEY,
+    validatedConfig.WEB_PUSH_VAPID_PRIVATE_KEY,
+    validatedConfig.WEB_PUSH_VAPID_SUBJECT,
+  ];
+  if (webPushKeys.some(Boolean) && !webPushKeys.every(Boolean))
+    throw new Error(
+      "Invalid environment configuration: WEB_PUSH_VAPID_PUBLIC_KEY, WEB_PUSH_VAPID_PRIVATE_KEY, and WEB_PUSH_VAPID_SUBJECT must be set together",
     );
   if (
     validatedConfig.PAYOUT_ACCOUNT_ENCRYPTION_KEY &&

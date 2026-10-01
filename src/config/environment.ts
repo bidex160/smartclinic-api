@@ -52,6 +52,11 @@ export interface AppConfiguration {
       firebaseClientEmail?: string;
       firebasePrivateKey?: string;
       maxAttempts: number;
+      webPush: {
+        publicKey?: string;
+        privateKey?: string;
+        subject?: string;
+      };
     };
   };
   whatsapp: {
@@ -237,6 +242,11 @@ export function createAppConfiguration(
         firebaseClientEmail: environment.FIREBASE_CLIENT_EMAIL,
         firebasePrivateKey: environment.FIREBASE_PRIVATE_KEY,
         maxAttempts: getNumber(environment.NOTIFICATION_PUSH_MAX_ATTEMPTS, 5),
+        webPush: {
+          publicKey: environment.WEB_PUSH_VAPID_PUBLIC_KEY,
+          privateKey: environment.WEB_PUSH_VAPID_PRIVATE_KEY,
+          subject: environment.WEB_PUSH_VAPID_SUBJECT,
+        },
       },
     },
     whatsapp: {
