@@ -21,6 +21,9 @@ import { BookingStatusHistory } from "../bookings/entities/booking-status-histor
 import { AdminProviderMatchingController } from "./admin-provider-matching.controller";
 import { ProviderMatchingService } from "./provider-matching.service";
 import { CurrentProviderService } from "./current-provider.service";
+import { ProviderMember } from "./entities/provider-member.entity";
+import { ProviderTeamService } from "./provider-team.service";
+import { ProviderTeamController, PublicTeamInvitationsController, TeamInvitationsController } from "./provider-team.controller";
 import { ProviderOffersController } from "./provider-offers.controller";
 import { ProviderOffersService } from "./provider-offers.service";
 import { AdminProviderAssignmentsService } from "./admin-provider-assignments.service";
@@ -86,6 +89,7 @@ import { InstitutionalVirtualCareController } from './institutional-virtual-care
     RewardsModule,
     TypeOrmModule.forFeature([
       Provider,
+      ProviderMember,
       ProviderAssignment,
       ProviderAssignmentHistory,
       ProviderService,
@@ -122,6 +126,9 @@ import { InstitutionalVirtualCareController } from './institutional-virtual-care
     AdminProvidersController,
     AdminProviderInvitationsController,
     PublicProviderInvitationsController,
+    ProviderTeamController,
+    PublicTeamInvitationsController,
+    TeamInvitationsController,
     PublicProviderRegistrationController,
     ProviderOnboardingController,
     ProviderSelfServiceConfigurationController,
@@ -146,6 +153,7 @@ import { InstitutionalVirtualCareController } from './institutional-virtual-care
     ProviderMatchingService,
     AdminBookingSchedulingService,
     CurrentProviderService,
+    ProviderTeamService,
     ProviderConfigurationContextService,
     ProviderOnboardingReadinessService,
     ProviderSelfServiceConfigurationService,

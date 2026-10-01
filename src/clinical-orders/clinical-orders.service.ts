@@ -23,7 +23,7 @@ import { Patient } from "../patients/entities/patient.entity";
 import { PatientRelationship } from "../patients/entities/patient-relationship.entity";
 import { PatientRelationshipRole, PatientRelationshipStatus } from "../patients/enums/patient-relationship.enum";
 import { PatientStatus } from "../patients/enums/patient-status.enum";
-import { CurrentProviderService } from "../providers/current-provider.service";
+import { canPrescribe, CurrentProviderService } from "../providers/current-provider.service";
 import { User } from "../users/entities/user.entity";
 import { generateClinicalOrderReference } from "./clinical-order-reference";
 import {
@@ -395,8 +395,7 @@ export class ClinicalOrdersService {
    * request. Returns only a first name and initial, never health details.
    */
   async lookupDirectPatient(user: User, patientReference: string) {
-    const provider = await this.currentProvider.resolveOperational(user);
-    this.requireDirectSender(provider);
+    const provider = await this.directSender(user);
     const patient = await this.directPatient(this.orders.manager, patientReference);
     return { patientReference: patient.patientReference, displayName: shortName(patient) };
   }
@@ -407,8 +406,7 @@ export class ClinicalOrdersService {
    * pharmacy or lab, or declines it.
    */
   async createDirect(user: User, dto: CreateDirectClinicalOrderDto) {
-    const provider = await this.currentProvider.resolveOperational(user);
-    this.requireDirectSender(provider);
+    const provider = await this.directSender(user);
     const isPrescription = dto.type === ClinicalOrderType.PRESCRIPTION;
     if (isPrescription ? !dto.prescriptionItems?.length : !dto.diagnosticItems?.length)
       throw new ConflictException(isPrescription ? "Add at least one medicine" : "Add at least one test");
@@ -535,6 +533,14 @@ export class ClinicalOrdersService {
       }
       return this.mapped(m, order.id);
     });
+  }
+
+  /** The facility, when this person may send requests: its owner or one of its doctors. */
+  private async directSender(user: User): Promise<Provider> {
+    const actor = await this.currentProvider.resolveOperationalActor(user);
+    if (!canPrescribe(actor)) throw new ForbiddenException("Only doctors can send prescriptions and test requests");
+    this.requireDirectSender(actor.provider);
+    return actor.provider;
   }
 
   private requireDirectSender(provider: Provider) {

@@ -30,3 +30,18 @@ describe('ProviderConfigurationContextService', () => {
     await expect(service.resolve(user)).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
+
+describe('ProviderConfigurationContextService staff members', () => {
+  const staff: any = { id: 'staff-1', status: UserStatus.ACTIVE, roles: [UserRole.USER, UserRole.PROVIDER], deletedAt: null };
+  const provider = { id: 'provider-1', status: ProviderStatus.ACTIVE, deletedAt: null };
+  const service = (role: string) => new ProviderConfigurationContextService({ findOne: jest.fn().mockResolvedValue(null) } as never, { findOne: jest.fn().mockResolvedValue({ role, provider }) } as never);
+
+  it('lets every staff member read the facility setup', async () => {
+    await expect(service('PHARMACIST').resolve(staff)).resolves.toBe(provider);
+  });
+
+  it('lets only team admins change it', async () => {
+    await expect(service('ADMIN').resolve(staff, true)).resolves.toBe(provider);
+    await expect(service('DOCTOR').resolve(staff, true)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
