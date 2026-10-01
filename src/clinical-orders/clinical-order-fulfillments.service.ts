@@ -2,6 +2,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { EntityManager, In, Repository } from "typeorm";
@@ -31,6 +32,12 @@ import { ClinicalOrderPatientResponse } from "./enums/clinical-order-origin.enum
 import { ClinicalOrderType } from "./enums/clinical-order-type.enum";
 import { PharmacyFulfillmentFunding } from "./entities/pharmacy-fulfillment-funding.entity";
 import { PharmacyDispensing } from "./entities/pharmacy-dispensing.entity";
+import { PharmacyQuote } from "./entities/pharmacy-quote.entity";
+import { DiagnosticQuote, DiagnosticQuoteStatus } from "./entities/diagnostic-quote.entity";
+import { PharmacyQuoteStatus } from "./enums/pharmacy-quote-status.enum";
+import { NotificationsService } from "../notifications/notifications.service";
+import { NotificationType } from "../notifications/enums/notification-type.enum";
+import { NotificationEntityType } from "../notifications/enums/notification-entity-type.enum";
 import {
   PharmacyDispensingStatus,
   PharmacyFundingStatus,
@@ -48,7 +55,98 @@ export class ClinicalOrderFulfillmentsService {
     private readonly fulfillments: Repository<ClinicalOrderFulfillment>,
     @InjectRepository(Patient) private readonly patients: Repository<Patient>,
     private readonly currentProvider: CurrentProviderService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
+
+  /**
+   * A lab or pharmacy passes a request it was chosen for to another one on
+   * SmartClinic (for a test it doesn't run, or a medicine it doesn't stock).
+   * The patient confirms the new place before it can accept; the referrer can
+   * follow it to results. Not allowed once the patient has accepted a price.
+   */
+  async referOnward(user: User, reference: string, unitReference: string, note: string | null) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    return this.fulfillments.manager.transaction(async (m) => {
+      const row = await m.getRepository(ClinicalOrderFulfillment).findOne({
+        where: { reference, fulfillmentProviderId: provider.id },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!row) this.notFound();
+      if (row.status !== ClinicalOrderFulfillmentStatus.SELECTED && row.status !== ClinicalOrderFulfillmentStatus.ACCEPTED)
+        throw new ConflictException("Only requests a patient chose you for can be referred on");
+      const order = await m.getRepository(ClinicalOrder).findOne({ where: { id: row.clinicalOrderId }, lock: { mode: "pessimistic_write" } });
+      if (!order) this.notFound();
+      this.requireFulfillable(order);
+      const pricedAndAccepted =
+        (await m.getRepository(PharmacyQuote).exists({ where: { fulfillmentId: row.id, status: PharmacyQuoteStatus.ACCEPTED_BY_PATIENT } })) ||
+        (await m.getRepository(DiagnosticQuote).exists({ where: { fulfillmentId: row.id, status: DiagnosticQuoteStatus.ACCEPTED_BY_PATIENT } }));
+      if (pricedAndAccepted)
+        throw new ConflictException("The patient has already accepted your price. Use “can’t fulfil” so their payment can be reviewed first.");
+      const unit = await this.eligibleUnit(m, unitReference, order.type);
+      if (unit.providerId === provider.id) throw new ConflictException("Choose a different facility to refer to");
+      const cleanNote = note?.trim() || null;
+      // Prices this provider sent but the patient never accepted no longer apply.
+      await m.getRepository(PharmacyQuote).update({ fulfillmentId: row.id, status: In([PharmacyQuoteStatus.DRAFT, PharmacyQuoteStatus.SUBMITTED]) }, { status: PharmacyQuoteStatus.CANCELLED });
+      await m.getRepository(DiagnosticQuote).update({ fulfillmentId: row.id, status: In([DiagnosticQuoteStatus.DRAFT, DiagnosticQuoteStatus.SUBMITTED]) }, { status: DiagnosticQuoteStatus.CANCELLED });
+      await this.cancelRow(m, row, user.id, "REFERRED_ONWARD", cleanNote ?? `Referred to ${unit.provider.displayName}`);
+      const next = await m.getRepository(ClinicalOrderFulfillment).save({
+        reference: generateClinicalOrderFulfillmentReference(),
+        clinicalOrderId: order.id,
+        patientId: order.patientId,
+        fulfillmentProviderId: unit.providerId,
+        fulfillmentServiceUnitId: unit.id,
+        recommendedServiceUnitId: unit.id,
+        recommendedByProviderId: provider.id,
+        referredFromFulfillmentId: row.id,
+        referralNote: cleanNote,
+        selectedByUserId: null,
+        status: ClinicalOrderFulfillmentStatus.PROPOSED,
+        acceptedAt: null,
+        cancelledAt: null,
+        cancellationReason: null,
+      });
+      await this.history(m, next.id, null, next.status, user.id, "REFERRED_FROM_PROVIDER", cleanNote);
+      const patient = await m.getRepository(Patient).findOne({ where: { id: order.patientId } });
+      if (patient?.userId) {
+        await this.notifications?.createTransactionalNotification(m, {
+          userId: patient.userId,
+          type: NotificationType.CLINICAL_ORDER_REFERRED,
+          title: `${provider.displayName} referred your request to ${unit.provider.displayName}`.slice(0, 200),
+          message: "Confirm the new place to continue, or choose another.",
+          entityType: NotificationEntityType.CLINICAL_ORDER,
+          entityReference: order.reference,
+          idempotencyKey: `clinical-order-fulfillment:${next.reference}:referred`,
+          email: { enabled: true },
+        });
+      }
+      return this.mapped(m, next.id);
+    });
+  }
+
+  /** Requests this provider passed on, with where each one is now. Results show once the new place has accepted. */
+  async listReferredOut(user: User, q: FulfillmentListQueryDto) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    const b = this.readBuilder()
+      .where("fulfillment.recommendedByProviderId=:providerId", { providerId: provider.id })
+      .andWhere("fulfillment.referredFromFulfillmentId IS NOT NULL");
+    if (q.orderType) b.andWhere("order.type=:orderType", { orderType: q.orderType });
+    const page = await this.page(b, q);
+    return {
+      ...page,
+      items: page.items.map((item) =>
+        item.status === ClinicalOrderFulfillmentStatus.ACCEPTED
+          ? item
+          : {
+              ...item,
+              clinicalOrder: {
+                ...item.clinicalOrder,
+                diagnosticItems: item.clinicalOrder.diagnosticItems.map((i: any) => ({ ...i, resultText: null, resultValue: null, resultUnit: null, referenceRange: null, resultFlag: null, resultedAt: null })),
+              },
+            },
+      ),
+    };
+  }
+
   async recommend(user: User, orderReference: string, unitReference: string) {
     const provider = await this.currentProvider.resolveOperational(user);
     return this.fulfillments.manager.transaction(async (m) => {
@@ -521,6 +619,7 @@ export class ClinicalOrderFulfillmentsService {
         "fulfillment.recommendedServiceUnit",
         "recommendedUnit",
       )
+      .leftJoinAndSelect("fulfillment.recommendedByProvider", "recommendedBy")
       .leftJoinAndSelect("order.prescription", "prescription")
       .leftJoinAndSelect("prescription.items", "items")
       .leftJoinAndMapMany("order.diagnosticItems",ClinicalDiagnosticOrderItem,"diagnosticItem","diagnosticItem.clinicalOrderId=order.id");
@@ -580,6 +679,14 @@ export class ClinicalOrderFulfillmentsService {
         ? {
             reference: f.recommendedServiceUnit.reference,
             name: f.recommendedServiceUnit.name,
+          }
+        : null,
+      referral: f.referredFromFulfillmentId
+        ? {
+            referredBy: f.recommendedByProvider
+              ? { providerReference: f.recommendedByProvider.providerReference, displayName: f.recommendedByProvider.displayName }
+              : null,
+            note: f.referralNote ?? null,
           }
         : null,
       acceptedAt: f.acceptedAt,

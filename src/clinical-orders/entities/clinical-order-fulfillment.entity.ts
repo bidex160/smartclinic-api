@@ -25,6 +25,9 @@ export class ClinicalOrderFulfillment {
   @ManyToOne(() => ProviderServiceUnit, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'recommended_service_unit_id' }) recommendedServiceUnit!: ProviderServiceUnit | null;
   @Column({ name: 'recommended_by_provider_id', type: 'uuid', nullable: true }) recommendedByProviderId!: string | null;
   @ManyToOne(() => Provider, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'recommended_by_provider_id' }) recommendedByProvider!: Provider | null;
+  /** Set when another lab or pharmacy passed this request on; recommendedByProviderId is the referrer. */
+  @Column({ name: 'referred_from_fulfillment_id', type: 'uuid', nullable: true }) referredFromFulfillmentId!: string | null;
+  @Column({ name: 'referral_note', type: 'varchar', length: 500, nullable: true }) referralNote!: string | null;
   @Column({ name: 'selected_by_user_id', type: 'uuid', nullable: true }) selectedByUserId!: string | null;
   @ManyToOne(() => User, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'selected_by_user_id' }) selectedByUser!: User | null;
   @Column({ type: 'enum', enum: ClinicalOrderFulfillmentStatus, enumName: 'clinical_order_fulfillment_status_enum' }) status!: ClinicalOrderFulfillmentStatus;

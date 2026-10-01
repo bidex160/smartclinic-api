@@ -191,11 +191,11 @@ export class CreateDirectClinicalOrderDto {
   @Matches(SMARTCLINIC_PATIENT_ID_PATTERN, { message: "Enter a SmartClinic ID like SCP-ABCD-1234" })
   patientReference!: string;
 
-  @ApiProperty({ enum: [ClinicalOrderType.PRESCRIPTION, ClinicalOrderType.LABORATORY, ClinicalOrderType.IMAGING] })
-  @IsIn([ClinicalOrderType.PRESCRIPTION, ClinicalOrderType.LABORATORY, ClinicalOrderType.IMAGING])
-  type!: ClinicalOrderType.PRESCRIPTION | ClinicalOrderType.LABORATORY | ClinicalOrderType.IMAGING;
+  @ApiProperty({ enum: [ClinicalOrderType.PRESCRIPTION, ClinicalOrderType.LABORATORY, ClinicalOrderType.IMAGING, ClinicalOrderType.REFERRAL] })
+  @IsIn([ClinicalOrderType.PRESCRIPTION, ClinicalOrderType.LABORATORY, ClinicalOrderType.IMAGING, ClinicalOrderType.REFERRAL])
+  type!: ClinicalOrderType.PRESCRIPTION | ClinicalOrderType.LABORATORY | ClinicalOrderType.IMAGING | ClinicalOrderType.REFERRAL;
 
-  @ApiPropertyOptional({ description: "Clinical context for the pharmacy or lab" })
+  @ApiPropertyOptional({ description: "Clinical context for the pharmacy or lab; for a referral, the reason and the specialty needed" })
   @IsOptional()
   @IsString()
   @MaxLength(4000)
@@ -211,7 +211,7 @@ export class CreateDirectClinicalOrderDto {
   prescriptionItems?: PrescriptionItemDto[];
 
   @ApiPropertyOptional({ type: [DiagnosticOrderItemDto], description: "Required for laboratory and imaging requests" })
-  @ValidateIf((dto: CreateDirectClinicalOrderDto) => dto.type !== ClinicalOrderType.PRESCRIPTION)
+  @ValidateIf((dto: CreateDirectClinicalOrderDto) => dto.type === ClinicalOrderType.LABORATORY || dto.type === ClinicalOrderType.IMAGING)
   @IsArray()
   @ArrayNotEmpty()
   @ArrayMaxSize(30)

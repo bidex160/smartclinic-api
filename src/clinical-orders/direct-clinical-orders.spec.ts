@@ -152,6 +152,15 @@ describe('ClinicalOrdersService direct requests', () => {
     }
   });
 
+  it('sends a specialist referral with the reason and no items', async () => {
+    await expect(service.createDirect(doctor, { patientReference: 'SCP-ABCD-1234', type: ClinicalOrderType.REFERRAL, clinicalNote: '  ' })).rejects.toBeInstanceOf(ConflictException);
+    const result: any = await service.createDirect(doctor, { patientReference: 'SCP-ABCD-1234', type: ClinicalOrderType.REFERRAL, clinicalNote: 'Cardiology review for new murmur' });
+    expect(saved.order).toMatchObject({ type: 'REFERRAL', origin: 'DIRECT', clinicalNote: 'Cardiology review for new murmur' });
+    expect(saved.record).toMatchObject({ recordType: 'OTHER', title: 'Referral from Dr Bisi Clinic' });
+    expect(saved.diagnostic).toBeUndefined();
+    expect(result.type).toBe('REFERRAL');
+  });
+
   it('requires items that match the request type', async () => {
     await expect(service.createDirect(doctor, { patientReference: 'SCP-ABCD-1234', type: ClinicalOrderType.PRESCRIPTION, diagnosticItems: [{ name: 'FBC' }] })).rejects.toBeInstanceOf(ConflictException);
   });

@@ -59,7 +59,7 @@ describe('Direct clinical requests (e2e)', () => {
     await request(app.getHttpServer())
       .post(url)
       .set('Authorization', 'Bearer provider')
-      .send({ patientReference: 'SCP-ABCD-1234', type: 'REFERRAL', diagnosticItems: [{ name: 'FBC' }] })
+      .send({ patientReference: 'SCP-ABCD-1234', type: 'PROCEDURE', diagnosticItems: [{ name: 'FBC' }] })
       .expect(400);
     await request(app.getHttpServer())
       .post(url)
