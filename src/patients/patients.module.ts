@@ -17,6 +17,9 @@ import { DependantsService } from "./dependants.service";
 import { MeDependantsController } from "./dependants.controller";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { PatientDailyCheckIn } from "./entities/patient-daily-check-in.entity";
+import { PatientHealthBasics } from "./entities/patient-health-basics.entity";
+import { PatientHealthBasicsController } from "./patient-health-basics.controller";
+import { PatientHealthBasicsService } from "./patient-health-basics.service";
 import { PatientDailyRoutineCompletion } from "./entities/patient-daily-routine-completion.entity";
 import { PatientDailyCheckInsController } from "./patient-daily-check-ins.controller";
 import { PatientDailyCheckInsService } from "./patient-daily-check-ins.service";
@@ -41,6 +44,7 @@ import { PatientDailyRoutineNotificationScheduler } from "./patient-daily-routin
       PatientDailyRoutine,
       PatientDailyRoutineCompletion,
       PatientDailyCheckIn,
+      PatientHealthBasics,
     ]),
   ],
   controllers: [
@@ -48,6 +52,7 @@ import { PatientDailyRoutineNotificationScheduler } from "./patient-daily-routin
     MeDependantsController,
     PatientDailyRoutinesController,
     PatientDailyCheckInsController,
+    PatientHealthBasicsController,
   ],
   providers: [
     PatientDashboardService,
@@ -57,6 +62,7 @@ import { PatientDailyRoutineNotificationScheduler } from "./patient-daily-routin
     PatientDailyRoutinesService,
     PatientDailyRoutineCompletionsService,
     PatientDailyCheckInsService,
+    PatientHealthBasicsService,
     PatientDailyRoutineNotificationScheduler,
   ],
   exports: [PatientAccessService],
