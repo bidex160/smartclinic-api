@@ -1,13 +1,24 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { EntityManager, In, Repository } from "typeorm";
 import { CareAppointment } from "../care-appointments/entities/care-appointment.entity";
 import { CareAppointmentStatus } from "../care-appointments/enums/care-appointment-status.enum";
 import { ClinicalRecord } from "../clinical-records/entities/clinical-record.entity";
+import { generateClinicalRecordReference } from "../clinical-records/clinical-record-reference";
+import { ClinicalRecordStatus } from "../clinical-records/enums/clinical-record-status.enum";
+import { ClinicalRecordType } from "../clinical-records/enums/clinical-record-type.enum";
+import { NotificationEntityType } from "../notifications/enums/notification-entity-type.enum";
+import { NotificationType } from "../notifications/enums/notification-type.enum";
+import { NotificationsService } from "../notifications/notifications.service";
+import { Provider } from "../providers/entities/provider.entity";
+import { ProviderStatus } from "../providers/enums/provider-status.enum";
+import { ProviderType } from "../providers/enums/provider-type.enum";
 import { Patient } from "../patients/entities/patient.entity";
 import { PatientRelationship } from "../patients/entities/patient-relationship.entity";
 import { PatientRelationshipRole, PatientRelationshipStatus } from "../patients/enums/patient-relationship.enum";
@@ -21,7 +32,10 @@ import {
   CreateSimpleClinicalOrderDto,
   UpsertPrescriptionDto,
   CreateDiagnosticOrderDto,
+  CreateDirectClinicalOrderDto,
+  DirectClinicalOrderListQueryDto,
 } from "./dto/clinical-order.dto";
+import { ClinicalOrderOrigin, ClinicalOrderPatientResponse } from "./enums/clinical-order-origin.enum";
 import { ClinicalOrderStatusHistory } from "./entities/clinical-order-status-history.entity";
 import { ClinicalOrder } from "./entities/clinical-order.entity";
 import { ClinicalDiagnosticOrderItem } from "./entities/clinical-diagnostic-order-item.entity";
@@ -38,6 +52,7 @@ export class ClinicalOrdersService {
     @InjectRepository(Patient) private readonly patients: Repository<Patient>,
     private readonly currentProvider: CurrentProviderService,
     private readonly fulfillments?: ClinicalOrderFulfillmentsService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
   async createPrescription(
     user: User,
@@ -217,7 +232,7 @@ export class ClinicalOrdersService {
     const provider = await this.currentProvider.resolveOperational(user);
     return this.orders.manager.transaction(async (m) => {
       const order = await this.lockOwned(m, reference, provider.id);
-      if (order.status !== ClinicalOrderStatus.DRAFT)
+      if (order.status !== ClinicalOrderStatus.DRAFT || !order.careAppointmentId)
         throw new ConflictException(
           "Issued or cancelled Clinical Orders are immutable",
         );
@@ -246,7 +261,7 @@ export class ClinicalOrdersService {
       const order = await this.lockOwned(m, reference, provider.id);
       if (order.status === ClinicalOrderStatus.ISSUED)
         return this.mapped(m, order.id);
-      if (order.status !== ClinicalOrderStatus.DRAFT)
+      if (order.status !== ClinicalOrderStatus.DRAFT || !order.careAppointmentId)
         throw new ConflictException("Clinical Order cannot be issued");
       const appointment = await m
         .getRepository(CareAppointment)
@@ -375,6 +390,175 @@ export class ClinicalOrdersService {
       .filter(row => !row.endedAt && row.patient && !row.patient.deletedAt && row.patient.status === PatientStatus.ACTIVE)
       .map(row => row.patientId)])];
   }
+  /**
+   * Confirms who a SmartClinic ID belongs to before a provider sends a
+   * request. Returns only a first name and initial, never health details.
+   */
+  async lookupDirectPatient(user: User, patientReference: string) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    this.requireDirectSender(provider);
+    const patient = await this.directPatient(this.orders.manager, patientReference);
+    return { patientReference: patient.patientReference, displayName: shortName(patient) };
+  }
+
+  /**
+   * Sends a prescription or test request to a patient by SmartClinic ID,
+   * without a SmartClinic appointment. The patient approves it by choosing a
+   * pharmacy or lab, or declines it.
+   */
+  async createDirect(user: User, dto: CreateDirectClinicalOrderDto) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    this.requireDirectSender(provider);
+    const isPrescription = dto.type === ClinicalOrderType.PRESCRIPTION;
+    if (isPrescription ? !dto.prescriptionItems?.length : !dto.diagnosticItems?.length)
+      throw new ConflictException(isPrescription ? "Add at least one medicine" : "Add at least one test");
+    return this.orders.manager.transaction(async (m) => {
+      const patient = await this.directPatient(m, dto.patientReference);
+      const now = new Date();
+      const clinicalNote = dto.clinicalNote?.trim() || null;
+      const record = await m.getRepository(ClinicalRecord).save(
+        m.getRepository(ClinicalRecord).create({
+          reference: generateClinicalRecordReference(),
+          patientId: patient.id,
+          providerId: provider.id,
+          careRequestId: null,
+          careAppointmentId: null,
+          careServiceDefinitionId: null,
+          recordType: isPrescription
+            ? ClinicalRecordType.PHARMACY
+            : dto.type === ClinicalOrderType.IMAGING ? ClinicalRecordType.IMAGING_RESULT : ClinicalRecordType.LAB_RESULT,
+          documentationTemplateSnapshot: null,
+          structuredData: null,
+          title: `${DIRECT_ORDER_LABEL[dto.type]} from ${provider.displayName}`.slice(0, 200),
+          summary: clinicalNote,
+          status: ClinicalRecordStatus.FINALIZED,
+          occurredAt: now,
+          finalizedAt: now,
+          createdByUserId: user.id,
+        }),
+      );
+      const repo = m.getRepository(ClinicalOrder);
+      const order = await repo.save(
+        repo.create({
+          reference: generateClinicalOrderReference(),
+          patientId: patient.id,
+          orderingProviderId: provider.id,
+          orderingUserId: user.id,
+          careRequestId: null,
+          careAppointmentId: null,
+          clinicalRecordId: record.id,
+          origin: ClinicalOrderOrigin.DIRECT,
+          patientResponse: ClinicalOrderPatientResponse.PENDING,
+          patientRespondedAt: null,
+          type: dto.type,
+          status: ClinicalOrderStatus.ISSUED,
+          clinicalNote,
+          issuedAt: now,
+          cancelledAt: null,
+          cancelledByUserId: null,
+          cancellationReason: null,
+        }),
+      );
+      if (isPrescription) {
+        const detail = await m
+          .getRepository(ClinicalPrescriptionDetail)
+          .save({ clinicalOrderId: order.id, notes: null });
+        await this.replaceItems(m, detail.id, dto.prescriptionItems ?? []);
+      } else {
+        await m.getRepository(ClinicalDiagnosticOrderItem).save(
+          (dto.diagnosticItems ?? []).map((i, index) => ({
+            clinicalOrderId: order.id,
+            name: i.name,
+            code: i.code ?? null,
+            instructions: i.instructions ?? null,
+            resultText: null,
+            resultValue: null,
+            resultUnit: null,
+            referenceRange: null,
+            resultFlag: null,
+            resultedAt: null,
+            sortOrder: index,
+          })),
+        );
+      }
+      await this.history(m, order.id, null, order.status, user.id, "DIRECT_ORDER_SENT");
+      for (const userId of await this.patientRecipients(m, patient)) {
+        await this.notifications?.createTransactionalNotification(m, {
+          userId,
+          type: NotificationType.CLINICAL_ORDER_RECEIVED,
+          // Titles reach lock screens: name the sender, never the medicines or tests.
+          title: `New ${DIRECT_ORDER_LABEL[dto.type].toLowerCase()} from ${provider.displayName}`.slice(0, 200),
+          message: "Review it, then choose where to get it done.",
+          entityType: NotificationEntityType.CLINICAL_ORDER,
+          entityReference: order.reference,
+          idempotencyKey: `clinical-order:${order.reference}:received:${userId}`,
+          email: { enabled: true },
+        });
+      }
+      return this.mapped(m, order.id);
+    });
+  }
+
+  /** Requests this provider has sent by SmartClinic ID, newest first. */
+  async listDirect(user: User, q: DirectClinicalOrderListQueryDto) {
+    const provider = await this.currentProvider.resolveOperational(user);
+    const b = this.readBuilder()
+      .where("order.orderingProviderId=:providerId", { providerId: provider.id })
+      .andWhere("order.origin=:origin", { origin: ClinicalOrderOrigin.DIRECT });
+    return this.page(b, { ...q, type: undefined, careAppointmentReference: undefined }, true);
+  }
+
+  /** The patient (or their guardian) approves or declines a directly sent request. */
+  async respondMine(user: User, reference: string, response: ClinicalOrderPatientResponse.APPROVED | ClinicalOrderPatientResponse.DECLINED) {
+    const patient = await this.patient(user.id);
+    const patientIds = await this.accessiblePatientIds(user.id, patient.id);
+    return this.orders.manager.transaction(async (m) => {
+      const order = await m.getRepository(ClinicalOrder).findOne({ where: { reference }, lock: { mode: "pessimistic_write" } });
+      if (!order || !patientIds.includes(order.patientId) || order.origin !== ClinicalOrderOrigin.DIRECT) this.notFound();
+      if (order.patientResponse === response) return this.mapped(m, order.id);
+      if (order.status !== ClinicalOrderStatus.ISSUED || order.patientResponse !== ClinicalOrderPatientResponse.PENDING)
+        throw new ConflictException("This request has already been answered");
+      order.patientResponse = response;
+      order.patientRespondedAt = new Date();
+      if (response === ClinicalOrderPatientResponse.DECLINED) {
+        order.status = ClinicalOrderStatus.CANCELLED;
+        order.cancelledAt = order.patientRespondedAt;
+        order.cancelledByUserId = user.id;
+        order.cancellationReason = "Declined by patient";
+      }
+      await m.getRepository(ClinicalOrder).save(order);
+      if (response === ClinicalOrderPatientResponse.DECLINED) {
+        await this.fulfillments?.cancelOpenForOrder(m, order.id, user.id, "Declined by patient");
+        await this.history(m, order.id, ClinicalOrderStatus.ISSUED, order.status, user.id, "PATIENT_DECLINED");
+      } else {
+        await this.history(m, order.id, order.status, order.status, user.id, "PATIENT_APPROVED");
+      }
+      return this.mapped(m, order.id);
+    });
+  }
+
+  private requireDirectSender(provider: Provider) {
+    if (provider.status !== ProviderStatus.ACTIVE)
+      throw new ForbiddenException("Active approved provider access is required");
+    if (!DIRECT_SENDER_TYPES.has(provider.providerType))
+      throw new ForbiddenException("Only clinicians and care facilities can send prescriptions and test requests");
+  }
+
+  private async directPatient(m: EntityManager, patientReference: string) {
+    const patient = await m.getRepository(Patient).findOne({ where: { patientReference } });
+    if (!patient || patient.deletedAt || patient.status !== PatientStatus.ACTIVE)
+      throw new NotFoundException("No SmartClinic patient has this ID. Check it with the patient.");
+    return patient;
+  }
+
+  /** The patient's own account plus active guardians, for dependants without one. */
+  private async patientRecipients(m: EntityManager, patient: Patient): Promise<string[]> {
+    const guardians = await m.getRepository(PatientRelationship).find({
+      where: { patientId: patient.id, role: PatientRelationshipRole.GUARDIAN, status: PatientRelationshipStatus.ACTIVE },
+    });
+    return [...new Set([patient.userId, ...guardians.filter((row) => !row.endedAt).map((row) => row.relatedUserId)].filter((id): id is string => !!id))];
+  }
+
   async requireNoDraftOrders(manager: EntityManager, appointmentId: string) {
     if (
       await manager
@@ -468,9 +652,9 @@ export class ClinicalOrdersService {
       .createQueryBuilder("order")
       .innerJoinAndSelect("order.patient", "patient")
       .innerJoinAndSelect("order.orderingProvider", "provider")
-      .innerJoinAndSelect("order.careAppointment", "appointment")
-      .innerJoinAndSelect("order.careRequest", "careRequest")
-      .innerJoinAndSelect("order.clinicalRecord", "clinicalRecord")
+      .leftJoinAndSelect("order.careAppointment", "appointment")
+      .leftJoinAndSelect("order.careRequest", "careRequest")
+      .leftJoinAndSelect("order.clinicalRecord", "clinicalRecord")
       .leftJoinAndSelect("order.prescription", "prescription")
       .leftJoinAndSelect("prescription.items", "items")
       .leftJoinAndMapMany(
@@ -499,8 +683,11 @@ export class ClinicalOrdersService {
         displayName: o.orderingProvider.displayName,
         providerType: o.orderingProvider.providerType,
       },
-      careRequestReference: o.careRequest.reference,
-      careAppointmentReference: o.careAppointment.reference,
+      origin: o.origin ?? ClinicalOrderOrigin.APPOINTMENT,
+      patientResponse: o.patientResponse ?? null,
+      patientRespondedAt: o.patientRespondedAt ?? null,
+      careRequestReference: o.careRequest?.reference ?? null,
+      careAppointmentReference: o.careAppointment?.reference ?? null,
       clinicalRecordReference: o.clinicalRecord?.reference ?? undefined,
       issuedAt: o.issuedAt,
       cancelledAt: o.cancelledAt,
@@ -611,4 +798,18 @@ export class ClinicalOrdersService {
   private notFound(): never {
     throw new NotFoundException("Clinical Order was not found");
   }
+}
+
+const DIRECT_SENDER_TYPES = new Set<ProviderType>([ProviderType.INDIVIDUAL, ProviderType.CLINIC, ProviderType.HOSPITAL, ProviderType.OTHER]);
+
+const DIRECT_ORDER_LABEL: Record<CreateDirectClinicalOrderDto["type"], string> = {
+  [ClinicalOrderType.PRESCRIPTION]: "Prescription",
+  [ClinicalOrderType.LABORATORY]: "Lab test request",
+  [ClinicalOrderType.IMAGING]: "Imaging request",
+};
+
+/** "Adaeze O." — enough for a clinician to confirm the right person. */
+function shortName(patient: Patient): string {
+  const initial = patient.familyName?.trim().charAt(0);
+  return `${patient.givenName.trim()}${initial ? ` ${initial.toUpperCase()}.` : ""}`;
 }

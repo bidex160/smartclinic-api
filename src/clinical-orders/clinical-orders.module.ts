@@ -1,3 +1,4 @@
+import { NotificationsModule } from '../notifications/notifications.module';
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "../auth/auth.module";
@@ -50,6 +51,7 @@ import { Provider } from "../providers/entities/provider.entity";
 @Module({
   imports: [
     AuthModule,
+    NotificationsModule,
     ProvidersModule,
     ProviderServiceUnitsModule,
     CommissionsModule,

@@ -40,3 +40,22 @@ describe('ClinicalOrderFulfillmentsService eligibility',()=>{
     expect(JSON.stringify(state)).not.toMatch(/commission|providerShare|payment|internal/i);
   });
 });
+
+describe('ClinicalOrderFulfillmentsService direct requests', () => {
+  it('treats choosing a pharmacy or lab as the patient approving a direct request', async () => {
+    const order: any = { id: 'order-id', patientId: 'patient-id', type: ClinicalOrderType.PRESCRIPTION, status: ClinicalOrderStatus.ISSUED, origin: 'DIRECT', patientResponse: 'PENDING', patientRespondedAt: null };
+    const orderRepo = { save: jest.fn(async (value: any) => value) };
+    const manager: any = { getRepository: jest.fn(() => orderRepo), save: jest.fn(async (value: any) => value) };
+    const subject: any = new ClinicalOrderFulfillmentsService({ manager: { transaction: (work: any) => work(manager) } } as any, {} as any, {} as any);
+    subject.patient = jest.fn().mockResolvedValue({ id: 'patient-id' });
+    subject.lockOrder = jest.fn().mockResolvedValue(order);
+    subject.eligibleUnit = jest.fn().mockResolvedValue({ id: 'unit-id', providerId: 'pharmacy-id' });
+    // Stop right after the approval step; the rest of selection is covered elsewhere.
+    subject.active = jest.fn().mockRejectedValue(new Error('stop'));
+
+    await expect(subject.select({ id: 'patient-user' }, 'SC-ORD-ABCDEF123456', 'SC-UNIT-1')).rejects.toThrow('stop');
+    expect(order.patientResponse).toBe('APPROVED');
+    expect(order.patientRespondedAt).toBeInstanceOf(Date);
+    expect(orderRepo.save).toHaveBeenCalledWith(order);
+  });
+});

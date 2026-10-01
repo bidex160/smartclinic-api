@@ -16,6 +16,7 @@ import { ClinicalRecord } from "../../clinical-records/entities/clinical-record.
 import { Patient } from "../../patients/entities/patient.entity";
 import { Provider } from "../../providers/entities/provider.entity";
 import { User } from "../../users/entities/user.entity";
+import { ClinicalOrderOrigin, ClinicalOrderPatientResponse } from "../enums/clinical-order-origin.enum";
 import { ClinicalOrderStatus } from "../enums/clinical-order-status.enum";
 import { ClinicalOrderType } from "../enums/clinical-order-type.enum";
 import { ClinicalPrescriptionDetail } from "./clinical-prescription-detail.entity";
@@ -32,6 +33,7 @@ import { ClinicalPrescriptionDetail } from "./clinical-prescription-detail.entit
   "createdAt",
 ])
 @Index("IDX_clinical_orders_appointment", ["careAppointmentId"])
+@Index("IDX_clinical_orders_provider_origin_created", ["orderingProviderId", "origin", "createdAt"])
 @Check(
   "CHK_clinical_orders_issued_at",
   `("status"='DRAFT' AND "issued_at" IS NULL AND "cancelled_at" IS NULL) OR ("status"='ISSUED' AND "issued_at" IS NOT NULL AND "cancelled_at" IS NULL) OR ("status"='CANCELLED' AND "cancelled_at" IS NOT NULL)`,
@@ -52,15 +54,21 @@ export class ClinicalOrder {
   @ManyToOne(() => User, { onDelete: "RESTRICT" })
   @JoinColumn({ name: "ordering_user_id" })
   orderingUser!: User;
-  @Column({ name: "care_request_id", type: "uuid" }) careRequestId!: string;
-  @ManyToOne(() => CareRequest, { onDelete: "RESTRICT" })
+  @Column({ name: "care_request_id", type: "uuid", nullable: true }) careRequestId!: string | null;
+  @ManyToOne(() => CareRequest, { nullable: true, onDelete: "RESTRICT" })
   @JoinColumn({ name: "care_request_id" })
-  careRequest!: CareRequest;
-  @Column({ name: "care_appointment_id", type: "uuid" })
-  careAppointmentId!: string;
-  @ManyToOne(() => CareAppointment, { onDelete: "RESTRICT" })
+  careRequest!: CareRequest | null;
+  @Column({ name: "care_appointment_id", type: "uuid", nullable: true })
+  careAppointmentId!: string | null;
+  @ManyToOne(() => CareAppointment, { nullable: true, onDelete: "RESTRICT" })
   @JoinColumn({ name: "care_appointment_id" })
-  careAppointment!: CareAppointment;
+  careAppointment!: CareAppointment | null;
+  @Column({ type: "varchar", length: 20, default: ClinicalOrderOrigin.APPOINTMENT })
+  origin!: ClinicalOrderOrigin;
+  @Column({ name: "patient_response", type: "varchar", length: 20, nullable: true })
+  patientResponse!: ClinicalOrderPatientResponse | null;
+  @Column({ name: "patient_responded_at", type: "timestamptz", nullable: true })
+  patientRespondedAt!: Date | null;
   @Column({ name: "clinical_record_id", type: "uuid" })
   clinicalRecordId!: string;
   @ManyToOne(() => ClinicalRecord, { onDelete: "RESTRICT" })

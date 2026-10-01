@@ -24,7 +24,11 @@ import {
   CreateSimpleClinicalOrderDto,
   UpsertPrescriptionDto,
   CreateDiagnosticOrderDto,
+  CreateDirectClinicalOrderDto,
+  DirectClinicalOrderListQueryDto,
+  DirectOrderPatientLookupQueryDto,
 } from "./dto/clinical-order.dto";
+import { ClinicalOrderPatientResponse } from "./enums/clinical-order-origin.enum";
 @ApiTags("Provider Clinical Orders")
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -32,6 +36,24 @@ import {
 @Controller("provider")
 export class ProviderClinicalOrdersController {
   constructor(private readonly service: ClinicalOrdersService) {}
+  @Get("direct-orders/patient-lookup") lookupPatient(
+    @Req() r: { user: User },
+    @Query() q: DirectOrderPatientLookupQueryDto,
+  ) {
+    return this.service.lookupDirectPatient(r.user, q.patientReference);
+  }
+  @Post("direct-orders") createDirect(
+    @Req() r: { user: User },
+    @Body() d: CreateDirectClinicalOrderDto,
+  ) {
+    return this.service.createDirect(r.user, d);
+  }
+  @Get("direct-orders") listDirect(
+    @Req() r: { user: User },
+    @Query() q: DirectClinicalOrderListQueryDto,
+  ) {
+    return this.service.listDirect(r.user, q);
+  }
   @Post("care-appointments/:reference/clinical-orders/diagnostics")
   createDiagnostic(
     @Req() r: { user: User },
@@ -103,5 +125,17 @@ export class MeClinicalOrdersController {
     @Param() p: ClinicalOrderReferenceParamsDto,
   ) {
     return this.service.getMine(r.user, p.reference);
+  }
+  @Post(":reference/approve") approve(
+    @Req() r: { user: User },
+    @Param() p: ClinicalOrderReferenceParamsDto,
+  ) {
+    return this.service.respondMine(r.user, p.reference, ClinicalOrderPatientResponse.APPROVED);
+  }
+  @Post(":reference/decline") decline(
+    @Req() r: { user: User },
+    @Param() p: ClinicalOrderReferenceParamsDto,
+  ) {
+    return this.service.respondMine(r.user, p.reference, ClinicalOrderPatientResponse.DECLINED);
   }
 }
