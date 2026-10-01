@@ -9,13 +9,16 @@ import { ProviderStatus } from '../providers/enums/provider-status.enum';
 import { User } from '../users/entities/user.entity';
 import { PartnerFacilityDirectoryQueryDto } from './dto/partner-facility-directory.dto';
 import { PartnerFacilityInterest } from './entities/partner-facility-interest.entity';
+import { PartnerFacilityRequest } from './entities/partner-facility-request.entity';
 import { PartnerFacilityListing, PartnerFacilityReadiness } from './entities/partner-facility-listing.entity';
+import { CreatePartnerFacilityRequestDto, PartnerFacilityFollowUpStatus } from './dto/partner-facility-directory.dto';
 
 @Injectable()
 export class PartnerFacilityDirectoryService {
   constructor(
     @InjectRepository(PartnerFacilityListing) private readonly listings: Repository<PartnerFacilityListing>,
     @InjectRepository(PartnerFacilityInterest) private readonly interests: Repository<PartnerFacilityInterest>,
+    @InjectRepository(PartnerFacilityRequest) private readonly requests: Repository<PartnerFacilityRequest>,
     @InjectRepository(Patient) private readonly patients: Repository<Patient>,
     private readonly currentProvider: CurrentProviderService,
   ) {}
@@ -46,6 +49,38 @@ export class PartnerFacilityDirectoryService {
     if (existing) return { accepted: true, alreadyRequested: true };
     await this.interests.save(this.interests.create({ patientId: patient.id, listingId: listing.id, consentCapturedAt: new Date() }));
     return { accepted: true, alreadyRequested: false };
+  }
+
+  async createRequest(user: User, listingId: string, dto: CreatePartnerFacilityRequestDto) {
+    if (!dto.consentAcknowledged) throw new BadRequestException('Consent is required before SmartClinic contacts this facility on your behalf');
+    const patient = await this.patient(user.id);
+    const listing = await this.listings.findOneBy({ id: listingId, active: true });
+    if (!listing) throw new NotFoundException('Facility listing was not found');
+    if (dto.preferredAt && new Date(dto.preferredAt).getTime() < Date.now()) throw new BadRequestException('Choose a future preferred date and time');
+    const request = await this.requests.save(this.requests.create({
+      patientId: patient.id, listingId: listing.id, requestType: dto.requestType,
+      preferredAt: dto.preferredAt ? new Date(dto.preferredAt) : null,
+      consentCapturedAt: new Date(), status: 'NEW',
+    }));
+    return { accepted: true, reference: `SC-PFR-${request.id.slice(0, 8).toUpperCase()}`, status: request.status, createdAt: request.createdAt };
+  }
+
+  async adminRequests() {
+    return this.requests.createQueryBuilder('request')
+      .innerJoinAndSelect('request.listing', 'listing')
+      .innerJoinAndSelect('request.patient', 'patient')
+      .where('request.status IN (:...statuses)', { statuses: ['NEW', 'CONTACTED'] })
+      .select(['request.id', 'request.requestType', 'request.preferredAt', 'request.status', 'request.createdAt', 'request.consentCapturedAt', 'listing.displayName', 'listing.facilityType', 'listing.city', 'listing.stateOrRegion', 'patient.patientReference', 'patient.givenName', 'patient.familyName', 'patient.phone', 'patient.email'])
+      .orderBy('request.createdAt', 'ASC')
+      .take(500)
+      .getMany();
+  }
+
+  async updateRequestStatus(id: string, status: PartnerFacilityFollowUpStatus) {
+    const request = await this.requests.findOneBy({ id });
+    if (!request) throw new NotFoundException('Facility follow-up request was not found');
+    request.status = status;
+    return this.requests.save(request);
   }
 
   async adminDemand() {

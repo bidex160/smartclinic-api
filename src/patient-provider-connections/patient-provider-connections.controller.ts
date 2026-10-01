@@ -36,7 +36,7 @@ import { HospitalCompanionService } from "./hospital-companion.service";
 import { HospitalServicePassService } from './hospital-service-pass.service';
 import { HospitalWalletSettlementService } from './hospital-wallet-settlement.service';
 import { PartnerFacilityDirectoryService } from './partner-facility-directory.service';
-import { PartnerFacilityDirectoryQueryDto, RequestFacilityContactDto } from './dto/partner-facility-directory.dto';
+import { CreatePartnerFacilityRequestDto, PartnerFacilityDirectoryQueryDto, RequestFacilityContactDto, UpdatePartnerFacilityRequestStatusDto } from './dto/partner-facility-directory.dto';
 
 @ApiTags("My Patient Provider Connections")
 @ApiBearerAuth()
@@ -61,6 +61,11 @@ export class MePatientProviderConnectionsController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() d: RequestFacilityContactDto,
   ) { return this.partnerDirectoryService.requestContact(r.user, id, d.consentAcknowledged); }
+  @Post('partner-facility-directory/:id/requests') createFacilityRequest(
+    @Req() r: { user: User },
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() d: CreatePartnerFacilityRequestDto,
+  ) { return this.partnerDirectoryService.createRequest(r.user, id, d); }
   @Get("patient-provider-connection-providers") directory(
     @Req() r: { user: User },
     @Query() q: ConnectionListQueryDto,
@@ -172,6 +177,8 @@ export class MePatientProviderConnectionsController {
 @Controller('admin/partner-facility-directory')
 export class AdminPartnerFacilityDirectoryController {
   constructor(private readonly service: PartnerFacilityDirectoryService) {}
+  @Get('requests') requests() { return this.service.adminRequests(); }
+  @Patch('requests/:id') updateRequest(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: UpdatePartnerFacilityRequestStatusDto) { return this.service.updateRequestStatus(id, dto.status); }
   @Get('demand') demand() { return this.service.adminDemand(); }
 }
 

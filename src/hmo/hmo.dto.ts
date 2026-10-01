@@ -24,6 +24,9 @@ export class CreateHmoPlanDto {
   @IsUUID() hmoId!: string;
   @IsString() name!: string;
   @IsString() code!: string;
+  @IsOptional() @IsInt() @Min(0) amountMinor?: number;
+  @IsOptional() @IsIn(['NGN', 'RWF', 'USD']) currency?: string;
+  @IsOptional() @IsIn(['MONTHLY', 'QUARTERLY', 'YEARLY']) billingPeriod?: string;
 }
 export class UpsertCoverageDto {
   @IsUUID() patientId!: string;
@@ -82,13 +85,21 @@ export class ReconcileClaimDto {
 }
 
 export class CreateHmoEnrollmentLeadDto {
+  @IsBoolean() consentAcknowledged!: boolean;
   @IsOptional()
   @IsUUID()
   preferredHmoId?: string;
+  @IsOptional()
+  @IsUUID()
+  planId?: string;
   @IsOptional()
   @IsString()
   employerOrganisation?: string;
   @IsOptional()
   @IsString()
   notes?: string;
+}
+
+export class UpdateHmoEnrollmentLeadDto {
+  @IsIn(['CONTACTED', 'CLOSED']) status!: 'CONTACTED' | 'CLOSED';
 }

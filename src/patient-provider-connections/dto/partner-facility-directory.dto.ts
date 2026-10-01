@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { PartnerFacilityType } from '../entities/partner-facility-listing.entity';
 
 export class PartnerFacilityDirectoryQueryDto {
@@ -13,4 +13,28 @@ export class PartnerFacilityDirectoryQueryDto {
 
 export class RequestFacilityContactDto {
   @IsBoolean() consentAcknowledged!: boolean;
+}
+
+export enum PartnerFacilityRequestType {
+  APPOINTMENT = 'APPOINTMENT',
+  REGISTRATION = 'REGISTRATION',
+  CONTACT = 'CONTACT',
+}
+
+export class CreatePartnerFacilityRequestDto {
+  @IsEnum(PartnerFacilityRequestType) requestType!: PartnerFacilityRequestType;
+  @IsBoolean() consentAcknowledged!: boolean;
+  @IsOptional() @IsDateString() preferredAt?: string;
+}
+
+export enum PartnerFacilityFollowUpStatus {
+  NEW = 'NEW',
+  CONTACTED = 'CONTACTED',
+  BOOKED = 'BOOKED',
+  UNAVAILABLE = 'UNAVAILABLE',
+  CLOSED = 'CLOSED',
+}
+
+export class UpdatePartnerFacilityRequestStatusDto {
+  @IsEnum(PartnerFacilityFollowUpStatus) status!: PartnerFacilityFollowUpStatus;
 }
