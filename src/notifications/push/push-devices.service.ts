@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { UserPushDevice } from '../entities/user-push-device.entity';
 import { NotificationPushOutbox } from '../entities/notification-push-outbox.entity';
 import { PushDevicePlatform } from '../enums/push-device-platform.enum';
+import { parseWebPushToken } from './web-push.provider';
 
 @Injectable()
 export class PushDevicesService {
@@ -46,6 +47,18 @@ export class PushDevicesService {
       device.lastSeenAt = new Date();
       await this.devices.save(device);
     }
+    return { unregistered: true };
+  }
+
+  /** Browsers unsubscribe by endpoint; their stored token is the subscription JSON. */
+  async unregisterWebEndpoint(userId: string, endpoint: string): Promise<{ unregistered: true }> {
+    const devices = await this.devices.find({ where: { userId, platform: PushDevicePlatform.WEB, isActive: true } });
+    const matching = devices.filter((device) => parseWebPushToken(device.token)?.endpoint === endpoint);
+    for (const device of matching) {
+      device.isActive = false;
+      device.lastSeenAt = new Date();
+    }
+    if (matching.length) await this.devices.save(matching);
     return { unregistered: true };
   }
 

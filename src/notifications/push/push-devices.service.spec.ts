@@ -31,3 +31,19 @@ describe('PushDevicesService', () => {
     expect(devices.save).toHaveBeenCalledWith(row);
   });
 });
+
+describe('PushDevicesService web subscriptions', () => {
+  it('deactivates only the current user browser subscription for an endpoint', async () => {
+    const { webPushToken } = jest.requireActual('./web-push.provider');
+    const keys = { p256dh: 'p', auth: 'a' };
+    const mine = { id: 'd1', userId: 'user-a', platform: 'WEB', isActive: true, token: webPushToken({ endpoint: 'https://fcm.googleapis.com/fcm/send/one', keys }) };
+    const other = { id: 'd2', userId: 'user-a', platform: 'WEB', isActive: true, token: webPushToken({ endpoint: 'https://fcm.googleapis.com/fcm/send/two', keys }) };
+    const devices = { find: jest.fn(async () => [mine, other]), save: jest.fn(async (value) => value) };
+    const service = new PushDevicesService(devices as any, {} as any);
+
+    await expect(service.unregisterWebEndpoint('user-a', 'https://fcm.googleapis.com/fcm/send/one')).resolves.toEqual({ unregistered: true });
+    expect(devices.find).toHaveBeenCalledWith({ where: { userId: 'user-a', platform: PushDevicePlatform.WEB, isActive: true } });
+    expect(mine.isActive).toBe(false);
+    expect(other.isActive).toBe(true);
+  });
+});
