@@ -1629,15 +1629,14 @@ export class PaymentFlowService {
       a.status = PaymentAttemptStatus.SUCCEEDED;
       a.lastVerifiedAt = new Date();
       await m.save(a);
-      if (
-        !(await m.getRepository(PaymentTransaction).exists({
-          where: {
-            paymentAttemptId: a.id,
-            status: PaymentTransactionStatus.SUCCEEDED,
-          },
-        }))
-      )
-        await m.getRepository(PaymentTransaction).save({
+      let tx = await m.getRepository(PaymentTransaction).findOne({
+        where: {
+          paymentAttemptId: a.id,
+          status: PaymentTransactionStatus.SUCCEEDED,
+        },
+      });
+      if (!tx)
+        tx = await m.getRepository(PaymentTransaction).save({
           paymentAttemptId: a.id,
           parentTransactionId: null,
           transactionType: PaymentTransactionType.COLLECTION,
@@ -1650,6 +1649,16 @@ export class PaymentFlowService {
       f.status = DiagnosticFundingStatus.PAID;
       f.paidAt = v.occurredAt;
       await m.save(f);
+      // Record the lab's earning (and any referral fee) for card payments, as wallet payments already do.
+      const fulfillment = await m.getRepository(ClinicalOrderFulfillment).findOne({ where: { id: f.fulfillmentId } });
+      if (fulfillment && this.earnings)
+        await this.earnings.createHeldDiagnosticFulfillmentEarning(m, {
+          providerId: f.providerId,
+          fulfillmentReference: fulfillment.reference,
+          grossAmountMinor: f.grossAmountMinor,
+          currency: f.currency,
+          paymentTransaction: tx,
+        });
       return this.diagnosticFundingResponse(q, f, a);
     });
   }

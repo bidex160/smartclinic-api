@@ -95,7 +95,7 @@ export interface AppConfiguration {
       webhookEnabled: boolean;
     };
   };
-  referrals: { monetaryShareBps: number };
+  referrals: { monetaryShareBps: number; providerReferralBps: number };
   pharmacyCoordination: {
     doctorFeeBps: number;
     hospitalFeeBps: number;
@@ -302,6 +302,8 @@ export function createAppConfiguration(
     },
     referrals: {
       monetaryShareBps: getNumber(environment.PRIMARY_REFERRER_SHARE_BPS, 300),
+      // Share of a referred lab or pharmacy job paid to the provider who referred it, out of the receiving provider's share.
+      providerReferralBps: getNumber(environment.PROVIDER_REFERRAL_FEE_BPS, 300),
     },
     pharmacyCoordination: {
       doctorFeeBps: getNumber(

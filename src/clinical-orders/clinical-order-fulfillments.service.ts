@@ -1,9 +1,14 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
   Optional,
 } from "@nestjs/common";
+import { ConfigType } from "@nestjs/config";
+import { appConfig } from "../config/app.config";
+import { ProviderEarning } from "../earnings/entities/provider-earning.entity";
+import { ProviderEarningSourceType } from "../earnings/enums/provider-earning-source-type.enum";
 import { InjectRepository } from "@nestjs/typeorm";
 import { EntityManager, In, Repository } from "typeorm";
 import { Patient } from "../patients/entities/patient.entity";
@@ -56,7 +61,14 @@ export class ClinicalOrderFulfillmentsService {
     @InjectRepository(Patient) private readonly patients: Repository<Patient>,
     private readonly currentProvider: CurrentProviderService,
     @Optional() private readonly notifications?: NotificationsService,
+    @Optional() @Inject(appConfig.KEY) private readonly config?: ConfigType<typeof appConfig>,
   ) {}
+
+  /** The referral fee rate shown to providers; the earnings ledger applies the same setting. */
+  private get referralFeeBps(): number {
+    const value = this.config?.referrals?.providerReferralBps;
+    return Number.isInteger(value) && value! >= 0 && value! <= 2000 ? value! : 300;
+  }
 
   /**
    * A lab or pharmacy passes a request it was chosen for to another one on
@@ -131,9 +143,10 @@ export class ClinicalOrderFulfillmentsService {
       .andWhere("fulfillment.referredFromFulfillmentId IS NOT NULL");
     if (q.orderType) b.andWhere("order.type=:orderType", { orderType: q.orderType });
     const page = await this.page(b, q);
+    const fees = await this.referralFees(page.items.map((item) => item.reference));
     return {
       ...page,
-      items: page.items.map((item) =>
+      items: page.items.map((item) => ({ ...item, referralFee: fees.get(item.reference) ?? null })).map((item) =>
         item.status === ClinicalOrderFulfillmentStatus.ACCEPTED
           ? item
           : {
@@ -145,6 +158,21 @@ export class ClinicalOrderFulfillmentsService {
             },
       ),
     };
+  }
+
+  /** The referrer's fee per referred job, once the job has been paid. */
+  private async referralFees(references: string[]) {
+    const fees = new Map<string, { amountMinor: number; currency: string; status: string }>();
+    if (!references.length) return fees;
+    try {
+      const rows = await this.fulfillments.manager.getRepository(ProviderEarning).find({
+        where: { sourceType: ProviderEarningSourceType.PROVIDER_REFERRAL, sourceReference: In(references) },
+      });
+      for (const row of rows) fees.set(row.sourceReference, { amountMinor: Number(row.providerShareMinor), currency: row.currency, status: row.status });
+    } catch {
+      // Before the earnings migration runs the list still works, just without fees.
+    }
+    return fees;
   }
 
   async recommend(user: User, orderReference: string, unitReference: string) {
@@ -687,6 +715,8 @@ export class ClinicalOrderFulfillmentsService {
               ? { providerReference: f.recommendedByProvider.providerReference, displayName: f.recommendedByProvider.displayName }
               : null,
             note: f.referralNote ?? null,
+            // Taken from the receiving provider's share when the job is paid; the patient's price is unchanged.
+            feeBps: this.referralFeeBps,
           }
         : null,
       acceptedAt: f.acceptedAt,

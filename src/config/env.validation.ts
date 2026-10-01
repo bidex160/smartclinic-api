@@ -174,6 +174,7 @@ class EnvironmentVariables {
   @IsOptional() @IsIn(["true", "false"]) OPAY_WEBHOOK_ENABLED?: string;
   @Type(() => Number) @IsInt() @Min(0) @Max(10000) PRIMARY_REFERRER_SHARE_BPS =
     300;
+  @Type(() => Number) @IsInt() @Min(0) @Max(2000) PROVIDER_REFERRAL_FEE_BPS = 300;
   @Type(() => Number)
   @IsInt()
   @Min(0)
