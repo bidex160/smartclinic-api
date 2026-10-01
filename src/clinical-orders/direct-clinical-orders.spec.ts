@@ -19,6 +19,7 @@ describe('ClinicalOrdersService direct requests', () => {
   const doctor: any = { id: 'doctor-user' };
   const patientUser: any = { id: 'patient-user' };
   let provider: any;
+  let actor: any;
   let patient: any;
   let saved: any;
   let repos: Record<string, any>;
@@ -30,6 +31,7 @@ describe('ClinicalOrdersService direct requests', () => {
 
   beforeEach(() => {
     provider = { id: 'provider-id', displayName: 'Dr Bisi Clinic', providerType: 'CLINIC', status: 'ACTIVE', providerReference: 'SCPR-1' };
+    actor = { provider, isOwner: true, role: null, memberId: null };
     patient = { id: 'patient-id', patientReference: 'SCP-ABCD-1234', givenName: 'Adaeze', familyName: 'Okafor', userId: 'patient-user', status: 'ACTIVE', deletedAt: null };
     saved = {};
     const repo = (name: string, extra: Record<string, unknown> = {}) => ({
@@ -82,7 +84,7 @@ describe('ClinicalOrdersService direct requests', () => {
     repos.order.createQueryBuilder = jest.fn(() => readQb);
     notifications = { createTransactionalNotification: jest.fn() };
     fulfillments = { cancelOpenForOrder: jest.fn(), summaries: jest.fn().mockResolvedValue(new Map()) };
-    service = new ClinicalOrdersService(repos.order, repos.patient, { resolveOperational: jest.fn().mockResolvedValue(provider) } as any, fulfillments, notifications);
+    service = new ClinicalOrdersService(repos.order, repos.patient, { resolveOperational: jest.fn(async () => provider), resolveOperationalActor: jest.fn(async () => actor) } as any, fulfillments, notifications);
   });
 
   it('confirms a SmartClinic ID with a first name and initial only', async () => {
@@ -139,6 +141,15 @@ describe('ClinicalOrdersService direct requests', () => {
     provider.providerType = 'CLINIC';
     provider.status = 'SUSPENDED';
     await expect(service.lookupDirectPatient(doctor, 'SCP-ABCD-1234')).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('lets doctors on the team send, but not other staff', async () => {
+    actor = { provider, isOwner: false, role: 'DOCTOR', memberId: 'member-1' };
+    await expect(service.lookupDirectPatient(doctor, 'SCP-ABCD-1234')).resolves.toMatchObject({ displayName: 'Adaeze O.' });
+    for (const role of ['LAB_SCIENTIST', 'PHARMACIST', 'FRONT_DESK', 'NURSE', 'ADMIN']) {
+      actor = { provider, isOwner: false, role, memberId: 'member-1' };
+      await expect(service.lookupDirectPatient(doctor, 'SCP-ABCD-1234')).rejects.toBeInstanceOf(ForbiddenException);
+    }
   });
 
   it('requires items that match the request type', async () => {
