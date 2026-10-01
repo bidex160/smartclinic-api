@@ -1,5 +1,8 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { PatientDailyRoutineDto } from "./patient-daily-routine.dto";
+import {
+  DailyCareProgressDto,
+  PatientTodayRoutineDto,
+} from "./patient-daily-routine.dto";
 
 export enum PatientDashboardRecommendedAction {
   COMPLETE_PROFILE = "COMPLETE_PROFILE",
@@ -100,9 +103,12 @@ export class PatientDashboardDto {
   dashboardMode!: PatientDashboardMode;
 
   @ApiProperty({
-    type: [PatientDailyRoutineDto],
+    type: [PatientTodayRoutineDto],
     description:
       "At most three enabled routines scheduled for the patient today.",
   })
-  todayRoutines!: PatientDailyRoutineDto[];
+  todayRoutines!: PatientTodayRoutineDto[];
+
+  @ApiProperty({ type: DailyCareProgressDto })
+  dailyCare!: DailyCareProgressDto;
 }

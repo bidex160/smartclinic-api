@@ -9,7 +9,7 @@ import { DependantsService } from '../src/patients/dependants.service';
 import { UserRole } from '../src/users/enums/user-role.enum';
 
 describe('Dependants routes (e2e)', () => {
-  let app: INestApplication; const dependants = { create: jest.fn(), list: jest.fn(), get: jest.fn() };
+  let app: INestApplication; const dependants = { create: jest.fn(), list: jest.fn(), get: jest.fn(), remove: jest.fn() };
   beforeAll(async () => {
     const module = await Test.createTestingModule({ controllers: [MeDependantsController], providers: [RolesGuard, Reflector, { provide: DependantsService, useValue: dependants }] })
       .overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => { const req = context.switchToHttp().getRequest(); if (!req.headers.authorization) throw new UnauthorizedException(); req.user = { id: 'user-id', roles: [UserRole.USER], status: 'ACTIVE', deletedAt: null }; return true; } }).compile();
@@ -28,5 +28,17 @@ describe('Dependants routes (e2e)', () => {
       await request(app.getHttpServer()).post('/api/v1/me/dependants').set('Authorization', 'Bearer user').send({ ...body, [field]: 'spoof' }).expect(400);
     }
     expect(dependants.create).not.toHaveBeenCalled();
+  });
+  it('ends a guardian relationship for an authenticated guardian without a body', async () => {
+    await request(app.getHttpServer()).delete('/api/v1/me/dependants/SCP-AB12-CD34').expect(401);
+    expect(dependants.remove).not.toHaveBeenCalled();
+
+    dependants.remove.mockResolvedValue(undefined);
+    await request(app.getHttpServer()).delete('/api/v1/me/dependants/SCP-AB12-CD34').set('Authorization', 'Bearer user').expect(204);
+    expect(dependants.remove).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-id' }), 'SCP-AB12-CD34');
+  });
+  it('rejects malformed dependant references before reaching the service', async () => {
+    await request(app.getHttpServer()).delete('/api/v1/me/dependants/not-a-reference').set('Authorization', 'Bearer user').expect(400);
+    expect(dependants.remove).not.toHaveBeenCalled();
   });
 });

@@ -15,6 +15,7 @@ import {
 import { Patient } from "./entities/patient.entity";
 import { PatientStatus } from "./enums/patient-status.enum";
 import { PatientDashboardActionProjectionService } from "./patient-dashboard-action-projection.service";
+import { PatientDailyRoutineCompletionsService } from "./patient-daily-routine-completions.service";
 import { PatientDailyRoutinesService } from "./patient-daily-routines.service";
 
 const MEANINGFUL_CONNECTION_STATUSES = [
@@ -39,6 +40,7 @@ export class PatientDashboardService {
     private readonly bookings: Repository<Booking>,
     private readonly actions: PatientDashboardActionProjectionService,
     private readonly dailyRoutines: PatientDailyRoutinesService,
+    private readonly routineCompletions: PatientDailyRoutineCompletionsService,
   ) {}
 
   async get(user: User): Promise<PatientDashboardDto> {
@@ -94,10 +96,19 @@ export class PatientDashboardService {
     const missingProfileFields = this.missingProfileFields(patient);
     const profileComplete = missingProfileFields.length === 0;
     const hasStartedCareJourney = hasCareRequest || hasHealthCheckBooking;
-    const [recommendedActionDetail, todayRoutines] = await Promise.all([
+    const [recommendedActionDetail, routinesForToday] = await Promise.all([
       this.actions.project(patient.id, profileComplete),
       this.dailyRoutines.today(patient.id),
     ]);
+    const dailyCare = await this.routineCompletions.progress(
+      patient.id,
+      routinesForToday[0]?.timezone,
+    );
+    const completed = new Set(dailyCare.completedReferences);
+    const todayRoutines = routinesForToday.map((routine) => ({
+      ...routine,
+      completedToday: completed.has(routine.reference),
+    }));
 
     return {
       patient: {
@@ -124,6 +135,7 @@ export class PatientDashboardService {
           ? PatientDashboardMode.ESTABLISHED
           : PatientDashboardMode.GETTING_STARTED,
       todayRoutines,
+      dailyCare,
     };
   }
 

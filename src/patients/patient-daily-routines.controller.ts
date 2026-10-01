@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -25,10 +26,12 @@ import { User } from "../users/entities/user.entity";
 import { UserRole } from "../users/enums/user-role.enum";
 import {
   CreatePatientDailyRoutineDto,
+  DailyCareProgressDto,
   PatientDailyRoutineDto,
   PatientDailyRoutineListDto,
   UpdatePatientDailyRoutineDto,
 } from "./dto/patient-daily-routine.dto";
+import { PatientDailyRoutineCompletionsService } from "./patient-daily-routine-completions.service";
 import { PatientDailyRoutinesService } from "./patient-daily-routines.service";
 
 @ApiTags("My daily care")
@@ -37,7 +40,10 @@ import { PatientDailyRoutinesService } from "./patient-daily-routines.service";
 @Roles(UserRole.USER)
 @Controller("me/daily-care/routines")
 export class PatientDailyRoutinesController {
-  constructor(private readonly service: PatientDailyRoutinesService) {}
+  constructor(
+    private readonly service: PatientDailyRoutinesService,
+    private readonly completions: PatientDailyRoutineCompletionsService,
+  ) {}
   @Get() @ApiOkResponse({ type: PatientDailyRoutineListDto }) list(
     @Req() req: { user: User },
   ) {
@@ -61,5 +67,18 @@ export class PatientDailyRoutinesController {
     @Param("reference") reference: string,
   ) {
     await this.service.remove(req.user, reference);
+  }
+  @Put(":reference/completions/today")
+  @ApiOkResponse({ type: DailyCareProgressDto })
+  complete(
+    @Req() req: { user: User },
+    @Param("reference") reference: string,
+  ) {
+    return this.completions.complete(req.user, reference);
+  }
+  @Delete(":reference/completions/today")
+  @ApiOkResponse({ type: DailyCareProgressDto })
+  undo(@Req() req: { user: User }, @Param("reference") reference: string) {
+    return this.completions.undo(req.user, reference);
   }
 }
