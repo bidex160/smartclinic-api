@@ -24,6 +24,7 @@ import { EarningsModule } from './earnings/earnings.module';
 import { ClinicalRecordsModule } from './clinical-records/clinical-records.module';
 import { PatientProviderConnectionsModule } from './patient-provider-connections/patient-provider-connections.module';
 import { ClinicalOrdersModule } from './clinical-orders/clinical-orders.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 import { ProviderServiceUnitsModule } from './provider-service-units/provider-service-units.module';
 import { GuidedSelfChecksModule } from './guided-self-checks/guided-self-checks.module';
 import { HealthPassportModule } from './health-passport/health-passport.module';
@@ -58,6 +59,7 @@ const persistenceDomainModules = configuration.database.enabled
       ClinicalRecordsModule,
       PatientProviderConnectionsModule,
       ClinicalOrdersModule,
+      IntegrationsModule,
       ProviderServiceUnitsModule,
       GuidedSelfChecksModule,
       HealthPassportModule,

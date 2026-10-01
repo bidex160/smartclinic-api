@@ -1,9 +1,13 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
+import { ConfigType } from "@nestjs/config";
+import { appConfig } from "../config/app.config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { EntityManager, Repository } from "typeorm";
 import { Booking } from "../bookings/entities/booking.entity";
@@ -43,7 +47,160 @@ export class ProviderEarningsService {
     @InjectRepository(Provider)
     private readonly providers: Repository<Provider>,
     private readonly commissions: CommissionResolutionService,
+    @Optional() @Inject(appConfig.KEY) private readonly config?: ConfigType<typeof appConfig>,
   ) {}
+
+  /**
+   * When a lab or pharmacy job came to this provider as a referral from
+   * another provider, moves the referral fee (3% by default) out of this
+   * provider's share into referralShareMinor, and records a held earning for
+   * the referrer. The patient's price never changes.
+   */
+  async applyProviderReferral(manager: EntityManager, earning: ProviderEarning): Promise<ProviderEarning | null> {
+    if (earning.sourceType !== ProviderEarningSourceType.PHARMACY_FULFILLMENT && earning.sourceType !== ProviderEarningSourceType.DIAGNOSTIC_FULFILLMENT) return null;
+    const fulfillment = await manager.getRepository(ClinicalOrderFulfillment).findOne({ where: { reference: earning.sourceReference } });
+    const referrerId = fulfillment?.referredFromFulfillmentId ? fulfillment.recommendedByProviderId : null;
+    if (!referrerId || referrerId === earning.providerId) return null;
+    if (!(await this.sourceTypeSupported(manager, ProviderEarningSourceType.PROVIDER_REFERRAL))) return null;
+    const repository = manager.getRepository(ProviderEarning);
+    const existing = await repository.findOne({
+      where: { sourceType: ProviderEarningSourceType.PROVIDER_REFERRAL, sourceReference: earning.sourceReference },
+      lock: { mode: "pessimistic_write" },
+    });
+    if (existing) return existing;
+    const bps = this.providerReferralBps();
+    const gross = BigInt(earning.grossAmountMinor);
+    const fee = (gross * BigInt(bps) + 5000n) / 10000n;
+    const providerShare = BigInt(earning.providerShareMinor);
+    // A fee that doesn't fit the provider's share is skipped rather than failing the patient's payment.
+    if (fee <= 0n || fee > providerShare) return null;
+    earning.referralShareMinor = (BigInt(earning.referralShareMinor ?? "0") + fee).toString();
+    earning.providerShareMinor = (providerShare - fee).toString();
+    await repository.save(earning);
+    const referral = await repository.save(
+      repository.create({
+        providerId: referrerId,
+        paymentTransactionId: null,
+        sourceType: ProviderEarningSourceType.PROVIDER_REFERRAL,
+        sourceReference: earning.sourceReference,
+        currency: earning.currency,
+        grossAmountMinor: fee.toString(),
+        commissionBps: 0,
+        commissionSource: earning.commissionSource,
+        commissionAmountMinor: "0",
+        referralShareMinor: "0",
+        providerShareMinor: fee.toString(),
+        status: ProviderEarningStatus.HELD,
+        payableAt: null,
+        settledAt: null,
+      }),
+    );
+    await manager.getRepository(ProviderEarningStatusHistory).save({
+      providerEarningId: referral.id,
+      fromStatus: null,
+      toStatus: ProviderEarningStatus.HELD,
+      actorUserId: null,
+      reasonCode: "PROVIDER_REFERRAL_FEE_HELD",
+      reasonNote: `${bps / 100}% of a referred job; payable once the job is completed`,
+    });
+    return referral;
+  }
+
+  /** Releases the referrer's fee once the referred job's own earning is payable. */
+  async releaseProviderReferral(manager: EntityManager, sourceReference: string, actorUserId: string | null) {
+    // Querying an enum value the database doesn't have yet would abort the whole transaction.
+    if (!(await this.sourceTypeSupported(manager, ProviderEarningSourceType.PROVIDER_REFERRAL))) return null;
+    const repository = manager.getRepository(ProviderEarning);
+    const referral = await repository.findOne({
+      where: { sourceType: ProviderEarningSourceType.PROVIDER_REFERRAL, sourceReference },
+      lock: { mode: "pessimistic_write" },
+    });
+    if (!referral || referral.status !== ProviderEarningStatus.HELD) return referral;
+    referral.status = ProviderEarningStatus.PAYABLE;
+    referral.payableAt = new Date();
+    await repository.save(referral);
+    await manager.getRepository(ProviderEarningStatusHistory).save({
+      providerEarningId: referral.id,
+      fromStatus: ProviderEarningStatus.HELD,
+      toStatus: ProviderEarningStatus.PAYABLE,
+      actorUserId,
+      reasonCode: "PROVIDER_REFERRAL_JOB_COMPLETED",
+      reasonNote: null,
+    });
+    return referral;
+  }
+
+  /**
+   * Lab jobs paid by card. Uses the provider's configured commission; when
+   * none is configured nothing is recorded, as before, so payment never fails here.
+   */
+  async createHeldDiagnosticFulfillmentEarning(
+    manager: EntityManager,
+    input: { providerId: string; fulfillmentReference: string; grossAmountMinor: string; currency: string; paymentTransaction: PaymentTransaction },
+  ) {
+    const repository = manager.getRepository(ProviderEarning);
+    const sourceType = ProviderEarningSourceType.DIAGNOSTIC_FULFILLMENT;
+    if (!(await this.sourceTypeSupported(manager, sourceType))) return null;
+    const existing = await repository.findOne({ where: { sourceType, sourceReference: input.fulfillmentReference }, lock: { mode: "pessimistic_write" } });
+    if (existing) return existing;
+    const resolution = await this.commissions.resolveForProvider(input.providerId, manager);
+    if (!resolution.configured) return null;
+    const calculation = calculateCommission(BigInt(input.grossAmountMinor), resolution.rateBasisPoints);
+    const earning = await repository.save(
+      repository.create({
+        providerId: input.providerId,
+        paymentTransactionId: input.paymentTransaction.id,
+        sourceType,
+        sourceReference: input.fulfillmentReference,
+        currency: input.currency,
+        grossAmountMinor: input.grossAmountMinor,
+        commissionBps: resolution.rateBasisPoints,
+        commissionSource: resolution.source,
+        commissionAmountMinor: calculation.commissionAmountMinor.toString(),
+        providerShareMinor: calculation.providerShareMinor.toString(),
+        status: ProviderEarningStatus.HELD,
+        payableAt: null,
+        settledAt: null,
+      }),
+    );
+    await manager.getRepository(ProviderEarningStatusHistory).save({
+      providerEarningId: earning.id,
+      fromStatus: null,
+      toStatus: ProviderEarningStatus.HELD,
+      actorUserId: null,
+      reasonCode: "DIAGNOSTIC_PAYMENT_SETTLED",
+      reasonNote: null,
+    });
+    await this.applyProviderReferral(manager, earning);
+    return earning;
+  }
+
+  private readonly supportedSourceTypes = new Set<string>();
+
+  /**
+   * True once the database's earning-type enum has this value. Guards new
+   * earning types deployed before their migration has run, so a payment is
+   * never rolled back because an earning couldn't be recorded.
+   */
+  private async sourceTypeSupported(manager: EntityManager, type: ProviderEarningSourceType): Promise<boolean> {
+    if (this.supportedSourceTypes.has(type)) return true;
+    try {
+      const rows = await manager.query(`SELECT $1 = ANY(enum_range(NULL::provider_earning_source_type_enum)::text[]) AS "supported"`, [type]);
+      if (rows?.[0]?.supported) {
+        this.supportedSourceTypes.add(type);
+        return true;
+      }
+    } catch {
+      // Not Postgres (tests) or no permission: assume supported, as before.
+      return true;
+    }
+    return false;
+  }
+
+  private providerReferralBps(): number {
+    const value = this.config?.referrals?.providerReferralBps;
+    return Number.isInteger(value) && value! >= 0 && value! <= 2000 ? value! : 300;
+  }
 
   async createHeldHealthCheckEarning(
     manager: EntityManager,
@@ -329,6 +486,7 @@ export class ProviderEarningsService {
       reasonCode: "PHARMACY_PAYMENT_SETTLED",
       reasonNote: null,
     });
+    await this.applyProviderReferral(manager, earning);
     return earning;
   }
   async markWalletDiagnosticPayable(
@@ -369,6 +527,7 @@ export class ProviderEarningsService {
         reasonCode: "DIAGNOSTIC_RESULT_COMPLETED",
         reasonNote: null,
       });
+    await this.releaseProviderReferral(manager, fulfillmentReference, actorUserId);
     return earning;
   }
 
@@ -437,6 +596,7 @@ export class ProviderEarningsService {
           reasonCode: "WALLET_SETTLEMENT_HOLD_MATURED",
           reasonNote: "Service completion verified before release",
         });
+      await this.releaseProviderReferral(m, locked.sourceReference, null);
       released++;
     }
     return { released };
@@ -533,6 +693,7 @@ export class ProviderEarningsService {
         reasonCode: "WALLET_HOSPITAL_PAYMENT_SETTLED",
         reasonNote: "Eligible for release after 24-hour hold",
       });
+    await this.applyProviderReferral(manager, earning);
     return earning;
   }
 
@@ -572,6 +733,7 @@ export class ProviderEarningsService {
       reasonCode: "PHARMACY_HANDOVER_COMPLETED",
       reasonNote: null,
     });
+    await this.releaseProviderReferral(manager, reference, actorUserId);
     return earning;
   }
 

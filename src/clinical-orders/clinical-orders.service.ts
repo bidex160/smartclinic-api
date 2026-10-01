@@ -15,6 +15,7 @@ import { ClinicalRecordStatus } from "../clinical-records/enums/clinical-record-
 import { ClinicalRecordType } from "../clinical-records/enums/clinical-record-type.enum";
 import { NotificationEntityType } from "../notifications/enums/notification-entity-type.enum";
 import { NotificationType } from "../notifications/enums/notification-type.enum";
+import { ProviderWebhooksService } from "../integrations/provider-webhooks.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { Provider } from "../providers/entities/provider.entity";
 import { ProviderStatus } from "../providers/enums/provider-status.enum";
@@ -53,6 +54,7 @@ export class ClinicalOrdersService {
     private readonly currentProvider: CurrentProviderService,
     private readonly fulfillments?: ClinicalOrderFulfillmentsService,
     @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly webhooks?: ProviderWebhooksService,
   ) {}
   async createPrescription(
     user: User,
@@ -512,7 +514,8 @@ export class ClinicalOrdersService {
   async respondMine(user: User, reference: string, response: ClinicalOrderPatientResponse.APPROVED | ClinicalOrderPatientResponse.DECLINED) {
     const patient = await this.patient(user.id);
     const patientIds = await this.accessiblePatientIds(user.id, patient.id);
-    return this.orders.manager.transaction(async (m) => {
+    let answered: ClinicalOrder | null = null;
+    const result = await this.orders.manager.transaction(async (m) => {
       const order = await m.getRepository(ClinicalOrder).findOne({ where: { reference }, lock: { mode: "pessimistic_write" } });
       if (!order || !patientIds.includes(order.patientId) || order.origin !== ClinicalOrderOrigin.DIRECT) this.notFound();
       if (order.patientResponse === response) return this.mapped(m, order.id);
@@ -533,8 +536,17 @@ export class ClinicalOrdersService {
       } else {
         await this.history(m, order.id, order.status, order.status, user.id, "PATIENT_APPROVED");
       }
+      answered = order;
       return this.mapped(m, order.id);
     });
+    const done = answered as ClinicalOrder | null;
+    if (done)
+      this.webhooks?.notify(done.orderingProviderId, "request.patient_responded", {
+        requestReference: done.reference,
+        patientResponse: done.patientResponse,
+        status: done.status,
+      });
+    return result;
   }
 
   /** The facility, when this person may send requests: its owner or one of its doctors. */

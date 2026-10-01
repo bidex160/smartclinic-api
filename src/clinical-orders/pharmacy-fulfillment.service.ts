@@ -1,3 +1,4 @@
+import { ClinicalOrderFulfillmentsService } from "./clinical-order-fulfillments.service";
 import {
   ConflictException,
   Injectable,
@@ -59,6 +60,7 @@ export class PharmacyFulfillmentService {
     private readonly earnings: ProviderEarningsService,
     @Optional() private readonly referrals?: ReferralsService,
     @Optional() private readonly config?: ConfigService,
+    @Optional() private readonly handoffs?: ClinicalOrderFulfillmentsService,
   ) {}
   async myCoordinationEarnings(user: User) {
     const provider = await this.current.resolveOperational(user);
@@ -485,7 +487,7 @@ export class PharmacyFulfillmentService {
     );
   }
   async complete(u: User, r: string) {
-    return this.transition(
+    const result = await this.transition(
       u,
       r,
       [PharmacyDispensingStatus.READY_FOR_PICKUP],
@@ -493,6 +495,8 @@ export class PharmacyFulfillmentService {
       "completedAt",
       true,
     );
+    this.handoffs?.announce(r, "DISPENSED");
+    return result;
   }
   async cannotFulfill(u: User, r: string) {
     const p = await this.current.resolveOperational(u);
