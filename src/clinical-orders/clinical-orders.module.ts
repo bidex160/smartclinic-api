@@ -1,3 +1,4 @@
+import { ProviderWebhooksModule } from "../integrations/provider-webhooks.module";
 import { NotificationsModule } from '../notifications/notifications.module';
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
@@ -57,6 +58,7 @@ import { Provider } from "../providers/entities/provider.entity";
     CommissionsModule,
     EarningsModule,
     RewardsModule,
+    ProviderWebhooksModule,
     TypeOrmModule.forFeature([
       ClinicalOrder,
       ClinicalOrderStatusHistory,

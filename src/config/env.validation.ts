@@ -3,6 +3,7 @@ import {
   IsIn,
   IsInt,
   IsOptional,
+  Matches,
   IsString,
   IsUrl,
   Max,
@@ -175,6 +176,9 @@ class EnvironmentVariables {
   @Type(() => Number) @IsInt() @Min(0) @Max(10000) PRIMARY_REFERRER_SHARE_BPS =
     300;
   @Type(() => Number) @IsInt() @Min(0) @Max(2000) PROVIDER_REFERRAL_FEE_BPS = 300;
+  /** Base64 of 32 random bytes; encrypts facility webhook secrets. Webhooks stay off without it. */
+  @IsOptional() @Matches(/^[A-Za-z0-9+/]{43}=$/, { message: "INTEGRATION_ENCRYPTION_KEY must be base64 of 32 bytes (openssl rand -base64 32)" })
+  INTEGRATION_ENCRYPTION_KEY?: string;
   @Type(() => Number)
   @IsInt()
   @Min(0)

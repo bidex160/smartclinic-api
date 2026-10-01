@@ -40,6 +40,7 @@ import { PharmacyDispensing } from "./entities/pharmacy-dispensing.entity";
 import { PharmacyQuote } from "./entities/pharmacy-quote.entity";
 import { DiagnosticQuote, DiagnosticQuoteStatus } from "./entities/diagnostic-quote.entity";
 import { PharmacyQuoteStatus } from "./enums/pharmacy-quote-status.enum";
+import { ProviderWebhooksService } from "../integrations/provider-webhooks.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/enums/notification-type.enum";
 import { NotificationEntityType } from "../notifications/enums/notification-entity-type.enum";
@@ -62,7 +63,33 @@ export class ClinicalOrderFulfillmentsService {
     private readonly currentProvider: CurrentProviderService,
     @Optional() private readonly notifications?: NotificationsService,
     @Optional() @Inject(appConfig.KEY) private readonly config?: ConfigType<typeof appConfig>,
+    @Optional() private readonly webhooks?: ProviderWebhooksService,
   ) {}
+
+  /**
+   * Tells the ordering facility's system (and, when a patient picks a place,
+   * the receiving one) that a request moved on. Runs after commit; best effort.
+   */
+  announce(fulfillmentReference: string, change: string): void {
+    const webhooks = this.webhooks;
+    if (!webhooks) return;
+    void this.fulfillments
+      .findOne({ where: { reference: fulfillmentReference }, relations: { clinicalOrder: true } })
+      .then((row) => {
+        if (!row?.clinicalOrder) return;
+        const data = {
+          requestReference: row.clinicalOrder.reference,
+          requestType: row.clinicalOrder.type,
+          handoffReference: row.reference,
+          handoffStatus: row.status,
+          change,
+        };
+        webhooks.notify(row.clinicalOrder.orderingProviderId, change === "RESULTS_READY" ? "request.results_ready" : "request.updated", data);
+        if (change === "PATIENT_SELECTED" || change === "REFERRED_ONWARD")
+          webhooks.notify(row.fulfillmentProviderId, "handoff.received", data);
+      })
+      .catch(() => undefined);
+  }
 
   /** The referral fee rate shown to providers; the earnings ledger applies the same setting. */
   private get referralFeeBps(): number {
@@ -78,7 +105,7 @@ export class ClinicalOrderFulfillmentsService {
    */
   async referOnward(user: User, reference: string, unitReference: string, note: string | null) {
     const provider = await this.currentProvider.resolveOperational(user);
-    return this.fulfillments.manager.transaction(async (m) => {
+    const result = await this.fulfillments.manager.transaction(async (m) => {
       const row = await m.getRepository(ClinicalOrderFulfillment).findOne({
         where: { reference, fulfillmentProviderId: provider.id },
         lock: { mode: "pessimistic_write" },
@@ -133,6 +160,8 @@ export class ClinicalOrderFulfillmentsService {
       }
       return this.mapped(m, next.id);
     });
+    this.announce(result.reference, "REFERRED_ONWARD");
+    return result;
   }
 
   /** Requests this provider passed on, with where each one is now. Results show once the new place has accepted. */
@@ -219,7 +248,7 @@ export class ClinicalOrderFulfillmentsService {
   }
   async select(user: User, orderReference: string, unitReference: string) {
     const patient = await this.patient(user.id);
-    return this.fulfillments.manager.transaction(async (m) => {
+    const result = await this.fulfillments.manager.transaction(async (m) => {
       const order = await this.lockOrder(m, orderReference);
       if (order.patientId !== patient.id) this.notFound();
       this.requireFulfillable(order);
@@ -283,6 +312,8 @@ export class ClinicalOrderFulfillmentsService {
       );
       return this.mapped(m, row.id);
     });
+    this.announce(result.reference, "PATIENT_SELECTED");
+    return result;
   }
   async getForPatientOrder(user: User, orderReference: string) {
     const patient = await this.patient(user.id);
@@ -327,7 +358,7 @@ export class ClinicalOrderFulfillmentsService {
   }
   async accept(user: User, reference: string) {
     const p = await this.currentProvider.resolveOperational(user);
-    return this.fulfillments.manager.transaction(async (m) => {
+    const result = await this.fulfillments.manager.transaction(async (m) => {
       const row = await m
         .getRepository(ClinicalOrderFulfillment)
         .findOne({
@@ -364,8 +395,10 @@ export class ClinicalOrderFulfillmentsService {
       );
       return this.mapped(m, row.id);
     });
+    this.announce(result.reference, "ACCEPTED");
+    return result;
   }
-  async submitDiagnosticResults(user:User,reference:string,dto:SubmitDiagnosticResultsDto){const p=await this.currentProvider.resolveOperational(user);return this.fulfillments.manager.transaction(async m=>{const row=await m.getRepository(ClinicalOrderFulfillment).findOne({where:{reference,fulfillmentProviderId:p.id},relations:{clinicalOrder:true},lock:{mode:'pessimistic_write'}});if(!row)this.notFound();if(row.status!==ClinicalOrderFulfillmentStatus.ACCEPTED)throw new ConflictException('Accept this diagnostic handoff before submitting results');if(![ClinicalOrderType.LABORATORY,ClinicalOrderType.IMAGING].includes(row.clinicalOrder.type))throw new ConflictException('Results can only be submitted for laboratory or imaging orders');const items=await m.getRepository(ClinicalDiagnosticOrderItem).find({where:{clinicalOrderId:row.clinicalOrderId},order:{sortOrder:'ASC'},lock:{mode:'pessimistic_write'}});if(!items.length)throw new ConflictException('This diagnostic order has no structured test items');for(const result of dto.items){const item=items.find(i=>i.sortOrder===result.sortOrder);if(!item)throw new ConflictException('A submitted result does not match this diagnostic order');item.resultText=result.resultText??null;item.resultValue=result.resultValue??null;item.resultUnit=result.resultUnit??null;item.referenceRange=result.referenceRange??null;item.resultFlag=result.resultFlag??null;item.resultedAt=new Date();await m.save(item);}return this.mapped(m,row.id);});}
+  async submitDiagnosticResults(user:User,reference:string,dto:SubmitDiagnosticResultsDto){const p=await this.currentProvider.resolveOperational(user);const result=await this.fulfillments.manager.transaction(async m=>{const row=await m.getRepository(ClinicalOrderFulfillment).findOne({where:{reference,fulfillmentProviderId:p.id},relations:{clinicalOrder:true},lock:{mode:'pessimistic_write'}});if(!row)this.notFound();if(row.status!==ClinicalOrderFulfillmentStatus.ACCEPTED)throw new ConflictException('Accept this diagnostic handoff before submitting results');if(![ClinicalOrderType.LABORATORY,ClinicalOrderType.IMAGING].includes(row.clinicalOrder.type))throw new ConflictException('Results can only be submitted for laboratory or imaging orders');const items=await m.getRepository(ClinicalDiagnosticOrderItem).find({where:{clinicalOrderId:row.clinicalOrderId},order:{sortOrder:'ASC'},lock:{mode:'pessimistic_write'}});if(!items.length)throw new ConflictException('This diagnostic order has no structured test items');for(const result of dto.items){const item=items.find(i=>i.sortOrder===result.sortOrder);if(!item)throw new ConflictException('A submitted result does not match this diagnostic order');item.resultText=result.resultText??null;item.resultValue=result.resultValue??null;item.resultUnit=result.resultUnit??null;item.referenceRange=result.referenceRange??null;item.resultFlag=result.resultFlag??null;item.resultedAt=new Date();await m.save(item);}return this.mapped(m,row.id);});this.announce(result.reference,'RESULTS_READY');return result;}
   async directory(user: User, q: FulfillmentDirectoryQueryDto) {
     await this.patient(user.id);
     return this.eligibleDirectory(q);
