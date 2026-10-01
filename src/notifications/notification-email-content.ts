@@ -94,6 +94,13 @@ const CONTENT: Record<NotificationType, NotificationContent> = {
     title: "Your SmartClinic routine",
     body: "A routine you chose is due. Open SmartClinic to review your Today list.",
   },
+  [NotificationType.CLINICAL_ORDER_RECEIVED]: {
+    subject: "A new request from your care provider",
+    preheader: "Review it and choose where to get it done.",
+    title: "A new request from your care provider",
+    body: "Your care provider sent you a prescription or test request on SmartClinic. Open SmartClinic to review it and choose a pharmacy or lab.",
+    ctaLabel: "Review request",
+  },
 };
 
 export function buildNotificationEmail(
@@ -145,6 +152,8 @@ function notificationActionUrl(
       return joinUrl(frontendUrl, `/me/care/${reference}`);
     case NotificationEntityType.CARE_APPOINTMENT:
       return joinUrl(frontendUrl, `/me/care/appointments/${reference}`);
+    case NotificationEntityType.CLINICAL_ORDER:
+      return joinUrl(frontendUrl, `/me/orders/${reference}`);
     default:
       return null;
   }

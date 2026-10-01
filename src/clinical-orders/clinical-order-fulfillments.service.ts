@@ -27,6 +27,7 @@ import { ClinicalOrder } from "./entities/clinical-order.entity";
 import { ClinicalDiagnosticOrderItem } from "./entities/clinical-diagnostic-order-item.entity";
 import { ClinicalOrderFulfillmentStatus } from "./enums/clinical-order-fulfillment-status.enum";
 import { ClinicalOrderStatus } from "./enums/clinical-order-status.enum";
+import { ClinicalOrderPatientResponse } from "./enums/clinical-order-origin.enum";
 import { ClinicalOrderType } from "./enums/clinical-order-type.enum";
 import { PharmacyFulfillmentFunding } from "./entities/pharmacy-fulfillment-funding.entity";
 import { PharmacyDispensing } from "./entities/pharmacy-dispensing.entity";
@@ -97,6 +98,12 @@ export class ClinicalOrderFulfillmentsService {
       if (order.patientId !== patient.id) this.notFound();
       this.requireFulfillable(order);
       const unit = await this.eligibleUnit(m, unitReference, order.type);
+      if (order.patientResponse === ClinicalOrderPatientResponse.PENDING) {
+        // Choosing where to get a directly sent request done is the patient's approval of it.
+        order.patientResponse = ClinicalOrderPatientResponse.APPROVED;
+        order.patientRespondedAt = new Date();
+        await m.getRepository(ClinicalOrder).save(order);
+      }
       const active = await this.active(m, order.id);
       if (active?.status === ClinicalOrderFulfillmentStatus.ACCEPTED)
         throw new ConflictException("Accepted fulfillment cannot be changed");
