@@ -37,3 +37,11 @@ export class FulfillmentDirectoryQueryDto extends FulfillmentListQueryDto {
   @IsOptional() @IsString() @MaxLength(120) stateOrRegion?: string;
   @IsOptional() @IsString() @MaxLength(120) city?: string;
 }
+
+export class ReferOnwardDto extends FulfillmentUnitDto {
+  @ApiPropertyOptional({ description: "Why it is being referred, for the receiving provider" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string | null;
+}

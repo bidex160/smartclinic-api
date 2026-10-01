@@ -101,6 +101,13 @@ const CONTENT: Record<NotificationType, NotificationContent> = {
     body: "Your care provider sent you a prescription or test request on SmartClinic. Open SmartClinic to review it and choose a pharmacy or lab.",
     ctaLabel: "Review request",
   },
+  [NotificationType.CLINICAL_ORDER_REFERRED]: {
+    subject: "Your request was referred to another provider",
+    preheader: "Confirm the new place to continue.",
+    title: "Your request was referred",
+    body: "The pharmacy or lab you chose referred your request to another provider on SmartClinic. Open SmartClinic to confirm the new place or choose another.",
+    ctaLabel: "Review request",
+  },
 };
 
 export function buildNotificationEmail(

@@ -408,8 +408,9 @@ export class ClinicalOrdersService {
   async createDirect(user: User, dto: CreateDirectClinicalOrderDto) {
     const provider = await this.directSender(user);
     const isPrescription = dto.type === ClinicalOrderType.PRESCRIPTION;
-    if (isPrescription ? !dto.prescriptionItems?.length : !dto.diagnosticItems?.length)
-      throw new ConflictException(isPrescription ? "Add at least one medicine" : "Add at least one test");
+    const isReferral = dto.type === ClinicalOrderType.REFERRAL;
+    if (isReferral ? !dto.clinicalNote?.trim() : isPrescription ? !dto.prescriptionItems?.length : !dto.diagnosticItems?.length)
+      throw new ConflictException(isReferral ? "Say why you are referring and to which specialty" : isPrescription ? "Add at least one medicine" : "Add at least one test");
     return this.orders.manager.transaction(async (m) => {
       const patient = await this.directPatient(m, dto.patientReference);
       const now = new Date();
@@ -424,6 +425,7 @@ export class ClinicalOrdersService {
           careServiceDefinitionId: null,
           recordType: isPrescription
             ? ClinicalRecordType.PHARMACY
+            : isReferral ? ClinicalRecordType.OTHER
             : dto.type === ClinicalOrderType.IMAGING ? ClinicalRecordType.IMAGING_RESULT : ClinicalRecordType.LAB_RESULT,
           documentationTemplateSnapshot: null,
           structuredData: null,
@@ -462,7 +464,7 @@ export class ClinicalOrdersService {
           .getRepository(ClinicalPrescriptionDetail)
           .save({ clinicalOrderId: order.id, notes: null });
         await this.replaceItems(m, detail.id, dto.prescriptionItems ?? []);
-      } else {
+      } else if (!isReferral) {
         await m.getRepository(ClinicalDiagnosticOrderItem).save(
           (dto.diagnosticItems ?? []).map((i, index) => ({
             clinicalOrderId: order.id,
@@ -812,6 +814,7 @@ const DIRECT_ORDER_LABEL: Record<CreateDirectClinicalOrderDto["type"], string> =
   [ClinicalOrderType.PRESCRIPTION]: "Prescription",
   [ClinicalOrderType.LABORATORY]: "Lab test request",
   [ClinicalOrderType.IMAGING]: "Imaging request",
+  [ClinicalOrderType.REFERRAL]: "Referral",
 };
 
 /** "Adaeze O." — enough for a clinician to confirm the right person. */

@@ -20,6 +20,7 @@ import {
   FulfillmentListQueryDto,
   FulfillmentReferenceParamsDto,
   FulfillmentUnitDto,
+  ReferOnwardDto,
 } from "./dto/clinical-order-fulfillment.dto";
 import { ClinicalOrderReferenceParamsDto, SubmitDiagnosticResultsDto } from "./dto/clinical-order.dto";
 @ApiTags("Provider Order Fulfillments")
@@ -45,6 +46,19 @@ export class ProviderOrderFulfillmentsController {
       p.reference,
       d.providerServiceUnitReference,
     );
+  }
+  @Get("referred-out-fulfillments") referredOut(
+    @Req() r: { user: User },
+    @Query() q: FulfillmentListQueryDto,
+  ) {
+    return this.service.listReferredOut(r.user, q);
+  }
+  @Post("order-fulfillments/:reference/refer-onward") referOnward(
+    @Req() r: { user: User },
+    @Param() p: FulfillmentReferenceParamsDto,
+    @Body() d: ReferOnwardDto,
+  ) {
+    return this.service.referOnward(r.user, p.reference, d.providerServiceUnitReference, d.note ?? null);
   }
   @Get("order-fulfillments") list(
     @Req() r: { user: User },
