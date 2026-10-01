@@ -3,6 +3,7 @@ import { NotFoundException } from "@nestjs/common";
 import { User } from "../users/entities/user.entity";
 import {
   localDateIn,
+  longestStreak,
   PatientDailyRoutineCompletionsService,
   streakEndingAt,
 } from "./patient-daily-routine-completions.service";
@@ -21,10 +22,13 @@ describe("PatientDailyRoutineCompletionsService", () => {
   let patients: any;
   let insertBuilder: any;
   let rows: { localDate: string; reference: string }[];
+  let checkInRows: { localDate: string; mood: number; energy: number | null; sleep: number | null }[];
+  let checkIns: any;
   let service: PatientDailyRoutineCompletionsService;
 
   beforeEach(() => {
     rows = [];
+    checkInRows = [];
     insertBuilder = {
       insert: jest.fn().mockReturnThis(),
       values: jest.fn().mockReturnThis(),
@@ -40,6 +44,14 @@ describe("PatientDailyRoutineCompletionsService", () => {
       orderBy: jest.fn().mockReturnThis(),
       getRawMany: jest.fn().mockImplementation(async () => rows),
     };
+    const checkInBuilder = {
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockImplementation(async () => checkInRows),
+    };
+    checkIns = { createQueryBuilder: jest.fn(() => checkInBuilder) };
     completions = {
       createQueryBuilder: jest.fn((alias?: string) =>
         alias ? selectBuilder : insertBuilder,
@@ -63,6 +75,7 @@ describe("PatientDailyRoutineCompletionsService", () => {
       completions,
       routines,
       patients,
+      checkIns,
     );
   });
 
@@ -79,11 +92,16 @@ describe("PatientDailyRoutineCompletionsService", () => {
       localDate: "2026-10-01",
     });
     expect(insertBuilder.orIgnore).toHaveBeenCalled();
-    expect(progress).toEqual({
+    expect(progress).toMatchObject({
       localDate: "2026-10-01",
       completedReferences: [routine.reference],
       streakDays: 1,
+      bestStreak: 1,
+      todayCheckIn: null,
     });
+    expect(progress.week).toHaveLength(7);
+    expect(progress.week[6]).toEqual({ localDate: "2026-10-01", active: true });
+    expect(progress.week[0]).toEqual({ localDate: "2026-09-25", active: false });
   });
 
   it("undoes only today's tick", async () => {
@@ -113,5 +131,32 @@ describe("PatientDailyRoutineCompletionsService", () => {
     const instant = new Date("2026-10-01T02:00:00Z");
     expect(localDateIn(instant, "Africa/Lagos")).toBe("2026-10-01");
     expect(localDateIn(instant, "America/New_York")).toBe("2026-09-30");
+  });
+
+  it("counts check-in days towards the streak and reports today's check-in", async () => {
+    const now = new Date("2026-10-01T10:00:00Z");
+    rows = [{ localDate: "2026-09-29", reference: routine.reference }];
+    checkInRows = [
+      { localDate: "2026-09-30", mood: 4, energy: null, sleep: 3 },
+      { localDate: "2026-10-01", mood: 5, energy: 4, sleep: null },
+    ];
+    const progress = await service.progress("patient-a", "Africa/Lagos", now);
+    expect(progress.streakDays).toBe(3);
+    expect(progress.bestStreak).toBe(3);
+    expect(progress.todayCheckIn).toEqual({ mood: 5, energy: 4, sleep: null });
+    expect(progress.completedReferences).toEqual([]);
+    expect(progress.week.filter((day) => day.active).map((day) => day.localDate)).toEqual([
+      "2026-09-29",
+      "2026-09-30",
+      "2026-10-01",
+    ]);
+  });
+
+  it("finds the longest run of active days", () => {
+    expect(longestStreak(new Set())).toBe(0);
+    expect(
+      longestStreak(new Set(["2026-09-01", "2026-09-02", "2026-09-10", "2026-09-11", "2026-09-12", "2026-09-30"])),
+    ).toBe(3);
+    expect(longestStreak(new Set(["2026-02-28", "2026-03-01"]))).toBe(2);
   });
 });

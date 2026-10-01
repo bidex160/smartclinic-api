@@ -122,6 +122,44 @@ export class PatientTodayRoutineDto extends PatientDailyRoutineDto {
   completedToday!: boolean;
 }
 
+export class DailyCheckInScoresDto {
+  @ApiProperty({ minimum: 1, maximum: 5, description: "1 = very low, 5 = great." })
+  mood!: number;
+  @ApiProperty({ minimum: 1, maximum: 5, nullable: true }) energy!: number | null;
+  @ApiProperty({ minimum: 1, maximum: 5, nullable: true }) sleep!: number | null;
+}
+
+export class DailyCheckInDto extends DailyCheckInScoresDto {
+  @ApiProperty({ example: "2026-10-01" }) localDate!: string;
+}
+
+export class DailyCheckInListDto {
+  @ApiProperty({ type: [DailyCheckInDto] }) items!: DailyCheckInDto[];
+}
+
+export class UpsertDailyCheckInDto {
+  @ApiProperty({ minimum: 1, maximum: 5 }) @IsInt() @Min(1) @Max(5) mood!: number;
+  @ApiPropertyOptional({ minimum: 1, maximum: 5, nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  energy?: number | null;
+  @ApiPropertyOptional({ minimum: 1, maximum: 5, nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  sleep?: number | null;
+  @ApiProperty({ example: "Africa/Lagos" }) @IsTimeZone() timezone!: string;
+}
+
+export class DailyCareDayDto {
+  @ApiProperty({ example: "2026-10-01" }) localDate!: string;
+  @ApiProperty({ description: "A routine was ticked or a check-in was saved that day." })
+  active!: boolean;
+}
+
 export class DailyCareProgressDto {
   @ApiProperty({ example: "2026-10-01", description: "Today in the patient's routine timezone." })
   localDate!: string;
@@ -129,7 +167,13 @@ export class DailyCareProgressDto {
   completedReferences!: string[];
   @ApiProperty({
     description:
-      "Consecutive days with at least one routine ticked, ending today (or yesterday when nothing is ticked yet today). Self-reported.",
+      "Consecutive active days (a routine ticked or a check-in saved), ending today or yesterday when today is not yet active. Self-reported.",
   })
   streakDays!: number;
+  @ApiProperty({ description: "Longest run of consecutive active days in the last 400 days." })
+  bestStreak!: number;
+  @ApiProperty({ type: DailyCheckInScoresDto, nullable: true })
+  todayCheckIn!: DailyCheckInScoresDto | null;
+  @ApiProperty({ type: [DailyCareDayDto], description: "The last 7 local days, oldest first, ending today." })
+  week!: DailyCareDayDto[];
 }
