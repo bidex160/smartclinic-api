@@ -27,6 +27,7 @@ describe("PatientDashboardService", () => {
   let bookings: { exists: jest.Mock };
   let actions: { project: jest.Mock };
   let dailyRoutines: { today: jest.Mock };
+  let routineCompletions: { progress: jest.Mock };
   let service: PatientDashboardService;
 
   beforeEach(() => {
@@ -44,6 +45,13 @@ describe("PatientDashboardService", () => {
         }),
     };
     dailyRoutines = { today: jest.fn().mockResolvedValue([]) };
+    routineCompletions = {
+      progress: jest.fn().mockResolvedValue({
+        localDate: "2026-10-01",
+        completedReferences: [],
+        streakDays: 0,
+      }),
+    };
     service = new PatientDashboardService(
       patients as never,
       connections as never,
@@ -51,6 +59,7 @@ describe("PatientDashboardService", () => {
       bookings as never,
       actions as never,
       dailyRoutines as never,
+      routineCompletions as never,
     );
   });
 
@@ -81,6 +90,11 @@ describe("PatientDashboardService", () => {
       },
       dashboardMode: PatientDashboardMode.GETTING_STARTED,
       todayRoutines: [],
+      dailyCare: {
+        localDate: "2026-10-01",
+        completedReferences: [],
+        streakDays: 0,
+      },
     });
   });
 

@@ -16,7 +16,9 @@ import { PatientAccessService } from "./patient-access.service";
 import { DependantsService } from "./dependants.service";
 import { MeDependantsController } from "./dependants.controller";
 import { NotificationsModule } from "../notifications/notifications.module";
+import { PatientDailyRoutineCompletion } from "./entities/patient-daily-routine-completion.entity";
 import { PatientDailyRoutine } from "./entities/patient-daily-routine.entity";
+import { PatientDailyRoutineCompletionsService } from "./patient-daily-routine-completions.service";
 import { PatientDailyRoutinesController } from "./patient-daily-routines.controller";
 import { PatientDailyRoutinesService } from "./patient-daily-routines.service";
 import { PatientDailyRoutineNotificationScheduler } from "./patient-daily-routine-notification.scheduler";
@@ -34,6 +36,7 @@ import { PatientDailyRoutineNotificationScheduler } from "./patient-daily-routin
       PatientRelationship,
       DependantRewardProvenance,
       PatientDailyRoutine,
+      PatientDailyRoutineCompletion,
     ]),
   ],
   controllers: [
@@ -47,6 +50,7 @@ import { PatientDailyRoutineNotificationScheduler } from "./patient-daily-routin
     PatientAccessService,
     DependantsService,
     PatientDailyRoutinesService,
+    PatientDailyRoutineCompletionsService,
     PatientDailyRoutineNotificationScheduler,
   ],
   exports: [PatientAccessService],

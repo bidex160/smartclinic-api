@@ -116,3 +116,20 @@ export class PatientDailyRoutineListDto {
   @Type(() => PatientDailyRoutineDto)
   items!: PatientDailyRoutineDto[];
 }
+
+export class PatientTodayRoutineDto extends PatientDailyRoutineDto {
+  @ApiProperty({ description: "Whether the patient ticked this routine today." })
+  completedToday!: boolean;
+}
+
+export class DailyCareProgressDto {
+  @ApiProperty({ example: "2026-10-01", description: "Today in the patient's routine timezone." })
+  localDate!: string;
+  @ApiProperty({ type: [String], description: "Routine references ticked today." })
+  completedReferences!: string[];
+  @ApiProperty({
+    description:
+      "Consecutive days with at least one routine ticked, ending today (or yesterday when nothing is ticked yet today). Self-reported.",
+  })
+  streakDays!: number;
+}
