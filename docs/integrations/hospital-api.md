@@ -130,6 +130,57 @@ function verify(rawBody, header, secret) {
 - Delivery may happen more than once. Use `X-SmartClinic-Delivery` to process each event once.
 - The portal shows the last 20 deliveries and their status.
 
+## FHIR R4
+
+Systems that already speak HL7 FHIR R4 can use it instead of the JSON above.
+Same API key, same consent and privacy rules. Base URL:
+`https://<smartclinic-api-host>/api/v1/fhir/r4`. Send and receive
+`application/fhir+json` (plain `application/json` also works). Errors come back
+as an `OperationOutcome` with the matching HTTP status.
+
+`GET /metadata` returns the CapabilityStatement and needs no key.
+
+| SmartClinic | FHIR R4 |
+| --- | --- |
+| SmartClinic ID | `Patient`, identifier system `https://smartclinicnetwork.com/fhir/sid/smartclinic-id`. Only first name and initial (`name[0].text`). |
+| Your facility | `Organization/{providerReference}` |
+| Lab, imaging or referral request | `ServiceRequest`, `id` = request reference. `category`: SNOMED `108252007` laboratory, `363679005` imaging, `3457005` referral. First test in `code`, further tests in `orderDetail`. |
+| Prescription | One `MedicationRequest` per medicine, `id` = `{reference}-{n}`, grouped by `groupIdentifier` = request reference. |
+| Results | `DiagnosticReport` (`id` = request reference) with contained `Observation`s: number + unit in `valueQuantity`, otherwise `valueString`; flag in `interpretation`; range in `referenceRange`. |
+| Patient's answer | Extension `https://smartclinicnetwork.com/fhir/StructureDefinition/patient-response` (`pending`, `approved`, `declined`). |
+
+| Method and path | What it does |
+| --- | --- |
+| `GET /Patient?identifier=…\|SCP-ABCD-1234` or `GET /Patient/SCP-ABCD-1234` | Confirm a SmartClinic ID |
+| `POST /ServiceRequest` | Send a lab, imaging or referral request (201 + `Location`) |
+| `POST /MedicationRequest` | Send a one-medicine prescription |
+| `POST /` with a `Bundle` (`batch` or `transaction`) | Send several. ServiceRequests that share patient, category and `requisition` become one request; MedicationRequests that share `groupIdentifier` become one prescription. Every entry is checked before anything is sent. At most 60 entries. |
+| `GET /ServiceRequest?_count=20&_page=1`, `GET /ServiceRequest/{id}` | Your requests and their status (`active`, `completed`, `revoked`) |
+| `GET /MedicationRequest?group-identifier={reference}`, `GET /MedicationRequest/{id}` | Your prescriptions |
+| `GET /DiagnosticReport?based-on=ServiceRequest/{reference}` | Results |
+| `POST /ServiceRequest/{id}/$cancel` (or `MedicationRequest`) | Cancel; optional `Parameters` with `reason` |
+
+Example: send a lab request.
+
+```bash
+curl -X POST -H "Authorization: Bearer $SMARTCLINIC_KEY" -H "Content-Type: application/fhir+json" \
+  https://<host>/api/v1/fhir/r4/ServiceRequest \
+  -d '{
+    "resourceType": "ServiceRequest",
+    "status": "active",
+    "intent": "order",
+    "category": [{ "coding": [{ "system": "http://snomed.info/sct", "code": "108252007" }] }],
+    "code": { "text": "Malaria parasite (MP)" },
+    "orderDetail": [{ "text": "Full blood count" }],
+    "subject": { "reference": "Patient/SCP-ABCD-1234" },
+    "reasonCode": [{ "text": "Fever for 3 days" }]
+  }'
+```
+
+Resources follow base FHIR R4. Profiles from the draft
+[Nigeria Core FHIR guide](https://build.fhir.org/ig/digitalhealth-gov-ng/Nigeria-Core/)
+will be added once it is published.
+
 ## Referral fees
 
 When a lab or pharmacy refers a patient to another facility on SmartClinic, the

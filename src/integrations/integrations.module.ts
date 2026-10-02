@@ -5,6 +5,7 @@ import { AuthModule } from "../auth/auth.module";
 import { ClinicalOrdersModule } from "../clinical-orders/clinical-orders.module";
 import { ProvidersModule } from "../providers/providers.module";
 import { ApiKeyGuard } from "./api-key.guard";
+import { FhirController } from "./fhir/fhir.controller";
 import { IntegrationApiController } from "./integration-api.controller";
 import { ProviderApiKey } from "./provider-api-key.entity";
 import { ProviderApiKeysService } from "./provider-api-keys.service";
@@ -20,7 +21,7 @@ import { User } from "../users/entities/user.entity";
     ProviderWebhooksModule,
     TypeOrmModule.forFeature([ProviderApiKey, User]),
   ],
-  controllers: [ProviderIntegrationsController, IntegrationApiController],
+  controllers: [ProviderIntegrationsController, IntegrationApiController, FhirController],
   providers: [ProviderApiKeysService, ApiKeyGuard],
 })
 export class IntegrationsModule {}
