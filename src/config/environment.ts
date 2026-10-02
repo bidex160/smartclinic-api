@@ -90,6 +90,17 @@ export interface AppConfiguration {
       webhookEnabled: boolean;
     };
   };
+  hospitalBills: {
+    requestTimeoutMs: number;
+    akth: {
+      baseUrl: string;
+      name: string;
+      logo: string;
+      bearerToken?: string;
+      invoiceEndpoint?: string;
+      paymentNotificationEndpoint?: string;
+    };
+  };
   referrals: { monetaryShareBps: number };
   pharmacyCoordination: {
     doctorFeeBps: number;
@@ -288,6 +299,17 @@ export function createAppConfiguration(
         callbackUrl: environment.OPAY_CALLBACK_URL,
         returnUrl: environment.OPAY_RETURN_URL,
         webhookEnabled: environment.OPAY_WEBHOOK_ENABLED !== "false",
+      },
+    },
+    hospitalBills: {
+      requestTimeoutMs: getNumber(environment.HOSPITAL_EMR_TIMEOUT_MS, 10000),
+      akth: {
+        baseUrl: environment.AKTH_EMR_BASE_URL ?? "https://artistic-destined-mite.ngrok-free.app",
+        name: environment.AKTH_HOSPITAL_NAME ?? "AKTH - SmartBox",
+        logo: environment.AKTH_HOSPITAL_LOGO ?? "https://res.cloudinary.com/bidex160/image/upload/v1772819387/IMG_9875_k1ur6k.jpg",
+        bearerToken: environment.AKTH_BEARER_TOKEN,
+        invoiceEndpoint: environment.AKTH_INVOICE_ENDPOINT,
+        paymentNotificationEndpoint: environment.AKTH_PAYMENT_NOTIFICATION_ENDPOINT,
       },
     },
     referrals: {

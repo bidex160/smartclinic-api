@@ -133,6 +133,6 @@ import { MeGuidedSelfCheckFundingController } from "./me-guided-self-check-fundi
       ],
     },
   ],
-  exports: [PaymentFlowService],
+  exports: [PaymentFlowService, PaymentProviderRegistry],
 })
 export class PaymentsModule {}

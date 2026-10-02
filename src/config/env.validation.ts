@@ -168,6 +168,13 @@ class EnvironmentVariables {
   @IsOptional() @IsString() OPAY_PRIVATE_KEY?: string;
   @IsOptional() @IsUrl({ require_tld: false }) OPAY_CALLBACK_URL?: string;
   @IsOptional() @IsUrl({ require_tld: false }) OPAY_RETURN_URL?: string;
+  @Type(() => Number) @IsInt() @Min(1000) HOSPITAL_EMR_TIMEOUT_MS = 10000;
+  @IsOptional() @IsUrl({ require_tld: false }) AKTH_EMR_BASE_URL?: string;
+  @IsOptional() @IsString() AKTH_HOSPITAL_NAME?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) AKTH_HOSPITAL_LOGO?: string;
+  @IsOptional() @IsString() AKTH_BEARER_TOKEN?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) AKTH_INVOICE_ENDPOINT?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) AKTH_PAYMENT_NOTIFICATION_ENDPOINT?: string;
   @IsOptional() @IsIn(["true", "false"]) OPAY_WEBHOOK_ENABLED?: string;
   @Type(() => Number) @IsInt() @Min(0) @Max(10000) PRIMARY_REFERRER_SHARE_BPS =
     300;

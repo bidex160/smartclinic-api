@@ -33,6 +33,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { WalletModule } from './wallet/wallet.module';
 import { BuildersModule } from './builders/builders.module';
+import { HospitalBillPaymentsModule } from './hospital-bill-payments/hospital-bill-payments.module';
 import { AssistedMatchingModule } from './assisted-matching/assisted-matching.module';
 import { HmoModule } from './hmo/hmo.module';
 import { PartnerModule } from './partners/partner.module';
@@ -67,6 +68,7 @@ const persistenceDomainModules = configuration.database.enabled
       NotificationsModule,
       WalletModule,
       BuildersModule,
+      HospitalBillPaymentsModule,
       AssistedMatchingModule,
       HmoModule,
       PartnerModule,

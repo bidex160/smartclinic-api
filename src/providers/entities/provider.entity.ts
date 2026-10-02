@@ -62,6 +62,9 @@ export class Provider {
   @Column({ type: 'varchar', nullable: true })
   city!: string | null;
 
+  @Column({ name: 'hospital_code', type: 'varchar', length: 40, nullable: true })
+  hospitalCode!: string | null;
+
   @Column({ type: 'enum', enum: ProviderStatus, enumName: 'provider_status_enum', default: ProviderStatus.PENDING })
   status!: ProviderStatus;
 
