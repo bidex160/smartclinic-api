@@ -29,6 +29,7 @@ import { ProviderServiceUnitsModule } from './provider-service-units/provider-se
 import { GuidedSelfChecksModule } from './guided-self-checks/guided-self-checks.module';
 import { HealthPassportModule } from './health-passport/health-passport.module';
 import { CompanionModule } from './companion/companion.module';
+import { WellnessAdminModule } from './wellness-admin/wellness-admin.module';
 import { CohortContactModule } from './cohort/cohort-contact.module';
 import { SupportModule } from './support/support.module';
 import { ProviderRecruitmentInvitationsModule } from './provider-recruitment-invitations/provider-recruitment-invitations.module';
@@ -66,6 +67,7 @@ const persistenceDomainModules = configuration.database.enabled
       GuidedSelfChecksModule,
       HealthPassportModule,
       CompanionModule,
+      WellnessAdminModule,
       CohortContactModule,
       SupportModule,
       ProviderRecruitmentInvitationsModule,

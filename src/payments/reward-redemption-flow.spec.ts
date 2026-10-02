@@ -87,8 +87,8 @@ describe("Health Check reward redemption funding", () => {
     let wellness: any; let withWellness: PaymentFlowService;
     beforeEach(() => {
       wellness = {
-        rules: () => ({ valuePerPointMinor: { NGN: 500, GHS: 4, RWF: 400 }, maxPercent: 20, minPoints: 100 }),
-        wallet: jest.fn(async () => ({ earnedPoints: 600, usedPoints: 0, availablePoints: 600 })),
+        rules: jest.fn(async () => ({ valuePerPointMinor: { NGN: 500, GHS: 4, RWF: 400 }, maxPercent: 20, minPoints: 100, paused: false })),
+        wallet: jest.fn(async () => ({ earnedPoints: 600, usedPoints: 0, adjustedPoints: 0, availablePoints: 600 })),
       };
       withWellness = new PaymentFlowService(booking && (manager.getRepository(Booking)), (manager.getRepository(PaymentAttempt)), new TestPaymentProviderAdapter(), undefined, matching, rewards, undefined, undefined, undefined, undefined, undefined, undefined, undefined, wellness);
     });
@@ -110,6 +110,12 @@ describe("Health Check reward redemption funding", () => {
       wellness.wallet.mockResolvedValueOnce({ earnedPoints: 150, usedPoints: 0, availablePoints: 150 });
       await expect(withWellness.applyRewardPoints(booking.bookingReference, userId, 200, RewardPointSource.WELLNESS)).rejects.toThrow("Not enough wellness points");
       expect(redemptions).toHaveLength(0);
+    });
+
+    it("refuses wellness points while staff have paused them, and hides them from the preview", async () => {
+      wellness.rules.mockResolvedValue({ valuePerPointMinor: { NGN: 500 }, maxPercent: 20, minPoints: 100, paused: true });
+      await expect(withWellness.applyRewardPoints(booking.bookingReference, userId, 200, RewardPointSource.WELLNESS)).rejects.toThrow("paused");
+      expect((await withWellness.previewRewardRedemption(booking.bookingReference, userId)).wellness).toBeNull();
     });
 
     it("previews both kinds of points for the booking", async () => {

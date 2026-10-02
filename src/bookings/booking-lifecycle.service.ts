@@ -15,6 +15,9 @@ import { Booking } from './entities/booking.entity';
 import { BookingStatus } from './enums/booking-status.enum';
 import { RewardBookingRedemption } from '../rewards/entities/reward-booking-redemption.entity';
 import { RewardBookingRedemptionStatus } from '../rewards/enums/reward-booking-redemption-status.enum';
+import { RewardPointSource } from '../rewards/enums/reward-point-source.enum';
+import { RewardPointsLedger } from '../rewards/entities/reward-points-ledger.entity';
+import { RewardLedgerDirection } from '../rewards/enums/reward-ledger-direction.enum';
 
 const ACTIONABLE_ASSIGNMENTS = [ProviderAssignmentStatus.OFFERED, ProviderAssignmentStatus.ACCEPTED, ProviderAssignmentStatus.CONFIRMED];
 const ACTIVE_RESERVATIONS = [ProviderBookingReservationStatus.HELD, ProviderBookingReservationStatus.CONFIRMED];
@@ -33,6 +36,7 @@ export class BookingLifecycleService {
       const redemptionRepository = manager.getRepository(RewardBookingRedemption);
       const redemption = typeof redemptionRepository.findOne === 'function' ? await redemptionRepository.findOne({ where: { bookingId: booking.id, status: RewardBookingRedemptionStatus.RESERVED }, lock: { mode: 'pessimistic_write' } }) : null;
       if (redemption) { redemption.status = RewardBookingRedemptionStatus.CANCELLED; redemption.releasedAt = new Date(); await manager.getRepository(RewardBookingRedemption).save(redemption); }
+      await this.refundSettledPoints(manager, booking.id);
       const fromStatus = booking.status; booking.status = BookingStatus.CANCELLED; booking.cancellationReason = dto.reason ?? null;
       await manager.getRepository(Booking).save(booking);
       await this.appendBookingHistory(manager, booking.id, fromStatus, BookingStatus.CANCELLED, actorUserId, dto.reasonCode ?? 'BOOKING_CANCELLED', dto.reason ?? null);
@@ -54,6 +58,27 @@ export class BookingLifecycleService {
       await this.appendBookingHistory(manager, booking.id, fromStatus, toStatus, actorUserId, 'BOOKING_RESCHEDULED', 'Scheduling context updated; fresh provider matching required where applicable');
       return AdminBookingLifecycleResponseDto.fromEntity(booking, impact.assignments, impact.reservations);
     });
+  }
+
+  /**
+   * A paid Health Check that is cancelled gives the patient their points back.
+   * Wellness points simply stop counting as spent; referral points get a matching credit in the ledger
+   * (once only — the event key is unique). The money part of any refund is handled separately.
+   */
+  private async refundSettledPoints(manager: EntityManager, bookingId: string): Promise<void> {
+    const repository = manager.getRepository(RewardBookingRedemption);
+    if (typeof repository.findOne !== 'function') return;
+    const settled = await repository.findOne({ where: { bookingId, status: RewardBookingRedemptionStatus.SETTLED }, lock: { mode: 'pessimistic_write' } });
+    if (!settled) return;
+    if (settled.pointSource !== RewardPointSource.WELLNESS) {
+      const ledger = manager.getRepository(RewardPointsLedger);
+      const eventKey = `HEALTH_CHECK_REDEMPTION_REFUND:${bookingId}`;
+      if (!(await ledger.exists({ where: { eventKey } })))
+        await ledger.save(ledger.create({ userId: settled.userId, referralId: null, eventKey, eventType: 'HEALTH_CHECK_REDEMPTION_REFUND', direction: RewardLedgerDirection.CREDIT, points: settled.pointsReserved, reasonCode: 'HEALTH_CHECK_CANCELLED' }));
+    }
+    settled.status = RewardBookingRedemptionStatus.REFUNDED;
+    settled.releasedAt = new Date();
+    await repository.save(settled);
   }
 
   private async closeAssignmentsAndReservations(manager: EntityManager, bookingId: string, actorUserId: string, reasonCode: string, reasonNote: string | null, reservationStatus: ProviderBookingReservationStatus) {

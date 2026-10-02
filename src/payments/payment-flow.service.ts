@@ -460,9 +460,9 @@ export class PaymentFlowService {
   /** Wellness points this patient could put toward this booking, or null if they can't be used here. */
   private async wellnessPreview(userId: string, totalMinor: bigint, currency: string) {
     if (!this.wellness) return null;
-    const rules = this.wellness.rules();
+    const rules = await this.wellness.rules();
     const perPoint = rules.valuePerPointMinor[currency.toUpperCase()];
-    if (!perPoint || rules.maxPercent <= 0) return null;
+    if (!perPoint || rules.maxPercent <= 0 || rules.paused) return null;
     let wallet;
     try {
       wallet = await this.wellness.wallet(userId);
@@ -552,7 +552,9 @@ export class PaymentFlowService {
       let rateCurrency: string;
       if (source === RewardPointSource.WELLNESS) {
         // Wellness points: never cash, capped to a share of the price. The user row is locked above.
-        const rules = wellness!.rules();
+        const rules = await wellness!.rules();
+        if (rules.paused)
+          throw new ConflictException("Using wellness points is paused right now. Please try again later.");
         const perPoint = rules.valuePerPointMinor[booking.currency.toUpperCase()];
         if (!perPoint || rules.maxPercent <= 0)
           throw new ConflictException(
