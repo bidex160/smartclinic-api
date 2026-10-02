@@ -47,10 +47,10 @@ export class EngagementController {
   /** What the points are worth toward a Health Check. Level and badges always use lifetime points. */
   private async spendable(user: User) {
     if (!this.wellness) return {};
-    const rules = this.wellness.rules();
+    const rules = await this.wellness.rules();
     return {
       wallet: await this.wellness.wallet(user.id),
-      redeem: { valuePerPointMinor: rules.valuePerPointMinor, maxPercent: rules.maxPercent, minPoints: rules.minPoints },
+      redeem: { valuePerPointMinor: rules.valuePerPointMinor, maxPercent: rules.maxPercent, minPoints: rules.minPoints, paused: rules.paused },
     };
   }
 }

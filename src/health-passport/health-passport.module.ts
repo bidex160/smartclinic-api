@@ -23,6 +23,8 @@ import { EngagementController } from './engagement/engagement.controller';
 import { EngagementService } from './engagement/engagement.service';
 import { HealthQuizAnswer } from './engagement/health-quiz-answer.entity';
 import { WellnessPointsService } from './engagement/wellness-points.service';
+import { WellnessPointAdjustment } from './engagement/wellness-point-adjustment.entity';
+import { AppSetting } from './engagement/app-setting.entity';
 import { RewardBookingRedemption } from '../rewards/entities/reward-booking-redemption.entity';
 import { HealthPassportController } from './health-passport.controller';
 import { HealthPassportService } from './health-passport.service';
@@ -53,6 +55,8 @@ import { User } from '../users/entities/user.entity';
       PatientRelationship,
       HealthQuizAnswer,
       RewardBookingRedemption,
+      WellnessPointAdjustment,
+      AppSetting,
     ]),
   ],
   controllers: [HealthPassportController, EngagementController],
