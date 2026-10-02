@@ -83,7 +83,7 @@ export class PatientDailyRoutineCompletionsService {
         .getRawMany(),
       this.checkIns
         .createQueryBuilder("checkIn")
-        .select("checkIn.local_date::text", "localDate")
+        .select('"checkIn"."local_date"::text', "localDate")
         .addSelect("checkIn.mood", "mood")
         .addSelect("checkIn.energy", "energy")
         .addSelect("checkIn.sleep", "sleep")
