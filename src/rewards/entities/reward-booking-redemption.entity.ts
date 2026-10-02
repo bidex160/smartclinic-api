@@ -8,6 +8,7 @@ import { RewardPointSource } from "../enums/reward-point-source.enum";
 @Check("CHK_reward_booking_redemption_positive", '"points_reserved" > 0 AND "rate_points" > 0 AND "rate_amount_minor" > 0 AND "amount_minor" > 0')
 @Index("UQ_reward_booking_redemption_active_booking", ["bookingId"], { unique: true, where: '"status" = \'RESERVED\'' })
 @Index("IDX_reward_booking_redemption_user_status", ["userId", "status"])
+@Index("IDX_reward_booking_redemption_user_source_status", ["userId", "pointSource", "status"])
 export class RewardBookingRedemption {
   @PrimaryGeneratedColumn("uuid") id!: string;
   @Column({ name: "booking_id", type: "uuid" }) bookingId!: string;

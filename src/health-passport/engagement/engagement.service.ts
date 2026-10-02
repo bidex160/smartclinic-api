@@ -163,7 +163,7 @@ export class EngagementService {
     };
   }
 
-  /** Lifetime wellness points (they never go down; spending is tracked separately). */
+  /** Wellness points earned so far. Spending is tracked separately; clearing a passport item removes its points. */
   async earnedPoints(patient: Patient, user: User): Promise<number> {
     return summarise(await this.facts(patient, user), localDateIn(new Date(), 'Africa/Lagos')).points;
   }
