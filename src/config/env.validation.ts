@@ -122,6 +122,19 @@ class EnvironmentVariables {
   @IsOptional() @IsString() FIREBASE_CLIENT_EMAIL?: string;
   @IsOptional() @IsString() FIREBASE_PRIVATE_KEY?: string;
   @Type(() => Number) @IsInt() @Min(1) NOTIFICATION_PUSH_MAX_ATTEMPTS = 5;
+  // Help line shown in the app; per-country overrides fall back to these.
+  @IsOptional() @IsString() SUPPORT_PHONE?: string;
+  @IsOptional() @IsString() SUPPORT_WHATSAPP?: string;
+  @IsOptional() @IsString() SUPPORT_HOURS?: string;
+  @IsOptional() @IsString() SUPPORT_PHONE_NG?: string;
+  @IsOptional() @IsString() SUPPORT_WHATSAPP_NG?: string;
+  @IsOptional() @IsString() SUPPORT_HOURS_NG?: string;
+  @IsOptional() @IsString() SUPPORT_PHONE_GH?: string;
+  @IsOptional() @IsString() SUPPORT_WHATSAPP_GH?: string;
+  @IsOptional() @IsString() SUPPORT_HOURS_GH?: string;
+  @IsOptional() @IsString() SUPPORT_PHONE_RW?: string;
+  @IsOptional() @IsString() SUPPORT_WHATSAPP_RW?: string;
+  @IsOptional() @IsString() SUPPORT_HOURS_RW?: string;
   @IsOptional() @IsString() WEB_PUSH_VAPID_PUBLIC_KEY?: string;
   @IsOptional() @IsString() WEB_PUSH_VAPID_PRIVATE_KEY?: string;
   @IsOptional() @IsString() WEB_PUSH_VAPID_SUBJECT?: string;
