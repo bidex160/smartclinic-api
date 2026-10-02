@@ -42,6 +42,8 @@ import { RewardBookingRedemption } from "../rewards/entities/reward-booking-rede
 import { RewardConversionRate } from "../rewards/entities/reward-conversion-rate.entity";
 import { RewardPointsLedger } from "../rewards/entities/reward-points-ledger.entity";
 import { RewardBookingRedemptionStatus } from "../rewards/enums/reward-booking-redemption-status.enum";
+import { RewardPointSource } from "../rewards/enums/reward-point-source.enum";
+import { maxRedeemablePoints, WellnessPointsService } from "../health-passport/engagement/wellness-points.service";
 import { RewardLedgerDirection } from "../rewards/enums/reward-ledger-direction.enum";
 import { RewardWithdrawalsService } from "../rewards/reward-withdrawals.service";
 import { User } from "../users/entities/user.entity";
@@ -126,6 +128,8 @@ export class PaymentFlowService {
     private readonly referralEarnings?: ReferralEarningsService,
     @Optional()
     private readonly partners?: PartnerService,
+    @Optional()
+    private readonly wellness?: WellnessPointsService,
   ) {}
 
   async getWalletTopUp(userId: string, reference: string) {
@@ -415,19 +419,25 @@ export class PaymentFlowService {
     });
     if (!booking || !booking.quotedAmount || !booking.currency)
       throw new NotFoundException("Booking not found");
+    const totalMinor = this.toMinor(booking.quotedAmount);
     const rate = await this.bookings.manager
       .getRepository(RewardConversionRate)
       .findOne({ where: { isActive: true }, order: { effectiveFrom: "DESC" } });
-    if (!rate || !this.rewards)
+    const referralConfigured = Boolean(rate && this.rewards);
+    const wellness = await this.wellnessPreview(userId, totalMinor, booking.currency);
+    if (!referralConfigured && !wellness)
       throw new ConflictException(
         "Reward redemption is not currently configured",
       );
-    const balance = await this.rewards.balance(userId);
-    const totalMinor = this.toMinor(booking.quotedAmount);
-    const rateMinor = this.toMinor(rate.amount);
-    const maximumRedeemablePoints = Number(
-      (totalMinor * BigInt(rate.points)) / rateMinor,
-    );
+    let availablePoints = 0;
+    let maximumRedeemablePoints = 0;
+    if (rate && this.rewards) {
+      const balance = await this.rewards.balance(userId);
+      availablePoints = balance.availablePoints;
+      maximumRedeemablePoints = Number(
+        (totalMinor * BigInt(rate.points)) / this.toMinor(rate.amount),
+      );
+    }
     const active = await this.bookings.manager
       .getRepository(RewardBookingRedemption)
       .findOne({
@@ -437,20 +447,52 @@ export class PaymentFlowService {
         },
       });
     return {
-      availablePoints: balance.availablePoints,
+      availablePoints,
       maximumRedeemablePoints,
       bookingOutstandingAmount: this.fromMinor(totalMinor),
       currency: booking.currency,
       activeRedemption: active ? this.redemptionView(active, totalMinor) : null,
+      referralConfigured,
+      wellness,
     };
   }
 
-  async applyRewardPoints(reference: string, userId: string, points: number) {
-    if (!this.rewards)
+  /** Wellness points this patient could put toward this booking, or null if they can't be used here. */
+  private async wellnessPreview(userId: string, totalMinor: bigint, currency: string) {
+    if (!this.wellness) return null;
+    const rules = this.wellness.rules();
+    const perPoint = rules.valuePerPointMinor[currency.toUpperCase()];
+    if (!perPoint || rules.maxPercent <= 0) return null;
+    let wallet;
+    try {
+      wallet = await this.wellness.wallet(userId);
+    } catch {
+      return null;
+    }
+    const maximum = maxRedeemablePoints(totalMinor, perPoint, rules.maxPercent, wallet.availablePoints);
+    return {
+      availablePoints: wallet.availablePoints,
+      minimumPoints: rules.minPoints,
+      maximumRedeemablePoints: maximum >= rules.minPoints ? maximum : 0,
+      valuePerPoint: this.fromMinor(BigInt(perPoint)),
+      maxPercent: rules.maxPercent,
+    };
+  }
+
+  async applyRewardPoints(
+    reference: string,
+    userId: string,
+    points: number,
+    source: RewardPointSource = RewardPointSource.REFERRAL,
+  ) {
+    if (source === RewardPointSource.REFERRAL && !this.rewards)
       throw new ConflictException(
         "Reward redemption is not currently configured",
       );
+    if (source === RewardPointSource.WELLNESS && !this.wellness)
+      throw new ConflictException("Wellness points can't be used yet");
     const rewards = this.rewards;
+    const wellness = this.wellness;
     let settledReference: string | null = null;
     const result = await this.bookings.manager.transaction(async (manager) => {
       const booking = await manager.getRepository(Booking).findOne({
@@ -504,20 +546,52 @@ export class PaymentFlowService {
         throw new ConflictException(
           "Reward points cannot change while an external payment attempt is active",
         );
-      const rate = await manager.getRepository(RewardConversionRate).findOne({
-        where: { isActive: true },
-        order: { effectiveFrom: "DESC" },
-      });
-      if (!rate)
-        throw new ConflictException(
-          "Reward redemption conversion is not configured",
-        );
-      const balance = await rewards.balance(userId, manager);
-      if (points > balance.availablePoints)
-        throw new ConflictException("Insufficient available reward points");
       const totalMinor = this.toMinor(booking.quotedAmount);
-      const rateMinor = this.toMinor(rate.amount);
-      const amountMinor = (BigInt(points) * rateMinor) / BigInt(rate.points);
+      let ratePoints: number;
+      let rateMinor: bigint;
+      let rateCurrency: string;
+      if (source === RewardPointSource.WELLNESS) {
+        // Wellness points: never cash, capped to a share of the price. The user row is locked above.
+        const rules = wellness!.rules();
+        const perPoint = rules.valuePerPointMinor[booking.currency.toUpperCase()];
+        if (!perPoint || rules.maxPercent <= 0)
+          throw new ConflictException(
+            "Wellness points can't be used for this Health Check yet",
+          );
+        if (points < rules.minPoints)
+          throw new BadRequestException(
+            `Use at least ${rules.minPoints} wellness points`,
+          );
+        const wallet = await wellness!.wallet(userId, manager);
+        if (points > wallet.availablePoints)
+          throw new ConflictException("Not enough wellness points");
+        if (
+          points >
+          maxRedeemablePoints(totalMinor, perPoint, rules.maxPercent, wallet.availablePoints)
+        )
+          throw new ConflictException(
+            `Wellness points can cover up to ${rules.maxPercent}% of a Health Check`,
+          );
+        ratePoints = 1;
+        rateMinor = BigInt(perPoint);
+        rateCurrency = booking.currency;
+      } else {
+        const rate = await manager.getRepository(RewardConversionRate).findOne({
+          where: { isActive: true },
+          order: { effectiveFrom: "DESC" },
+        });
+        if (!rate)
+          throw new ConflictException(
+            "Reward redemption conversion is not configured",
+          );
+        const balance = await rewards!.balance(userId, manager);
+        if (points > balance.availablePoints)
+          throw new ConflictException("Insufficient available reward points");
+        ratePoints = rate.points;
+        rateMinor = this.toMinor(rate.amount);
+        rateCurrency = rate.currency;
+      }
+      const amountMinor = (BigInt(points) * rateMinor) / BigInt(ratePoints);
       if (amountMinor <= 0n)
         throw new BadRequestException(
           "Requested points do not convert to a usable amount",
@@ -531,10 +605,11 @@ export class PaymentFlowService {
           bookingId: booking.id,
           userId,
           pointsReserved: points,
-          ratePoints: rate.points,
+          pointSource: source,
+          ratePoints,
           rateAmountMinor: rateMinor.toString(),
           amountMinor: amountMinor.toString(),
-          currency: rate.currency.toUpperCase(),
+          currency: rateCurrency.toUpperCase(),
           status: RewardBookingRedemptionStatus.RESERVED,
           settledAt: null,
           releasedAt: null,
@@ -596,6 +671,7 @@ export class PaymentFlowService {
         bookingReference: booking.bookingReference,
         bookingTotal: booking.quotedAmount,
         pointsReserved: redemption.pointsReserved,
+        pointSource: redemption.pointSource,
         pointsAmount: this.fromMinor(amountMinor),
         remainingExternalAmount: this.fromMinor(remainingMinor),
         currency: booking.currency,
@@ -3999,7 +4075,9 @@ export class PaymentFlowService {
   ) {
     const eventKey = `HEALTH_CHECK_REDEMPTION:${redemption.bookingId}`;
     const ledger = manager.getRepository(RewardPointsLedger);
-    if (!(await ledger.exists({ where: { eventKey } })))
+    // Wellness points live outside the cash ledger: settling just marks them spent.
+    const fromCashLedger = redemption.pointSource !== RewardPointSource.WELLNESS;
+    if (fromCashLedger && !(await ledger.exists({ where: { eventKey } })))
       await ledger.save(
         ledger.create({
           userId: redemption.userId,
@@ -4071,6 +4149,7 @@ export class PaymentFlowService {
   ) {
     return {
       pointsReserved: redemption.pointsReserved,
+      pointSource: redemption.pointSource ?? RewardPointSource.REFERRAL,
       pointsAmount: this.fromMinor(BigInt(redemption.amountMinor)),
       remainingExternalAmount: this.fromMinor(
         totalMinor - BigInt(redemption.amountMinor),

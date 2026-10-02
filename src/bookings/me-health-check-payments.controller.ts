@@ -88,7 +88,7 @@ export class MeHealthCheckRewardsController {
   @Get('preview') @ApiOperation({ summary: 'Preview server-authoritative reward redemption limits' })
   async preview(@Req() request: { user: User }, @Param() { reference }: BookingReferenceParamsDto) { await this.bookings.requireOwnedBooking(request.user, reference); return this.payments.previewRewardRedemption(reference, request.user.id); }
   @Post('apply') @HttpCode(HttpStatus.OK) @ApiOperation({ summary: 'Reserve reward points toward an owned Health Check' })
-  async apply(@Req() request: { user: User }, @Param() { reference }: BookingReferenceParamsDto, @Body() body: ApplyRewardPointsDto) { await this.bookings.requireOwnedBooking(request.user, reference); return this.payments.applyRewardPoints(reference, request.user.id, body.points); }
+  async apply(@Req() request: { user: User }, @Param() { reference }: BookingReferenceParamsDto, @Body() body: ApplyRewardPointsDto) { await this.bookings.requireOwnedBooking(request.user, reference); return this.payments.applyRewardPoints(reference, request.user.id, body.points, body.source); }
   @Delete() @ApiOperation({ summary: 'Release an unsettled Health Check reward reservation' })
   async release(@Req() request: { user: User }, @Param() { reference }: BookingReferenceParamsDto) { await this.bookings.requireOwnedBooking(request.user, reference); return this.payments.releaseRewardPoints(reference, request.user.id); }
 }

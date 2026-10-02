@@ -163,6 +163,11 @@ export class EngagementService {
     };
   }
 
+  /** Lifetime wellness points (they never go down; spending is tracked separately). */
+  async earnedPoints(patient: Patient, user: User): Promise<number> {
+    return summarise(await this.facts(patient, user), localDateIn(new Date(), 'Africa/Lagos')).points;
+  }
+
   private quizView(today: string, answer: HealthQuizAnswer | null) {
     const q = questionForDate(today);
     return {

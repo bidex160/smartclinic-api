@@ -2,6 +2,7 @@ import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, 
 import { Booking } from "../../bookings/entities/booking.entity";
 import { User } from "../../users/entities/user.entity";
 import { RewardBookingRedemptionStatus } from "../enums/reward-booking-redemption-status.enum";
+import { RewardPointSource } from "../enums/reward-point-source.enum";
 
 @Entity("reward_booking_redemptions")
 @Check("CHK_reward_booking_redemption_positive", '"points_reserved" > 0 AND "rate_points" > 0 AND "rate_amount_minor" > 0 AND "amount_minor" > 0')
@@ -18,6 +19,7 @@ export class RewardBookingRedemption {
   @Column({ name: "rate_amount_minor", type: "bigint" }) rateAmountMinor!: string;
   @Column({ name: "amount_minor", type: "bigint" }) amountMinor!: string;
   @Column({ type: "varchar", length: 3 }) currency!: string;
+  @Column({ name: "point_source", type: "enum", enum: RewardPointSource, enumName: "reward_point_source_enum", default: RewardPointSource.REFERRAL }) pointSource!: RewardPointSource;
   @Column({ type: "enum", enum: RewardBookingRedemptionStatus, enumName: "reward_booking_redemption_status_enum" }) status!: RewardBookingRedemptionStatus;
   @Column({ name: "settled_at", type: "timestamptz", nullable: true }) settledAt!: Date | null;
   @Column({ name: "released_at", type: "timestamptz", nullable: true }) releasedAt!: Date | null;

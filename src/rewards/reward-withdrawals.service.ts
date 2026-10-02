@@ -11,6 +11,7 @@ import { RewardWithdrawalStatusHistory } from "./entities/reward-withdrawal-stat
 import { RewardLedgerDirection } from "./enums/reward-ledger-direction.enum";
 import { RewardWithdrawalStatus } from "./enums/reward-withdrawal-status.enum";
 import { RewardBookingRedemption } from "./entities/reward-booking-redemption.entity";
+import { RewardPointSource } from "./enums/reward-point-source.enum";
 import { RewardBookingRedemptionStatus } from "./enums/reward-booking-redemption-status.enum";
 
 const RESERVED = [RewardWithdrawalStatus.REQUESTED, RewardWithdrawalStatus.PROCESSING];
@@ -118,7 +119,9 @@ export class RewardWithdrawalsService {
       manager.getRepository(RewardWithdrawalRequest).createQueryBuilder("withdrawal").select("COALESCE(SUM(withdrawal.pointsRequested), 0)", "reserved")
         .where("withdrawal.userId = :userId", { userId }).andWhere("withdrawal.status IN (:...statuses)", { statuses: RESERVED }).getRawOne<{ reserved: string }>(),
       manager.getRepository(RewardBookingRedemption).createQueryBuilder("redemption").select("COALESCE(SUM(redemption.pointsReserved), 0)", "reserved")
-        .where("redemption.userId = :userId", { userId }).andWhere("redemption.status = :status", { status: RewardBookingRedemptionStatus.RESERVED }).getRawOne<{ reserved: string }>(),
+        .where("redemption.userId = :userId", { userId }).andWhere("redemption.status = :status", { status: RewardBookingRedemptionStatus.RESERVED })
+        // Wellness points are a separate, non-cash balance; they never reduce withdrawable points.
+        .andWhere("redemption.pointSource = :source", { source: RewardPointSource.REFERRAL }).getRawOne<{ reserved: string }>(),
     ]);
     const withdrawalReservedPoints = Number(withdrawals?.reserved ?? 0);
     const healthCheckReservedPoints = Number(healthChecks?.reserved ?? 0);
