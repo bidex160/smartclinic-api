@@ -1,4 +1,4 @@
-import { ConflictException } from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import { BookingFunding } from "../bookings/entities/booking-funding.entity";
 import { BookingStatusHistory } from "../bookings/entities/booking-status-history.entity";
 import { Booking } from "../bookings/entities/booking.entity";
@@ -9,6 +9,8 @@ import { RewardBookingRedemption } from "../rewards/entities/reward-booking-rede
 import { RewardConversionRate } from "../rewards/entities/reward-conversion-rate.entity";
 import { RewardPointsLedger } from "../rewards/entities/reward-points-ledger.entity";
 import { RewardBookingRedemptionStatus } from "../rewards/enums/reward-booking-redemption-status.enum";
+import { RewardPointSource } from "../rewards/enums/reward-point-source.enum";
+import { maxRedeemablePoints, parsePointValues } from "../health-passport/engagement/wellness-points.service";
 import { User } from "../users/entities/user.entity";
 import { PaymentAttempt } from "./entities/payment-attempt.entity";
 import { PaymentTransaction } from "./entities/payment-transaction.entity";
@@ -79,5 +81,54 @@ describe("Health Check reward redemption funding", () => {
     await subject.applyRewardPoints(booking.bookingReference, userId, 400);
     await expect(subject.releaseRewardPoints(booking.bookingReference, userId)).resolves.toMatchObject({ redemptionStatus: RewardBookingRedemptionStatus.RELEASED, releasedPoints: 400 });
     expect(funding.amount).toBe("10000.00"); expect(ledgerRows).toHaveLength(0);
+  });
+
+  describe("wellness points", () => {
+    let wellness: any; let withWellness: PaymentFlowService;
+    beforeEach(() => {
+      wellness = {
+        rules: () => ({ valuePerPointMinor: { NGN: 500, GHS: 4, RWF: 400 }, maxPercent: 20, minPoints: 100 }),
+        wallet: jest.fn(async () => ({ earnedPoints: 600, usedPoints: 0, availablePoints: 600 })),
+      };
+      withWellness = new PaymentFlowService(booking && (manager.getRepository(Booking)), (manager.getRepository(PaymentAttempt)), new TestPaymentProviderAdapter(), undefined, matching, rewards, undefined, undefined, undefined, undefined, undefined, undefined, undefined, wellness);
+    });
+
+    it("takes up to 20% off at ₦5 a point, never touches the cash ledger, and settles as spent", async () => {
+      const applied = await withWellness.applyRewardPoints(booking.bookingReference, userId, 400, RewardPointSource.WELLNESS);
+      expect(applied).toMatchObject({ pointsReserved: 400, pointSource: RewardPointSource.WELLNESS, pointsAmount: "2000.00", remainingExternalAmount: "8000.00", redemptionStatus: RewardBookingRedemptionStatus.RESERVED });
+      expect(rewards.balance).not.toHaveBeenCalled();
+      await withWellness.initiatePatientPayment(booking.bookingReference, CheckoutFundingOption.PAY_NOW);
+      attemptsRows[0].bookingFunding = funding;
+      await withWellness.confirmPayment(attemptsRows[0].id, userId);
+      expect(redemptions[0]).toMatchObject({ status: RewardBookingRedemptionStatus.SETTLED, pointSource: RewardPointSource.WELLNESS });
+      expect(ledgerRows).toHaveLength(0);
+    });
+
+    it("refuses below the minimum, above the 20% cap, or beyond the balance", async () => {
+      await expect(withWellness.applyRewardPoints(booking.bookingReference, userId, 50, RewardPointSource.WELLNESS)).rejects.toBeInstanceOf(BadRequestException);
+      await expect(withWellness.applyRewardPoints(booking.bookingReference, userId, 401, RewardPointSource.WELLNESS)).rejects.toThrow("20%");
+      wellness.wallet.mockResolvedValueOnce({ earnedPoints: 150, usedPoints: 0, availablePoints: 150 });
+      await expect(withWellness.applyRewardPoints(booking.bookingReference, userId, 200, RewardPointSource.WELLNESS)).rejects.toThrow("Not enough wellness points");
+      expect(redemptions).toHaveLength(0);
+    });
+
+    it("previews both kinds of points for the booking", async () => {
+      const preview = await withWellness.previewRewardRedemption(booking.bookingReference, userId);
+      expect(preview.wellness).toEqual({ availablePoints: 600, minimumPoints: 100, maximumRedeemablePoints: 400, valuePerPoint: "5.00", maxPercent: 20 });
+      expect(preview.referralConfigured).toBe(true);
+    });
+  });
+
+  describe("wellness helpers", () => {
+    it("reads point values per currency and ignores bad entries", () => {
+      expect(parsePointValues("NGN:5, GHS:0.04,RWF:4")).toEqual({ NGN: 500, GHS: 4, RWF: 400 });
+      expect(parsePointValues("NGN:abc,xx:1,GHS:0.05")).toEqual({ GHS: 5 });
+      expect(parsePointValues("")).toEqual({ NGN: 500, GHS: 4, RWF: 400 });
+    });
+    it("caps by balance and by share of the price", () => {
+      expect(maxRedeemablePoints(1_000_000n, 500, 20, 9999)).toBe(400);
+      expect(maxRedeemablePoints(1_000_000n, 500, 20, 120)).toBe(120);
+      expect(maxRedeemablePoints(1_000_000n, 500, 0, 999)).toBe(0);
+    });
   });
 });

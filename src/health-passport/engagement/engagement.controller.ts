@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Optional, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, IsTimeZone, Max, MaxLength, Min } from 'class-validator';
@@ -9,6 +9,7 @@ import { RolesGuard } from '../../auth/roles.guard';
 import { User } from '../../users/entities/user.entity';
 import { UserRole } from '../../users/enums/user-role.enum';
 import { EngagementService } from './engagement.service';
+import { WellnessPointsService } from './wellness-points.service';
 
 export class EngagementQueryDto {
   @ApiPropertyOptional({ example: 'Africa/Lagos' }) @IsOptional() @IsTimeZone() timezone?: string;
@@ -26,17 +27,30 @@ export class AnswerHealthQuizDto {
 @Roles(UserRole.USER)
 @Controller('me/engagement')
 export class EngagementController {
-  constructor(private readonly engagement: EngagementService) {}
+  constructor(
+    private readonly engagement: EngagementService,
+    @Optional() private readonly wellness?: WellnessPointsService,
+  ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Points, level, streak, badges, passport completion and today’s quiz' })
-  overview(@Req() r: { user: User }, @Query() q: EngagementQueryDto) {
-    return this.engagement.overview(r.user, q.timezone ?? 'Africa/Lagos');
+  @ApiOperation({ summary: 'Points, level, streak, badges, passport completion, today’s quiz and points you can spend' })
+  async overview(@Req() r: { user: User }, @Query() q: EngagementQueryDto) {
+    return { ...(await this.engagement.overview(r.user, q.timezone ?? 'Africa/Lagos')), ...(await this.spendable(r.user)) };
   }
 
   @Post('quiz/answers')
   @ApiOperation({ summary: 'Answer today’s health quiz question (once a day)' })
-  answer(@Req() r: { user: User }, @Body() dto: AnswerHealthQuizDto) {
-    return this.engagement.answerQuiz(r.user, dto);
+  async answer(@Req() r: { user: User }, @Body() dto: AnswerHealthQuizDto) {
+    return { ...(await this.engagement.answerQuiz(r.user, dto)), ...(await this.spendable(r.user)) };
+  }
+
+  /** What the points are worth toward a Health Check. Level and badges always use lifetime points. */
+  private async spendable(user: User) {
+    if (!this.wellness) return {};
+    const rules = this.wellness.rules();
+    return {
+      wallet: await this.wellness.wallet(user.id),
+      redeem: { valuePerPointMinor: rules.valuePerPointMinor, maxPercent: rules.maxPercent, minPoints: rules.minPoints },
+    };
   }
 }

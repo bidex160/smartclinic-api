@@ -49,6 +49,6 @@ export class PatientPortalProfileService {
   }
 
   private project(user: User, patient: Patient): PatientPortalProfileDto {
-    return { user: { displayName: user.displayName!, email: user.email }, patient: { patientReference: patient.patientReference, givenName: patient.givenName, familyName: patient.familyName, phone: patient.phone, dateOfBirth: patient.dateOfBirth } };
+    return { user: { displayName: user.displayName!, email: user.email }, patient: { patientReference: patient.patientReference, givenName: patient.givenName, familyName: patient.familyName, phone: patient.phone, dateOfBirth: patient.dateOfBirth, countryCode: patient.countryCode ?? null } };
   }
 }

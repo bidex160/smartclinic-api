@@ -135,6 +135,21 @@ class EnvironmentVariables {
   @IsOptional() @IsString() SUPPORT_PHONE_RW?: string;
   @IsOptional() @IsString() SUPPORT_WHATSAPP_RW?: string;
   @IsOptional() @IsString() SUPPORT_HOURS_RW?: string;
+  // Companion: smart answers (reuses OPENAI_API_KEY) and natural voices. Every key is optional; missing ones are skipped.
+  @IsOptional() @IsIn(["none", "openai"]) COMPANION_AI_PROVIDER?: string;
+  @IsOptional() @IsString() COMPANION_OPENAI_MODEL?: string;
+  @IsOptional() @IsString() SPITCH_API_KEY?: string;
+  @IsOptional() @IsString() COMPANION_SPITCH_PIDGIN_LANGUAGE?: string;
+  @IsOptional() @IsString() AZURE_SPEECH_KEY?: string;
+  @IsOptional() @IsString() AZURE_SPEECH_REGION?: string;
+  @IsOptional() @IsString() KHAYA_API_KEY?: string;
+  @IsOptional() @IsIn(["true", "false"]) COMPANION_OPENAI_TTS?: string;
+  @IsOptional() @IsString() COMPANION_OPENAI_TTS_MODEL?: string;
+  @IsOptional() @IsString() COMPANION_TTS_RW_URL?: string;
+  // Wellness points toward Health Checks: value of ONE point per currency, in major units ("NGN:5,GHS:0.04,RWF:4").
+  @IsOptional() @IsString() WELLNESS_POINT_VALUES?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) WELLNESS_REDEEM_MAX_PERCENT?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) WELLNESS_REDEEM_MIN_POINTS?: number;
   @IsOptional() @IsString() WEB_PUSH_VAPID_PUBLIC_KEY?: string;
   @IsOptional() @IsString() WEB_PUSH_VAPID_PRIVATE_KEY?: string;
   @IsOptional() @IsString() WEB_PUSH_VAPID_SUBJECT?: string;

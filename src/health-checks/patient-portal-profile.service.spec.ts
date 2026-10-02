@@ -5,8 +5,8 @@ import { PatientPortalProfileService } from './patient-portal-profile.service';
 describe('PatientPortalProfileService', () => {
   const user: any = { id: 'user-a', displayName: 'Ada Okafor', email: 'ada@example.test' };
   it('returns the safe SELF Patient profile with public reference', async () => {
-    const patients: any = { findOne: jest.fn().mockResolvedValue({ patientReference: 'SCP-8K4M-27QD', userId: user.id, givenName: 'Ada', familyName: 'Okafor', phone: '+2348000000000', dateOfBirth: '1990-01-01', status: PatientStatus.ACTIVE, deletedAt: null }) };
-    await expect(new PatientPortalProfileService(patients).get(user)).resolves.toEqual({ user: { displayName: 'Ada Okafor', email: 'ada@example.test' }, patient: { patientReference: 'SCP-8K4M-27QD', givenName: 'Ada', familyName: 'Okafor', phone: '+2348000000000', dateOfBirth: '1990-01-01' } });
+    const patients: any = { findOne: jest.fn().mockResolvedValue({ patientReference: 'SCP-8K4M-27QD', userId: user.id, givenName: 'Ada', familyName: 'Okafor', phone: '+2348000000000', dateOfBirth: '1990-01-01', countryCode: 'RW', status: PatientStatus.ACTIVE, deletedAt: null }) };
+    await expect(new PatientPortalProfileService(patients).get(user)).resolves.toEqual({ user: { displayName: 'Ada Okafor', email: 'ada@example.test' }, patient: { patientReference: 'SCP-8K4M-27QD', givenName: 'Ada', familyName: 'Okafor', phone: '+2348000000000', dateOfBirth: '1990-01-01', countryCode: 'RW' } });
     expect(patients.findOne).toHaveBeenCalledWith({ where: { userId: user.id }, withDeleted: true });
   });
   it('returns a null account email without asserting or fabricating a value', async () => {
@@ -27,7 +27,7 @@ describe('PatientPortalProfileService', () => {
     expect(patientRepository.findOne).toHaveBeenCalledWith({ where: { userId: user.id }, withDeleted: true });
     expect(patientRepository.save).toHaveBeenCalledWith(expect.objectContaining({ givenName: 'Adanna', familyName: 'Okafor', email: user.email, phone: '+2348012345678', dateOfBirth: '1990-01-01' }));
     expect(userRepository.update).toHaveBeenCalledWith(user.id, { displayName: 'Adanna Okafor', phoneNormalized: '+2348012345678' });
-    expect(result).toEqual({ user: { displayName: 'Adanna Okafor', email: user.email }, patient: { patientReference: 'SCP-8K4M-27QD', givenName: 'Adanna', familyName: 'Okafor', phone: '+2348012345678', dateOfBirth: '1990-01-01' } });
+    expect(result).toEqual({ user: { displayName: 'Adanna Okafor', email: user.email }, patient: { patientReference: 'SCP-8K4M-27QD', givenName: 'Adanna', familyName: 'Okafor', phone: '+2348012345678', dateOfBirth: '1990-01-01', countryCode: null } });
     expect(result.patient).not.toHaveProperty('id');
     expect(result.patient).not.toHaveProperty('userId');
   });

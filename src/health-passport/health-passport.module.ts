@@ -22,6 +22,8 @@ import { PatientRelationship } from '../patients/entities/patient-relationship.e
 import { EngagementController } from './engagement/engagement.controller';
 import { EngagementService } from './engagement/engagement.service';
 import { HealthQuizAnswer } from './engagement/health-quiz-answer.entity';
+import { WellnessPointsService } from './engagement/wellness-points.service';
+import { RewardBookingRedemption } from '../rewards/entities/reward-booking-redemption.entity';
 import { HealthPassportController } from './health-passport.controller';
 import { HealthPassportService } from './health-passport.service';
 import { User } from '../users/entities/user.entity';
@@ -50,10 +52,11 @@ import { User } from '../users/entities/user.entity';
       PatientDailyCheckIn,
       PatientRelationship,
       HealthQuizAnswer,
+      RewardBookingRedemption,
     ]),
   ],
   controllers: [HealthPassportController, EngagementController],
-  providers: [HealthPassportService, EngagementService],
-  exports: [HealthPassportService],
+  providers: [HealthPassportService, EngagementService, WellnessPointsService],
+  exports: [HealthPassportService, WellnessPointsService],
 })
 export class HealthPassportModule {}

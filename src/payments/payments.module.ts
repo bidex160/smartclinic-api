@@ -1,3 +1,4 @@
+import { HealthPassportModule } from '../health-passport/health-passport.module';
 import { Module } from "@nestjs/common";
 import { ConfigType } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
@@ -63,6 +64,7 @@ import { MeGuidedSelfCheckFundingController } from "./me-guided-self-check-fundi
     CareAppointmentsModule,
     WalletModule,
     PartnerModule,
+    HealthPassportModule,
     TypeOrmModule.forFeature([
       PaymentAttempt,
       PaymentTransaction,

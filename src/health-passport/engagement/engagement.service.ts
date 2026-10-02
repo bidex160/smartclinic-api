@@ -163,6 +163,11 @@ export class EngagementService {
     };
   }
 
+  /** Wellness points earned so far. Spending is tracked separately; clearing a passport item removes its points. */
+  async earnedPoints(patient: Patient, user: User): Promise<number> {
+    return summarise(await this.facts(patient, user), localDateIn(new Date(), 'Africa/Lagos')).points;
+  }
+
   private quizView(today: string, answer: HealthQuizAnswer | null) {
     const q = questionForDate(today);
     return {
