@@ -94,6 +94,19 @@ const CONTENT: Record<NotificationType, NotificationContent> = {
     title: "Your SmartClinic routine",
     body: "A routine you chose is due. Open SmartClinic to review your Today list.",
   },
+  // Nudges are sent in-app and to phones only (email disabled); these are fallbacks.
+  [NotificationType.DAILY_NUDGE]: {
+    subject: "A small step for your health today",
+    preheader: "Your daily SmartClinic reminder.",
+    title: "A small step for your health today",
+    body: "Open SmartClinic for today's question and your check-in.",
+  },
+  [NotificationType.WELL_CHILD_VISIT]: {
+    subject: "Your child's check-up is coming up",
+    preheader: "Take their health card to the clinic.",
+    title: "Your child's check-up is coming up",
+    body: "Open SmartClinic to plan your child's routine check-up.",
+  },
   [NotificationType.CLINICAL_ORDER_RECEIVED]: {
     subject: "A new request from your care provider",
     preheader: "Review it and choose where to get it done.",

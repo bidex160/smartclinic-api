@@ -146,6 +146,11 @@ class EnvironmentVariables {
   @IsOptional() @IsIn(["true", "false"]) COMPANION_OPENAI_TTS?: string;
   @IsOptional() @IsString() COMPANION_OPENAI_TTS_MODEL?: string;
   @IsOptional() @IsString() COMPANION_TTS_RW_URL?: string;
+  // Daily nudges. Set NUDGES_ENABLED=false to stop them. WhatsApp needs a Meta-approved template
+  // whose body has two parameters: {{1}} title, {{2}} message.
+  @IsOptional() @IsIn(["true", "false"]) NUDGES_ENABLED?: string;
+  @IsOptional() @IsString() NUDGE_WHATSAPP_TEMPLATE?: string;
+  @IsOptional() @IsString() NUDGE_WHATSAPP_LANGUAGES?: string;
   // Wellness points toward Health Checks: value of ONE point per currency, in major units ("NGN:5,GHS:0.04,RWF:4").
   @IsOptional() @IsString() WELLNESS_POINT_VALUES?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) WELLNESS_REDEEM_MAX_PERCENT?: number;
