@@ -160,3 +160,48 @@ describe("PatientDailyRoutineCompletionsService", () => {
     expect(longestStreak(new Set(["2026-02-28", "2026-03-01"]))).toBe(2);
   });
 });
+
+/**
+ * The mocks above never build SQL, which let an unquoted camelCase alias
+ * ("checkIn.local_date::text") reach staging, where Postgres folds it to
+ * "checkin" and every dashboard load failed. This builds the real queries.
+ */
+describe("PatientDailyRoutineCompletionsService SQL", () => {
+  it("quotes every table alias in the progress queries", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { DataSource, SelectQueryBuilder } = require("typeorm");
+    const dataSource = new DataSource({
+      type: "postgres",
+      entities: [`${__dirname}/../**/*.entity.{ts,js}`],
+    });
+    await dataSource.buildMetadatas();
+    const sql: string[] = [];
+    const spy = jest
+      .spyOn(SelectQueryBuilder.prototype, "getRawMany")
+      .mockImplementation(function (this: { getQuery(): string }) {
+        sql.push(this.getQuery());
+        return Promise.resolve([]);
+      });
+    try {
+      const { PatientDailyRoutineCompletion } = await import("./entities/patient-daily-routine-completion.entity");
+      const { PatientDailyRoutine } = await import("./entities/patient-daily-routine.entity");
+      const { PatientDailyCheckIn } = await import("./entities/patient-daily-check-in.entity");
+      const { Patient } = await import("./entities/patient.entity");
+      const service = new PatientDailyRoutineCompletionsService(
+        dataSource.getRepository(PatientDailyRoutineCompletion),
+        dataSource.getRepository(PatientDailyRoutine),
+        dataSource.getRepository(Patient),
+        dataSource.getRepository(PatientDailyCheckIn),
+      );
+      await service.progress("patient-a", "Africa/Lagos", new Date("2026-10-02T09:00:00Z"));
+    } finally {
+      spy.mockRestore();
+    }
+    expect(sql).toHaveLength(2);
+    for (const query of sql) {
+      // A camelCase alias is only safe when quoted; unquoted it is lower-cased by Postgres.
+      expect(query).not.toMatch(/(^|[^"\w])checkIn\./);
+    }
+    expect(sql.join("\n")).toContain('"checkIn"."local_date"::text');
+  });
+});
