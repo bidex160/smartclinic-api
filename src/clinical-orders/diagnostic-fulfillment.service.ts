@@ -31,8 +31,8 @@ import {
   DiagnosticExecutionStatus,
 } from "./entities/diagnostic-execution.entity";
 import { ClinicalOrderType } from "./enums/clinical-order-type.enum";
-import { ClinicalRecord } from "src/clinical-records/entities/clinical-record.entity";
-import { ClinicalRecordAttachment } from "src/clinical-records/entities/clinical-record-attachment.entity";
+import { ClinicalRecord } from "../clinical-records/entities/clinical-record.entity";
+import { ClinicalRecordAttachment } from "../clinical-records/entities/clinical-record-attachment.entity";
 import { ProviderEarningsService } from "../earnings/provider-earnings.service";
 @Injectable()
 export class DiagnosticFulfillmentService {

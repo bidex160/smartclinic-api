@@ -7,6 +7,7 @@ import { ProviderMember } from './entities/provider-member.entity';
 import { MANAGING_ROLES, PRESCRIBING_ROLES, ProviderMemberRole, ProviderMemberStatus } from './enums/provider-member.enum';
 import { ProviderStatus } from './enums/provider-status.enum';
 import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
+import { ProviderType } from './enums/provider-type.enum';
 
 /** Who is acting for a provider: the facility's own account (owner) or a staff member with a role. */
 export interface ProviderActor {
@@ -70,3 +71,11 @@ export function canPrescribe(actor: ProviderActor): boolean {
 export function canManage(actor: ProviderActor): boolean {
   return actor.isOwner || (!!actor.role && MANAGING_ROLES.has(actor.role));
 }
+
+/** Provider types that may send prescriptions and test requests by SmartClinic ID. */
+export const DIRECT_SENDER_TYPES: ReadonlySet<ProviderType> = new Set<ProviderType>([
+  ProviderType.INDIVIDUAL,
+  ProviderType.CLINIC,
+  ProviderType.HOSPITAL,
+  ProviderType.OTHER,
+]);

@@ -24,7 +24,7 @@ import { Patient } from "../patients/entities/patient.entity";
 import { PatientRelationship } from "../patients/entities/patient-relationship.entity";
 import { PatientRelationshipRole, PatientRelationshipStatus } from "../patients/enums/patient-relationship.enum";
 import { PatientStatus } from "../patients/enums/patient-status.enum";
-import { canPrescribe, CurrentProviderService } from "../providers/current-provider.service";
+import { canPrescribe, CurrentProviderService, DIRECT_SENDER_TYPES } from "../providers/current-provider.service";
 import { User } from "../users/entities/user.entity";
 import { generateClinicalOrderReference } from "./clinical-order-reference";
 import {
@@ -365,7 +365,7 @@ export class ClinicalOrdersService {
       .andWhere(
         `(order.status='ISSUED' OR (order.status='CANCELLED' AND order.issuedAt IS NOT NULL))`,
       );
-    return this.page(b, q, true);
+    return this.page(b, q, true, true);
   }
   async getMine(user: User, reference: string) {
     const patient = await this.patient(user.id);
@@ -379,7 +379,7 @@ export class ClinicalOrdersService {
     const row = await b.getOne();
     if (!row) this.notFound();
     const summaries = await this.fulfillments?.summaries([row.id]);
-    return this.map(row, summaries?.get(row.id) ?? null);
+    return this.map(row, summaries?.get(row.id) ?? null, true);
   }
   private async accessiblePatientIds(userId: string, selfPatientId: string): Promise<string[]> {
     const relationships = await this.orders.manager
@@ -518,7 +518,7 @@ export class ClinicalOrdersService {
     const result = await this.orders.manager.transaction(async (m) => {
       const order = await m.getRepository(ClinicalOrder).findOne({ where: { reference }, lock: { mode: "pessimistic_write" } });
       if (!order || !patientIds.includes(order.patientId) || order.origin !== ClinicalOrderOrigin.DIRECT) this.notFound();
-      if (order.patientResponse === response) return this.mapped(m, order.id);
+      if (order.patientResponse === response) return this.mapped(m, order.id, true);
       if (order.status !== ClinicalOrderStatus.ISSUED || order.patientResponse !== ClinicalOrderPatientResponse.PENDING)
         throw new ConflictException("This request has already been answered");
       order.patientResponse = response;
@@ -537,7 +537,7 @@ export class ClinicalOrdersService {
         await this.history(m, order.id, order.status, order.status, user.id, "PATIENT_APPROVED");
       }
       answered = order;
-      return this.mapped(m, order.id);
+      return this.mapped(m, order.id, true);
     });
     const done = answered as ClinicalOrder | null;
     if (done)
@@ -684,17 +684,33 @@ export class ClinicalOrdersService {
         "diagnosticItem.clinicalOrderId=order.id",
       );
   }
-  private async mapped(m: EntityManager, id: string) {
+  private async mapped(m: EntityManager, id: string, patientView = false) {
     const row = await this.readBuilder(m)
       .where("order.id=:id", { id })
       .orderBy("items.sortOrder", "ASC")
       .getOneOrFail();
-    return this.map(row);
+    return this.map(row, undefined, patientView);
   }
-  private map(o: ClinicalOrder, fulfillment: unknown = undefined) {
+  /**
+   * A provider who sent a request by SmartClinic ID sees only "First L." until
+   * the patient approves it, the same as the ID lookup — so a key or a guessed
+   * ID never reveals a full name the patient has not agreed to share.
+   */
+  private map(o: ClinicalOrder, fulfillment: unknown = undefined, patientView = false) {
+    const awaitingConsent =
+      o.origin === ClinicalOrderOrigin.DIRECT &&
+      o.patientResponse !== ClinicalOrderPatientResponse.APPROVED;
     return {
       reference: o.reference,
-      patient: o.patient ? { patientReference: o.patient.patientReference, displayName: `${o.patient.givenName} ${o.patient.familyName}`.trim() } : undefined,
+      patient: o.patient
+        ? {
+            patientReference: o.patient.patientReference,
+            displayName:
+              awaitingConsent && !patientView
+                ? shortName(o.patient)
+                : `${o.patient.givenName} ${o.patient.familyName}`.trim(),
+          }
+        : undefined,
       type: o.type,
       status: o.status,
       clinicalNote: o.clinicalNote,
@@ -754,6 +770,7 @@ export class ClinicalOrdersService {
     b: ReturnType<ClinicalOrdersService["readBuilder"]>,
     q: ClinicalOrderListQueryDto,
     includeFulfillment = false,
+    patientView = false,
   ) {
     if (q.type) b.andWhere("order.type=:type", { type: q.type });
     if (q.careAppointmentReference)
@@ -778,6 +795,7 @@ export class ClinicalOrdersService {
         this.map(
           r,
           includeFulfillment ? (summaries.get(r.id) ?? null) : undefined,
+          patientView,
         ),
       ),
       page: q.page,
@@ -820,7 +838,6 @@ export class ClinicalOrdersService {
   }
 }
 
-const DIRECT_SENDER_TYPES = new Set<ProviderType>([ProviderType.INDIVIDUAL, ProviderType.CLINIC, ProviderType.HOSPITAL, ProviderType.OTHER]);
 
 const DIRECT_ORDER_LABEL: Record<CreateDirectClinicalOrderDto["type"], string> = {
   [ClinicalOrderType.PRESCRIPTION]: "Prescription",

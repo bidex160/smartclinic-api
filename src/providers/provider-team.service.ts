@@ -9,11 +9,12 @@ import { EMAIL_PROVIDER, EmailProvider, EmailSendOutcome } from '../notification
 import { renderTransactionalEmail, sanitizeEmailSubject } from '../notifications/email/transactional-email-renderer';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../users/enums/user-role.enum';
-import { canManage, canPrescribe, CurrentProviderService, ProviderActor } from './current-provider.service';
+import { canManage, canPrescribe, CurrentProviderService, DIRECT_SENDER_TYPES, ProviderActor } from './current-provider.service';
 import { InviteProviderMemberDto } from './dto/provider-team.dto';
 import { Provider } from './entities/provider.entity';
 import { ProviderMember } from './entities/provider-member.entity';
 import { ProviderMemberRole, ProviderMemberStatus } from './enums/provider-member.enum';
+import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 import { ProviderStatus } from './enums/provider-status.enum';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -168,7 +169,13 @@ export class ProviderTeamService {
       role: actor.role,
       roleLabel: actor.role ? PROVIDER_MEMBER_ROLE_LABEL[actor.role] : 'Owner',
       canManageTeam: canManage(actor),
-      canSendRequests: canPrescribe(actor),
+      // Mirrors what the request endpoints enforce, so the app never offers an action the API will refuse.
+      awaitingApproval: actor.provider.onboardingStatus !== ProviderOnboardingStatus.APPROVED,
+      canSendRequests:
+        canPrescribe(actor) &&
+        actor.provider.status === ProviderStatus.ACTIVE &&
+        actor.provider.onboardingStatus === ProviderOnboardingStatus.APPROVED &&
+        DIRECT_SENDER_TYPES.has(actor.provider.providerType),
       provider: {
         providerReference: actor.provider.providerReference,
         displayName: actor.provider.displayName,

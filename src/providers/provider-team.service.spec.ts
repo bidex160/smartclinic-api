@@ -11,7 +11,7 @@ import { ProviderTeamService } from './provider-team.service';
 const hash = (token: string) => createHash('sha256').update(token).digest('hex');
 
 describe('ProviderTeamService', () => {
-  const provider: any = { id: 'provider-1', userId: 'owner-user', displayName: 'Lagoon Hospital', providerType: 'HOSPITAL', providerReference: 'SCPR-1', status: 'ACTIVE', deletedAt: null };
+  const provider: any = { id: 'provider-1', userId: 'owner-user', displayName: 'Lagoon Hospital', providerType: 'HOSPITAL', providerReference: 'SCPR-1', status: 'ACTIVE', onboardingStatus: 'APPROVED', deletedAt: null };
   let actor: any;
   let members: any;
   let users: any;
@@ -57,6 +57,16 @@ describe('ProviderTeamService', () => {
     expect(rows[0]).toMatchObject({ status: 'INVITED', role: 'LAB_SCIENTIST', emailNormalized: 'ngozi@lagoon.ng', userId: null });
     expect(rows[0].inviteTokenHash).toBe(hash(result.inviteUrl.split('/').pop()!));
     expect(email.sendTransactionalEmail.mock.calls[0][0]).toMatchObject({ to: 'ngozi@lagoon.ng', subject: 'Join Lagoon Hospital on SmartClinic' });
+  });
+
+  it('does not offer sending requests until the facility is approved', async () => {
+    expect(await service.me({ id: 'owner-user' } as User)).toMatchObject({ canSendRequests: true, awaitingApproval: false });
+    provider.onboardingStatus = 'SUBMITTED';
+    try {
+      expect(await service.me({ id: 'owner-user' } as User)).toMatchObject({ canSendRequests: false, awaitingApproval: true });
+    } finally {
+      provider.onboardingStatus = 'APPROVED';
+    }
   });
 
   it('refuses duplicate invitations and the facility’s own email', async () => {
