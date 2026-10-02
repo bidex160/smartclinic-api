@@ -13,5 +13,6 @@ import { WhatsAppService } from './whatsapp.service';
   imports: [TypeOrmModule.forFeature([WhatsAppIdentity, WhatsAppMessage, User, Patient])],
   controllers: [WhatsAppController],
   providers: [WhatsAppService, MetaWhatsAppAdapter, { provide: WHATSAPP_PROVIDER, useExisting: MetaWhatsAppAdapter }],
+  exports: [WHATSAPP_PROVIDER],
 })
 export class WhatsAppModule {}

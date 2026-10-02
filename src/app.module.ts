@@ -30,6 +30,7 @@ import { GuidedSelfChecksModule } from './guided-self-checks/guided-self-checks.
 import { HealthPassportModule } from './health-passport/health-passport.module';
 import { CompanionModule } from './companion/companion.module';
 import { WellnessAdminModule } from './wellness-admin/wellness-admin.module';
+import { FamilyModule } from './family/family.module';
 import { CohortContactModule } from './cohort/cohort-contact.module';
 import { SupportModule } from './support/support.module';
 import { ProviderRecruitmentInvitationsModule } from './provider-recruitment-invitations/provider-recruitment-invitations.module';
@@ -68,6 +69,7 @@ const persistenceDomainModules = configuration.database.enabled
       HealthPassportModule,
       CompanionModule,
       WellnessAdminModule,
+      FamilyModule,
       CohortContactModule,
       SupportModule,
       ProviderRecruitmentInvitationsModule,

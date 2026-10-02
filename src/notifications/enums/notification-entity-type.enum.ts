@@ -4,4 +4,6 @@ export enum NotificationEntityType {
   PROVIDER_PROFILE = "PROVIDER_PROFILE",
   DAILY_ROUTINE = "DAILY_ROUTINE",
   CLINICAL_ORDER = "CLINICAL_ORDER",
+  /** Opens metadata.route in the app (progress, passport, kids corner). */
+  WELLNESS = "WELLNESS",
 }
