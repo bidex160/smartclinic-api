@@ -1,5 +1,6 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 import { AppModule } from './app.module';
@@ -8,7 +9,7 @@ import { createAppConfiguration } from './config/environment';
 
 async function bootstrap(): Promise<void> {
   const configuration = createAppConfiguration();
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
     logger:
       configuration.environment === 'production'
@@ -30,6 +31,8 @@ async function bootstrap(): Promise<void> {
   configuration.frontendUrl // keep your env one
 ]
 
+  // FHIR clients send application/fhir+json; parse it like ordinary JSON.
+  app.useBodyParser('json', { type: ['application/json', 'application/fhir+json'], limit: '1mb' });
   app.setGlobalPrefix('api/v1');
   app.enableCors({
     origin: allowedOrigins,
