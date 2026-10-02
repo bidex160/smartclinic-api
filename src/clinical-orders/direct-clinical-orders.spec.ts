@@ -116,6 +116,20 @@ describe('ClinicalOrdersService direct requests', () => {
     expect(result).toMatchObject({ origin: 'DIRECT', patientResponse: 'PENDING', careAppointmentReference: null });
   });
 
+  it('shows the sender only a first name and initial until the patient approves', async () => {
+    const sent: any = await service.createDirect(doctor, {
+      patientReference: 'SCP-ABCD-1234',
+      type: ClinicalOrderType.PRESCRIPTION,
+      prescriptionItems: [{ medicationName: 'Paracetamol', dosage: '1 tablet', frequency: 'Twice daily' }],
+    });
+    expect(sent.patient).toEqual({ patientReference: 'SCP-ABCD-1234', displayName: 'Adaeze O.' });
+
+    const row = await readQb.getOneOrFail();
+    const view = (patientResponse: ClinicalOrderPatientResponse) => (service as any).map({ ...row, patientResponse }).patient.displayName;
+    expect(view(ClinicalOrderPatientResponse.DECLINED)).toBe('Adaeze O.');
+    expect(view(ClinicalOrderPatientResponse.APPROVED)).toBe('Adaeze Okafor');
+  });
+
   it('notifies the patient and guardians without naming medicines or tests', async () => {
     repos.relationship.find.mockResolvedValue([{ relatedUserId: 'guardian-user', endedAt: null }, { relatedUserId: 'old-guardian', endedAt: new Date() }]);
     await service.createDirect(doctor, {
@@ -189,6 +203,12 @@ describe('ClinicalOrdersService direct requests', () => {
       await service.respondMine(patientUser, order.reference, ClinicalOrderPatientResponse.APPROVED);
       expect(order).toMatchObject({ patientResponse: 'APPROVED', status: ClinicalOrderStatus.ISSUED });
       await expect(service.respondMine(patientUser, order.reference, ClinicalOrderPatientResponse.DECLINED)).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('patients always see their own full name', async () => {
+      readQb.getOneOrFail.mockImplementationOnce(async () => ({ ...order, patient, orderingProvider: provider, careRequest: null, careAppointment: null, clinicalRecord: null, prescription: null, diagnosticItems: [] }));
+      const result: any = await service.respondMine(patientUser, order.reference, ClinicalOrderPatientResponse.DECLINED);
+      expect(result.patient.displayName).toBe('Adaeze Okafor');
     });
 
     it('hides requests for other patients and appointment orders', async () => {

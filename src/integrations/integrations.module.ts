@@ -10,7 +10,7 @@ import { ProviderApiKey } from "./provider-api-key.entity";
 import { ProviderApiKeysService } from "./provider-api-keys.service";
 import { ProviderIntegrationsController } from "./provider-integrations.controller";
 import { ProviderWebhooksModule } from "./provider-webhooks.module";
-import { User } from "src/users/entities/user.entity";
+import { User } from "../users/entities/user.entity";
 
 @Module({
   imports: [
