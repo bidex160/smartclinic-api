@@ -14,6 +14,14 @@ import { GuidedSelfChecksModule } from '../guided-self-checks/guided-self-checks
 import { HealthCheckEncounter } from '../health-checks/entities/health-check-encounter.entity';
 import { HealthCheckMeasurement } from '../health-checks/entities/health-check-measurement.entity';
 import { Patient } from '../patients/entities/patient.entity';
+import { PatientDailyCheckIn } from '../patients/entities/patient-daily-check-in.entity';
+import { PatientDailyRoutineCompletion } from '../patients/entities/patient-daily-routine-completion.entity';
+import { PatientDailyRoutine } from '../patients/entities/patient-daily-routine.entity';
+import { PatientHealthBasics } from '../patients/entities/patient-health-basics.entity';
+import { PatientRelationship } from '../patients/entities/patient-relationship.entity';
+import { EngagementController } from './engagement/engagement.controller';
+import { EngagementService } from './engagement/engagement.service';
+import { HealthQuizAnswer } from './engagement/health-quiz-answer.entity';
 import { HealthPassportController } from './health-passport.controller';
 import { HealthPassportService } from './health-passport.service';
 import { User } from '../users/entities/user.entity';
@@ -36,10 +44,16 @@ import { User } from '../users/entities/user.entity';
       ClinicalOrder,
       PharmacyDispensing,
       User,
+      PatientHealthBasics,
+      PatientDailyRoutine,
+      PatientDailyRoutineCompletion,
+      PatientDailyCheckIn,
+      PatientRelationship,
+      HealthQuizAnswer,
     ]),
   ],
-  controllers: [HealthPassportController],
-  providers: [HealthPassportService],
+  controllers: [HealthPassportController, EngagementController],
+  providers: [HealthPassportService, EngagementService],
   exports: [HealthPassportService],
 })
 export class HealthPassportModule {}
