@@ -62,6 +62,7 @@ export class FindCareQueryDto {
   @ApiPropertyOptional({ default: false, description: 'When true, return only services with an active FastTrack configuration.' }) @IsOptional() @Transform(({ value }) => value === true || value === 'true' ? true : value === false || value === 'false' ? false : value) @IsBoolean() fastTrackOnly?: boolean;
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z][A-Z0-9_]{1,79}$/) serviceCode?: string;
   @ApiPropertyOptional({ enum: ProviderType }) @IsOptional() @IsEnum(ProviderType) providerType?: ProviderType;
+  @ApiPropertyOptional({ example: 'CARDIOLOGY', description: 'Only doctors and facilities with this specialty (see /public/provider-directory/specialties).' }) @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z][A-Z0-9_]{1,79}$/) specialty?: string;
   @ApiPropertyOptional({ enum: CareDeliveryMode }) @IsOptional() @IsEnum(CareDeliveryMode) deliveryMode?: CareDeliveryMode;
   @ApiPropertyOptional({ description: 'Limit VIRTUAL discovery to clinicians approved for this hospital/clinic.' }) @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^SCPR-[A-F0-9]{16,32}$/) hostProviderReference?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value) @Matches(/^[A-Z]{2}$/) countryCode?: string;

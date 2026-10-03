@@ -11,6 +11,7 @@ import { Provider } from './entities/provider.entity';
 import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 import { ProviderStatus } from './enums/provider-status.enum';
 import { ProviderConfigurationContextService } from './provider-configuration-context.service';
+import { ProviderCredentialsService } from './credentials/provider-credentials.service';
 import { ProviderOnboardingReadinessService } from './provider-onboarding-readiness.service';
 import { ReferralsService } from '../rewards/referrals.service';
 import { NotificationActionType } from '../notifications/enums/notification-action-type.enum';
@@ -30,6 +31,7 @@ export class ProviderOnboardingService {
     private readonly referrals: ReferralsService,
     @Optional() private readonly notifications?: NotificationsService,
     private readonly growthInvites?: ProviderGrowthInvitesService,
+    @Optional() private readonly providerCredentials?: ProviderCredentialsService,
   ) {}
 
   async register(dto: RegisterProviderDto): Promise<ProviderOnboardingProfileResponseDto> {
@@ -47,6 +49,7 @@ export class ProviderOnboardingService {
         await this.referrals.ensureReferralCode(user.id, manager);
         if (dto.referralCode) await this.referrals.captureProvider(manager, dto.referralCode, provider, dto.intendedReferralType);
         if (dto.inviteToken && this.growthInvites) await this.growthInvites.claim(manager, dto.inviteToken, provider.id);
+        if (this.providerCredentials) await this.providerCredentials.saveAtRegistration(manager, provider, dto);
         return provider;
       });
       return this.map(provider);

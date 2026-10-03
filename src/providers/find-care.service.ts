@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import { CareServiceDefinition } from './entities/care-service-definition.entity';
@@ -7,12 +7,14 @@ import { FindCareQueryDto } from './dto/care-service.dto';
 import { ProviderStatus } from './enums/provider-status.enum';
 import { ProviderOnboardingStatus } from './enums/provider-onboarding-status.enum';
 import { CareDeliveryMode } from './enums/care-delivery-mode.enum';
+import { ProviderCredentialsService } from './credentials/provider-credentials.service';
 
 @Injectable()
 export class FindCareService {
   constructor(
     @InjectRepository(Provider) private readonly providers: Repository<Provider>,
     @InjectRepository(CareServiceDefinition) private readonly definitions: Repository<CareServiceDefinition>,
+    @Optional() private readonly credentials?: ProviderCredentialsService,
   ) {}
 
   async catalogue() {
@@ -34,6 +36,7 @@ export class FindCareService {
     if (query.q) builder.andWhere(new Brackets((where) => where.where('provider.displayName ILIKE :search', { search: `%${query.q}%` }).orWhere('definition.name ILIKE :search', { search: `%${query.q}%` })));
     if (query.serviceCode) builder.andWhere('definition.code = :serviceCode', { serviceCode: query.serviceCode });
     if (query.providerType) builder.andWhere('provider.providerType = :providerType', { providerType: query.providerType });
+    if (query.specialty) builder.andWhere('EXISTS (SELECT 1 FROM provider_specialties ps INNER JOIN clinical_specialties cs ON cs.id = ps.specialty_id WHERE ps.provider_id = provider.id AND cs.code = :specialty AND cs.is_active = true)', { specialty: query.specialty });
     if (query.fastTrackOnly) builder.andWhere('careService.supportsFastTrack = true').andWhere('careService.fastTrackFeeMinor IS NOT NULL').andWhere('careService.fastTrackCurrency IS NOT NULL');
     if (query.deliveryMode) builder.andWhere('EXISTS (SELECT 1 FROM provider_care_service_delivery_options filtered_option WHERE filtered_option.provider_care_service_id = careService.id AND filtered_option.delivery_mode = :deliveryMode)', { deliveryMode: query.deliveryMode });
     if (query.hostProviderReference) {
@@ -47,13 +50,14 @@ export class FindCareService {
     }
     builder.orderBy('provider.isPlatformDefault', 'DESC').addOrderBy('provider.platformDefaultPriority', 'ASC', 'NULLS LAST').addOrderBy('provider.displayName', 'ASC').addOrderBy('provider.providerReference', 'ASC').skip((query.page - 1) * query.limit).take(query.limit);
     const [providers, total] = await builder.getManyAndCount();
-    return { items: providers.map((provider) => this.mapProvider(provider)), page: query.page, limit: query.limit, total, totalPages: total ? Math.ceil(total / query.limit) : 0 };
+    const badges = await this.badges(providers.map((p) => p.id));
+    return { items: providers.map((provider) => this.mapProvider(provider, badges.get(provider.id))), page: query.page, limit: query.limit, total, totalPages: total ? Math.ceil(total / query.limit) : 0 };
   }
 
   async providerDetail(reference: string) {
     const provider = await this.publicBuilder().andWhere('provider.providerReference = :reference', { reference }).getOne();
     if (!provider) throw new NotFoundException('Provider was not found');
-    return this.mapProvider(provider);
+    return this.mapProvider(provider, (await this.badges([provider.id])).get(provider.id));
   }
 
   private publicBuilder() {
@@ -75,11 +79,18 @@ export class FindCareService {
     if (profile.length) builder.andWhere(`((${profile.join(' AND ')}) OR (${location.join(' AND ')}))`, parameters);
   }
 
-  private mapProvider(provider: Provider) {
+  private async badges(ids: string[]) {
+    return this.credentials ? this.credentials.badges(ids) : new Map<string, { verified: boolean; specialties: { code: string; name: string; isPrimary: boolean }[] }>();
+  }
+
+  private mapProvider(provider: Provider, badge?: { verified: boolean; specialties: { code: string; name: string; isPrimary: boolean }[] }) {
     return {
       providerReference: provider.providerReference,
       displayName: provider.displayName,
       providerType: provider.providerType,
+      /** Licence checked by SmartClinic staff with the regulator. */
+      verified: badge?.verified ?? false,
+      specialties: badge?.specialties ?? [],
       location: { city: provider.city, stateOrRegion: provider.stateOrRegion, countryCode: provider.countryCode },
       locations: (provider.locations ?? []).filter((location) => location.isActive).map((location) => ({ locationReference: location.locationReference, name: location.name, addressLine1: location.addressLine1, addressLine2: location.addressLine2, city: location.city, stateOrRegion: location.state, postalCode: location.postalCode, countryCode: location.countryCode })),
       services: (provider.careServices ?? []).filter((service) => service.isActive && service.definition?.isActive).map((service) => ({ code: service.definition.code, name: service.definition.name, description: service.descriptionOverride ?? service.definition.description, deliveryOptions: [...(service.deliveryOptions ?? [])].sort((a, b) => a.deliveryMode.localeCompare(b.deliveryMode)).map((option) => ({ deliveryMode: option.deliveryMode, priceMinor: Number(option.priceMinor), currency: option.currency })), supportsAppointmentRequests: service.supportsAppointmentRequests, supportsFastTrack: service.supportsFastTrack, fastTrackFeeMinor: service.supportsFastTrack && service.fastTrackFeeMinor != null ? Number(service.fastTrackFeeMinor) : null, fastTrackCurrency: service.supportsFastTrack ? service.fastTrackCurrency : null })),

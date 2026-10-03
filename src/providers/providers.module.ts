@@ -81,6 +81,10 @@ import { ProviderGrowthInvitesService } from './provider-growth-invites.service'
 import { ProviderGrowthInvitesController } from './provider-growth-invites.controller';
 import { InstitutionalVirtualCareService } from './institutional-virtual-care.service';
 import { InstitutionalVirtualCareController } from './institutional-virtual-care.controller';
+import { AdminProviderCredentialsController, ProviderCredentialsController, PublicSpecialtiesController } from './credentials/provider-credentials.controller';
+import { ProviderCredentialsService } from './credentials/provider-credentials.service';
+import { ClinicalSpecialty, ProviderCredential, ProviderSpecialty } from './credentials/credential.entities';
+
 @Module({
   imports: [
     AuthModule,
@@ -88,6 +92,9 @@ import { InstitutionalVirtualCareController } from './institutional-virtual-care
     NotificationsModule,
     RewardsModule,
     TypeOrmModule.forFeature([
+      ClinicalSpecialty,
+      ProviderSpecialty,
+      ProviderCredential,
       Provider,
       ProviderMember,
       ProviderAssignment,
@@ -122,7 +129,7 @@ import { InstitutionalVirtualCareController } from './institutional-virtual-care
       HealthCheckPackageAddon,
     ]),
   ],
-  controllers: [InstitutionalVirtualCareController, ProviderGrowthInvitesController, 
+  controllers: [PublicSpecialtiesController, ProviderCredentialsController, AdminProviderCredentialsController, InstitutionalVirtualCareController, ProviderGrowthInvitesController, 
     AdminProvidersController,
     AdminProviderInvitationsController,
     PublicProviderInvitationsController,
@@ -145,7 +152,7 @@ import { InstitutionalVirtualCareController } from './institutional-virtual-care
     ProviderCareServicesController,
     AdminCareServicesController,
   ],
-  providers: [InstitutionalVirtualCareService, ProviderGrowthInvitesService, 
+  providers: [ProviderCredentialsService, InstitutionalVirtualCareService, ProviderGrowthInvitesService, 
     ProviderCapabilitiesService,
     ProviderServiceAreasService,
     ProviderAvailabilityService,
@@ -171,6 +178,7 @@ import { InstitutionalVirtualCareController } from './institutional-virtual-care
     ProviderCareEligibilityService,
   ],
   exports: [
+    ProviderCredentialsService,
     ProviderCapabilitiesService,
     ProviderAvailabilityService,
     ProviderMatchingService,

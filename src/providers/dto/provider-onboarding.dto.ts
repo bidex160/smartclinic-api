@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
 import {
+  ArrayMaxSize,
+  IsArray,
   IsEmail,
   IsEnum,
   IsOptional,
@@ -79,6 +81,28 @@ export class RegisterProviderDto extends ProviderProfileFieldsDto {
   @IsOptional()
   @IsEnum(ReferralTargetType)
   intendedReferralType?: ReferralTargetType;
+  @ApiPropertyOptional({ type: [String], description: "Specialty codes from /public/provider-directory/specialties. Doctors need at least one." })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(40)
+  @IsString({ each: true })
+  @Matches(/^[A-Z][A-Z0-9_]{1,79}$/, { each: true })
+  specialtyCodes?: string[];
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Z][A-Z0-9_]{1,79}$/)
+  primarySpecialty?: string;
+  @ApiPropertyOptional({ example: "MDCN", description: "Who issued the licence (see /public/provider-directory/regulators)" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  regulator?: string;
+  @ApiPropertyOptional({ example: "MDCN/R/123456" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  licenceNumber?: string;
   @ApiPropertyOptional({ description: "Opaque provider-growth invitation token" })
   @IsOptional()
   @IsString()

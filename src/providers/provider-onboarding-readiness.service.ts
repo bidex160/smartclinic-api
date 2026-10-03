@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { ProviderOnboardingBlocker, ProviderOnboardingReadinessDto } from './dto/provider-onboarding-readiness.dto';
@@ -8,6 +8,7 @@ import { ProviderService } from './entities/provider-service.entity';
 import { Provider } from './entities/provider.entity';
 import { PROVIDER_LOCATION_MODE } from './provider-capabilities.service';
 import { ProviderServiceArea } from './entities/provider-service-area.entity';
+import { ProviderCredentialsService } from './credentials/provider-credentials.service';
 
 @Injectable()
 export class ProviderOnboardingReadinessService {
@@ -17,6 +18,7 @@ export class ProviderOnboardingReadinessService {
     @InjectRepository(ProviderLocation) private readonly locations: Repository<ProviderLocation>,
     @InjectRepository(ProviderAvailability) private readonly availability: Repository<ProviderAvailability>,
     @InjectRepository(ProviderServiceArea) private readonly serviceAreas: Repository<ProviderServiceArea>,
+    @Optional() @Inject(forwardRef(() => ProviderCredentialsService)) private readonly credentials?: ProviderCredentialsService,
   ) {}
 
   async evaluateAccountReadiness(
@@ -26,9 +28,10 @@ export class ProviderOnboardingReadinessService {
     const providers = manager?.getRepository(Provider) ?? this.providers;
     const provider = await providers.findOne({ where: { id: providerId }, withDeleted: true });
     const profileComplete = this.isProfileComplete(provider);
+    const credentialBlockers = provider && this.credentials ? await this.credentials.blockers(provider, manager) : [];
     return {
       profileComplete,
-      blockers: profileComplete ? [] : [ProviderOnboardingBlocker.PROFILE_INCOMPLETE],
+      blockers: [...(profileComplete ? [] : [ProviderOnboardingBlocker.PROFILE_INCOMPLETE]), ...credentialBlockers],
     };
   }
 
@@ -57,6 +60,7 @@ export class ProviderOnboardingReadinessService {
     if (!providerLocationReady) blockers.push(ProviderOnboardingBlocker.PROVIDER_LOCATION_WITHOUT_LOCATION);
     if (!availabilityCount) blockers.push(ProviderOnboardingBlocker.NO_WEEKLY_AVAILABILITY);
     if (!homeVisitReady) blockers.push(ProviderOnboardingBlocker.HOME_VISIT_WITHOUT_SERVICE_AREA);
+    if (provider && this.credentials) blockers.push(...(await this.credentials.blockers(provider, manager)));
     return { profileComplete, hasActiveCapability: activeCapabilities.length > 0, providerLocationReady, homeVisitReady, hasAvailability: availabilityCount > 0, blockers, capabilityCount: capabilityRows.length, activeCapabilityCount: activeCapabilities.length, locationCount, activeLocationCount, availabilityCount };
   }
 
