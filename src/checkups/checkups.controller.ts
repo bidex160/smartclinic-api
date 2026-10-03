@@ -99,8 +99,10 @@ export class MeCheckupController {
 
   @Get('partners')
   @ApiOperation({ summary: 'Pharmacies and clinics that do free checks, nearest first' })
-  partners(@Query() q: PartnersQueryDto) {
-    return this.free.partnersNear(q.countryCode ?? 'NG', q.stateOrRegion, q.city);
+  async partners(@Req() r: { user: User }, @Query() q: PartnersQueryDto) {
+    // Nearest to where the patient lives unless they search somewhere else.
+    const me = q.stateOrRegion || q.city ? null : await this.checkups.patientFor(r.user).catch(() => null);
+    return this.free.partnersNear(q.countryCode ?? me?.countryCode ?? 'NG', q.stateOrRegion ?? me?.stateOrRegion ?? undefined, q.city ?? me?.city ?? undefined);
   }
 
   @Get('gifts')
@@ -160,6 +162,7 @@ export class ProviderFreeChecksController {
 @Controller('public/free-checks')
 export class PublicFreeChecksController {
   private readonly budget = new RateBudget(10, 10 * 60_000);
+  private readonly searches = new RateBudget(60, 10 * 60_000);
   constructor(private readonly free: FreeChecksService) {}
 
   @Post('result')
@@ -172,7 +175,7 @@ export class PublicFreeChecksController {
   @Get('partners')
   @ApiOperation({ summary: 'Pharmacies and clinics that do free checks, nearest first' })
   partners(@Query() q: PartnersQueryDto, @Req() req: PublicReq) {
-    if (!this.budget.take(`p:${clientKey(req)}`)) throw new HttpException('Please wait a few minutes and try again', HttpStatus.TOO_MANY_REQUESTS);
+    if (!this.searches.take(clientKey(req))) throw new HttpException('Please wait a few minutes and try again', HttpStatus.TOO_MANY_REQUESTS);
     return this.free.partnersNear(q.countryCode ?? 'NG', q.stateOrRegion, q.city);
   }
 }
