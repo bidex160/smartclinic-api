@@ -60,14 +60,14 @@ const URGENT = /(chest pain|can'?t breathe|cannot breathe|not breathing|unconsci
 
 const EMERGENCY_TEXT: Readonly<Record<CompanionLanguage, { title: string; body: string }>> = {
   en: { title: 'Get help now', body: 'This sounds urgent. Call 112 or go to the nearest hospital emergency unit now. Do not wait for an appointment.' },
-  pcm: { title: 'Find help now now', body: 'This one fit be serious. Call 112 or go the nearest hospital emergency now now. No wait for appointment.' },
-  yo: { title: 'Wá ìrànlọ́wọ́ báyìí', body: 'Ó dàbí pé ó le. Pe 112 tàbí lọ sí ẹ̀ka pàjáwìrì ilé-ìwòsàn tó súnmọ́ jùlọ báyìí. Má ṣe dúró de àdéhùn.' },
+  pcm: { title: 'Get help now now', body: 'Dis one be like emergency. Call 112 or go di emergency unit for di hospital wey near you pass, now now. No wait for appointment.' },
+  yo: { title: 'Ẹ wá ìrànlọ́wọ́ báyìí', body: 'Ó dàbí pé ọ̀rọ̀ yìí le. Ẹ pe 112 tàbí kí ẹ lọ sí ẹ̀ka pàjáwìrì ilé-ìwòsàn tó súnmọ́ yín jùlọ báyìí. Ẹ má ṣe dúró de àdéhùn.' },
   ha: { title: 'Nemi taimako yanzu', body: 'Wannan yana da gaggawa. Kira 112 ko ka je sashen gaggawa na asibiti mafi kusa yanzu. Kada ka jira alƙawari.' },
-  ig: { title: 'Chọọ enyemaka ugbu a', body: 'Nke a dị ka ihe mberede. Kpọọ 112 ma ọ bụ gaa ngalaba mberede nke ụlọ ọgwụ kacha nso ugbu a.' },
-  rw: { title: 'Shaka ubufasha ubu', body: 'Ibi bisa n’ibyihutirwa. Hamagara 112 cyangwa 912, cyangwa ujye ku bitaro bikwegereye ubu. Ntutegereze gahunda.' },
-  fr: { title: 'Obtenez de l’aide maintenant', body: 'Cela semble urgent. Appelez le 112 ou rendez-vous immédiatement aux urgences de l’hôpital le plus proche.' },
-  sw: { title: 'Pata msaada sasa', body: 'Hii inaonekana ni dharura. Piga 112 au nenda kwenye kitengo cha dharura cha hospitali iliyo karibu sasa hivi.' },
-  tw: { title: 'Hwehwɛ mmoa seesei', body: 'Eyi yɛ ntɛmntɛm asɛm. Frɛ 112 anaa kɔ ayaresabea a ɛbɛn wo no seesei ara.' },
+  ig: { title: 'Chọọ enyemaka ugbu a', body: 'Nke a dị ka ihe mberede. Kpọọ 112 ma ọ bụ gaa ngalaba mberede nke ụlọ ọgwụ kacha nso ugbu a. Echerela oge a kara aka.' },
+  rw: { title: 'Shaka ubufasha ubu', body: 'Ibi bisa n’ibyihutirwa. Hamagara 112 (cyangwa 912 ku mbangukiragutabara) cyangwa ujye aho bakira indembe ku bitaro bikwegereye ubu. Ntutegereze gahunda yo kwa muganga.' },
+  fr: { title: 'Obtenez de l’aide maintenant', body: 'Cela semble urgent. Appelez le 112 ou rendez-vous immédiatement aux urgences de l’hôpital le plus proche. N’attendez pas un rendez-vous.' },
+  sw: { title: 'Pata msaada sasa', body: 'Hii inaonekana ni dharura. Piga 112 au nenda kwenye kitengo cha dharura cha hospitali iliyo karibu sasa hivi. Usisubiri miadi.' },
+  tw: { title: 'Hwehwɛ mmoa seesei', body: 'Eyi te sɛ asɛm a ɛhia mmoa ntɛm. Frɛ 112 anaa kɔ ayaresabea a ɛbɛn wo no ntɛmpɛ ayaresa dan (emergency) mu seesei ara. Ntwɛn da a wɔahyɛ ama wo (appointment).' },
 };
 
 /** Tiny LRU so the same sentence in the same voice is only paid for once. */

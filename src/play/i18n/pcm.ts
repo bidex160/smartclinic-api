@@ -55,10 +55,10 @@ export const pcm: PlayServerText = {
   messages: {
     challengeNudge: { title: 'You dey #{rank} for your health challenge', body: 'Do one healthy thing today make you climb di board. {days} days remain.' },
     challengeLead: { title: 'You dey lead your health challenge 🏆', body: 'Keep am up today make you stay for top. {days} days remain.' },
-    challengeJoined: { title: '{name} don join your challenge', body: 'Game on. Check di board to see who dey front.' },
+    challengeJoined: { title: '{name} don join your challenge', body: 'Game don start. Check di board to see who dey front.' },
     challengeWon: { title: 'You win your health challenge 🏆', body: 'You come first out of {total}. You wan start another one?' },
     challengeResult: { title: 'Your health challenge don finish', body: 'You come #{rank} out of {total}. Start another one and go for di top.' },
-    challengeNoScore: { title: 'Your health challenge don finish', body: 'Nobody score this time. Start new one make una begin together.' },
+    challengeNoScore: { title: 'Your health challenge don finish', body: 'Nobody score dis time. Start new one make una begin together.' },
     wordNudge: { title: 'Today Health Word don ready', body: 'You fit guess am in six tries? Up to 10 points.' },
   },
 };
