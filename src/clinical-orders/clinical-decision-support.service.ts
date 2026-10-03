@@ -5,6 +5,11 @@ import { SmartClinicServiceCatalogueItem } from './entities/smartclinic-service-
 import { ClinicalDecisionSupportRule } from './entities/clinical-decision-support-rule.entity';
 import { ClinicalDecisionSupportSuggestDto } from './dto/clinical-decision-support.dto';
 
+/** Drop what the patient does NOT have ("no cough", "denies chest pain") so it can't match. */
+export function withoutNegatives(text:string):string{
+ return text.replace(/\b(no|denies|denied|without|nil|not)\s+[a-z][a-z\s-]{0,40}?(?=[,.;:\n]|\s(?:and|but)\s|$)/g,' ');
+}
+
 @Injectable()
 export class ClinicalDecisionSupportService {
  constructor(
@@ -12,7 +17,7 @@ export class ClinicalDecisionSupportService {
   @InjectRepository(SmartClinicServiceCatalogueItem) private readonly catalogue:Repository<SmartClinicServiceCatalogueItem>,
  ){}
  async suggest(dto:ClinicalDecisionSupportSuggestDto){
-  const fields=[dto.presentingComplaint,dto.historyOfPresentingComplaint,dto.observations,dto.assessment,dto.diagnosis].filter(Boolean).join(' ').toLowerCase();
+  const fields=withoutNegatives([dto.presentingComplaint,dto.historyOfPresentingComplaint,dto.observations,dto.assessment,dto.diagnosis].filter(Boolean).join('\n').toLowerCase());
   if(fields.trim().length<2)return {diagnoses:[],redFlags:[]};
   const rules=await this.rules.find({where:{isActive:true},order:{sortOrder:'ASC'}});
   const ranked=rules.map(rule=>{
@@ -28,7 +33,8 @@ export class ClinicalDecisionSupportService {
   const items=codes.length?await this.catalogue.find({where:{code:In(codes),isActive:true}}):[];
   const map=new Map(items.map(x=>[x.code,x]));
   const view=(code:string)=>{const x=map.get(code);if(!x)return null;const cost=Number(x.averageCostMinor);return {code:x.code,category:x.category,name:x.name,groupName:x.groupName,requiresPrescription:x.requiresPrescription,standardPriceMinor:Math.ceil(cost*(10000+x.markupBps)/10000),currency:x.currency};};
-  const redFlags=[...new Set(rules.flatMap(rule=>rule.redFlagTerms.filter(t=>fields.includes(t.toLowerCase()))))];
+  // Only the warning signs of the conditions being considered, so a word like "fever" doesn't raise every rule's flags.
+  const redFlags=[...new Set(ranked.flatMap(({rule})=>rule.redFlagTerms.filter(t=>fields.includes(t.toLowerCase()))))];
   return {redFlags,diagnoses:ranked.map(({rule,matched})=>({
     code:rule.code,diagnosisName:rule.diagnosisName,reason:matched.length?`Matched: ${matched.join(', ')}`:'Matches the documented clinical context',
     clinicalNote:rule.clinicalNote,

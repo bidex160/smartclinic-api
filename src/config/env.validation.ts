@@ -163,6 +163,13 @@ class EnvironmentVariables {
   @IsOptional() @IsIn(["true", "false"]) CHECKUP_REMINDERS_ENABLED?: string;
   // Health shop: delivery fee per order, paid to the supplying pharmacy ("NGN:1500").
   @IsOptional() @IsString() SHOP_DELIVERY_FEE?: string;
+  /** STORE: SmartClinic packs and delivers every order (default while volumes are low). PARTNERS: send to partner pharmacies. */
+  @IsOptional() @IsIn(["STORE", "PARTNERS"]) SHOP_FULFILMENT?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) SHOP_BONUS_POINTS?: number;
+  // Doctor companion: dictation and note/differential help for clinicians. Reuses OPENAI_API_KEY; "none" = built-in rules only.
+  @IsOptional() @IsIn(["none", "openai"]) DOCTOR_COMPANION_AI_PROVIDER?: string;
+  @IsOptional() @IsString() DOCTOR_COMPANION_OPENAI_MODEL?: string;
+  @IsOptional() @IsString() DOCTOR_TRANSCRIBE_MODEL?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) FACILITY_AUTO_INVITE_MIN_DEMAND?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) FACILITY_AUTO_INVITES_PER_HOUR?: number;
   // Nigeria Health Facility Registry API (https://hfr.fmohconnect.gov.ng/developers). Nightly sync when the key is set.
