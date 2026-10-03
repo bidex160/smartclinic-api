@@ -13,7 +13,8 @@ export class WellnessPointAdjustment {
   /** Positive adds points, negative removes them. */
   @Column({ type: 'integer' }) points!: number;
   @Column({ type: 'varchar', length: 300 }) reason!: string;
-  @Column({ name: 'admin_user_id', type: 'uuid' }) adminUserId!: string;
-  @ManyToOne(() => User, { onDelete: 'RESTRICT' }) @JoinColumn({ name: 'admin_user_id' }) admin!: User;
+  /** Null for automatic awards (e.g. the thank-you bonus for a shop order). */
+  @Column({ name: 'admin_user_id', type: 'uuid', nullable: true }) adminUserId!: string | null;
+  @ManyToOne(() => User, { onDelete: 'RESTRICT', nullable: true }) @JoinColumn({ name: 'admin_user_id' }) admin!: User | null;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
 }

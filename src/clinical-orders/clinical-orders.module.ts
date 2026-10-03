@@ -101,6 +101,6 @@ import { Provider } from "../providers/entities/provider.entity";
     SmartClinicServiceCatalogueService,
     ClinicalDecisionSupportService,
   ],
-  exports: [ClinicalOrdersService],
+  exports: [ClinicalOrdersService, ClinicalDecisionSupportService],
 })
 export class ClinicalOrdersModule {}

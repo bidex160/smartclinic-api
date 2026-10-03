@@ -35,6 +35,8 @@ import { PlayModule } from './play/play.module';
 import { FacilityOutreachModule } from './facility-outreach/facility-outreach.module';
 import { CheckupsModule } from './checkups/checkups.module';
 import { ShopModule } from './shop/shop.module';
+import { IntakeModule } from './intake/intake.module';
+import { DoctorCompanionModule } from './doctor-companion/doctor-companion.module';
 import { CohortContactModule } from './cohort/cohort-contact.module';
 import { SupportModule } from './support/support.module';
 import { ProviderRecruitmentInvitationsModule } from './provider-recruitment-invitations/provider-recruitment-invitations.module';
@@ -78,6 +80,8 @@ const persistenceDomainModules = configuration.database.enabled
       FacilityOutreachModule,
       CheckupsModule,
       ShopModule,
+      IntakeModule,
+      DoctorCompanionModule,
       CohortContactModule,
       SupportModule,
       ProviderRecruitmentInvitationsModule,

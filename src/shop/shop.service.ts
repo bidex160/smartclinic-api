@@ -31,6 +31,7 @@ const MAX_LINES = 6;
 const SCHEDULER_MS = 15 * 60_000;
 const OPEN: OrderStatus[] = ['AWAITING_SUPPLIER', 'ASSIGNED', 'ACCEPTED', 'OUT_FOR_DELIVERY'];
 const CURRENCY: Record<string, string> = { NG: 'NGN', GH: 'GHS', RW: 'RWF' };
+const DEFAULT_BONUS_POINTS = 200;
 
 export interface ProductInput {
   sku: string; name: string; brand?: string | null; category: ProductCategory; description: string; highlights?: string[];
@@ -93,13 +94,13 @@ export class ShopService implements OnModuleInit, OnModuleDestroy {
   async catalogue(category?: ProductCategory, currency = 'NGN') {
     const where = { active: true, currency, ...(category ? { category } : {}) };
     const rows = await this.products.find({ where, order: { sortOrder: 'ASC', priceMinor: 'ASC' } });
-    return { items: rows.map((p) => this.publicProduct(p)), deliveryFeeMinor: this.deliveryFee(currency), currency };
+    return { items: rows.map((p) => this.publicProduct(p)), deliveryFeeMinor: this.deliveryFee(currency), currency, bonusPoints: this.bonusPoints };
   }
 
   async product(sku: string) {
     const p = await this.products.findOne({ where: { sku: sku.toUpperCase(), active: true } });
     if (!p) throw new NotFoundException('Product not found');
-    return { ...this.publicProduct(p), deliveryFeeMinor: this.deliveryFee(p.currency) };
+    return { ...this.publicProduct(p), deliveryFeeMinor: this.deliveryFee(p.currency), bonusPoints: this.bonusPoints };
   }
 
   private publicProduct(p: ShopProduct) {
@@ -344,8 +345,23 @@ export class ShopService implements OnModuleInit, OnModuleDestroy {
    * Find who supplies it: a pharmacy that stocks everything in the order, same city first, then
    * same state. If none, SmartClinic's store when it has stock. Otherwise it waits for staff.
    */
+  /**
+   * STORE (the default while orders are few): SmartClinic's team handles every order itself and
+   * keeps the whole margin. PARTNERS: offer orders to nearby pharmacies first.
+   */
+  private get storeFirst(): boolean {
+    return (this.config?.get<string>('SHOP_FULFILMENT') ?? 'STORE').toUpperCase() !== 'PARTNERS';
+  }
+
   private async assign(m: EntityManager, o: ShopOrder) {
     const productIds = o.lines.map((l) => l.productId);
+    if (this.storeFirst) {
+      for (const l of o.lines) await m.query(`UPDATE shop_products SET store_stock = GREATEST(store_stock - $2, 0) WHERE id = $1`, [l.productId, l.quantity]);
+      Object.assign(o, { fulfilment: 'STORE', providerId: null, status: 'ACCEPTED', assignedAt: new Date(), acceptBy: null });
+      await m.getRepository(ShopOrder).save(o);
+      await this.event(m, o.id, 'STORE', null, null, null);
+      return;
+    }
     const passed = o.passedProviderIds?.length ? o.passedProviderIds : ['00000000-0000-0000-0000-000000000000'];
     const [best]: { id: string }[] = await m.query(
       `SELECT p.id FROM providers p
@@ -455,6 +471,13 @@ export class ShopService implements OnModuleInit, OnModuleDestroy {
         await m.getRepository(ProviderEarningStatusHistory).save({ providerEarningId: earning.id, fromStatus: null, toStatus: ProviderEarningStatus.PAYABLE, actorUserId: null, reasonCode: 'SHOP_ORDER_DELIVERED', reasonNote: 'Delivered with the customer’s code' });
       }
     }
+    // Thank-you points toward their next Health Check.
+    const bonus = Math.max(0, Math.round(Number(this.config?.get('SHOP_BONUS_POINTS') ?? DEFAULT_BONUS_POINTS) || 0));
+    if (bonus > 0) {
+      const reason = `Thank you for your SmartClinic order ${o.reference}`;
+      const exists = await m.query('SELECT 1 FROM wellness_point_adjustments WHERE user_id = $1 AND reason = $2 LIMIT 1', [o.userId, reason]).catch(() => [1]);
+      if (!exists.length) await m.query('INSERT INTO wellness_point_adjustments (user_id, points, reason, admin_user_id) VALUES ($1, $2, $3, NULL)', [o.userId, bonus, reason]);
+    }
     if (o.referrerUserId && o.referralShareMinor > 0) {
       const [rate] = await m.query(`SELECT points, amount FROM reward_conversion_rates WHERE is_active AND currency = $1 LIMIT 1`, [o.currency]);
       const rateMinor = rate ? Math.round(Number(rate.amount) * 100) : 0;
@@ -485,8 +508,12 @@ export class ShopService implements OnModuleInit, OnModuleDestroy {
     return row.userId;
   }
 
+  private get bonusPoints(): number {
+    return Math.max(0, Math.round(Number(this.config?.get('SHOP_BONUS_POINTS') ?? DEFAULT_BONUS_POINTS) || 0));
+  }
+
   private deliveryFee(currency: string): number {
-    return feeFor(this.config?.get<string>('SHOP_DELIVERY_FEE') ?? 'NGN:1500', currency);
+    return feeFor(this.config?.get<string>('SHOP_DELIVERY_FEE') ?? 'NGN:0', currency);
   }
 
   private cleanDelivery(d: DeliveryDetails): DeliveryDetails {

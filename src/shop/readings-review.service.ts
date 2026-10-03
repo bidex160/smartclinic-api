@@ -36,7 +36,7 @@ export class ReadingsReviewService {
     const request = await this.requests.findOne({ where: { patientId: patient.id }, order: { createdAt: 'DESC' } });
     const since = order?.deliveredAt ?? null;
     const count = since
-      ? await this.readings.createQueryBuilder('r').where('r.patientId = :p AND r.source = :s AND r.measuredAt >= :since AND r.systolic IS NOT NULL', { p: patient.id, s: 'HOME', since }).getCount()
+      ? await this.readings.createQueryBuilder('r').where('r.patientId = :p AND r.source = :s AND r.measuredAt >= :since AND (r.systolic IS NOT NULL OR r.glucoseMmol IS NOT NULL)', { p: patient.id, s: 'HOME', since }).getCount()
       : 0;
     return {
       hasKit: Boolean(order),
@@ -51,7 +51,7 @@ export class ReadingsReviewService {
     const state = await this.mine(user);
     if (!state.hasKit) throw new ForbiddenException('The free review comes with a Home Heart Kit');
     if (state.request) throw new ConflictException('You’ve already asked for your free review');
-    if (state.readings < READINGS_FOR_REVIEW) throw new BadRequestException(`Add ${READINGS_FOR_REVIEW - state.readings} more blood pressure readings first`);
+    if (state.readings < READINGS_FOR_REVIEW) throw new BadRequestException(`Add ${READINGS_FOR_REVIEW - state.readings} more readings first`);
     const patient = await this.checkups.patientFor(user);
     const order = await this.orders.findOne({ where: { userId: user.id, includesReview: true, status: 'DELIVERED' }, order: { deliveredAt: 'ASC' } });
     await this.requests.save(this.requests.create({ patientId: patient.id, orderId: order?.id ?? null, status: 'REQUESTED', patientNote: note?.trim().slice(0, 500) || null, answer: null, answeredByUserId: null, answeredAt: null }));
