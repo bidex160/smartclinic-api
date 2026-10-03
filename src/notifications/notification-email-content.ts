@@ -107,6 +107,18 @@ const CONTENT: Record<NotificationType, NotificationContent> = {
     title: "Your child's check-up is coming up",
     body: "Open SmartClinic to plan your child's routine check-up.",
   },
+  [NotificationType.CHALLENGE_JOINED]: {
+    subject: "Someone joined your health challenge",
+    preheader: "Check the board to see who is ahead.",
+    title: "Someone joined your health challenge",
+    body: "Open SmartClinic to see your challenge board.",
+  },
+  [NotificationType.CHALLENGE_RESULT]: {
+    subject: "Your health challenge is over",
+    preheader: "See where you finished.",
+    title: "Your health challenge is over",
+    body: "Open SmartClinic to see the final board and start another challenge.",
+  },
   [NotificationType.CLINICAL_ORDER_RECEIVED]: {
     subject: "A new request from your care provider",
     preheader: "Review it and choose where to get it done.",

@@ -9,6 +9,8 @@ import { PatientDailyRoutineCompletion } from '../patients/entities/patient-dail
 import { PatientHealthBasics } from '../patients/entities/patient-health-basics.entity';
 import { PatientRelationship } from '../patients/entities/patient-relationship.entity';
 import { Patient } from '../patients/entities/patient.entity';
+import { PlayModule } from '../play/play.module';
+import { HealthWordGame } from '../play/play.entities';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 import { FamilyKidsController } from './family-kids.controller';
 import { FamilyKidsService } from './family-kids.service';
@@ -21,9 +23,10 @@ import { NudgesService } from './nudges.service';
     AuthModule,
     NotificationsModule,
     WhatsAppModule,
+    PlayModule,
     TypeOrmModule.forFeature([
       Patient, PatientRelationship, PatientHealthBasics, PatientDailyCheckIn, PatientDailyRoutineCompletion, HealthQuizAnswer,
-      ChildDailyTask, ChildTaskCompletion, ChildQuizAnswer, NudgeSettings,
+      ChildDailyTask, ChildTaskCompletion, ChildQuizAnswer, NudgeSettings, HealthWordGame,
     ]),
   ],
   controllers: [FamilyKidsController, NudgesController],

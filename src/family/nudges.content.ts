@@ -2,12 +2,17 @@
  * Once-a-day nudges. Short, kind, never alarming, never medical advice.
  * yo, ha, ig, rw and tw are drafts for native-speaker review (see the translation review sheet).
  */
-export type NudgeKind = 'quiz' | 'streak' | 'kids' | 'passport' | 'welcomeBack' | 'visitSoon' | 'visitToday';
+import { playText } from '../play/i18n';
+
+type BaseKind = 'quiz' | 'streak' | 'kids' | 'passport' | 'welcomeBack' | 'visitSoon' | 'visitToday';
+/** Nudges about Play live with the Play text (see src/play/i18n). */
+const PLAY_KINDS = { challenge: 'challengeNudge', challengeLead: 'challengeLead', word: 'wordNudge' } as const;
+export type NudgeKind = BaseKind | keyof typeof PLAY_KINDS;
 export type NudgeLanguage = 'en' | 'pcm' | 'yo' | 'ha' | 'ig' | 'rw' | 'fr' | 'sw' | 'tw';
 
 type Text = { title: string; body: string };
 
-export const NUDGES: Readonly<Record<NudgeLanguage, Readonly<Record<NudgeKind, Text>>>> = {
+export const NUDGES: Readonly<Record<NudgeLanguage, Readonly<Record<BaseKind, Text>>>> = {
   en: {
     quiz: { title: 'Your health question is ready', body: 'One quick question a day. Answer today’s for up to 10 points.' },
     streak: { title: 'Keep your {n}-day streak going', body: 'Do one small thing today: your check-in or today’s question.' },
@@ -94,7 +99,7 @@ export const NUDGES: Readonly<Record<NudgeLanguage, Readonly<Record<NudgeKind, T
 export function nudgeText(language: string, kind: NudgeKind, params: Record<string, string | number>): Text {
   const lang = (language in NUDGES ? language : 'en') as NudgeLanguage;
   const fill = (s: string) => s.replace(/\{(\w+)\}/g, (w, k: string) => (params[k] === undefined ? w : String(params[k])));
-  const t = NUDGES[lang][kind];
+  const t = kind in PLAY_KINDS ? playText(lang).messages[PLAY_KINDS[kind as keyof typeof PLAY_KINDS]] : NUDGES[lang][kind as BaseKind];
   return { title: fill(t.title), body: fill(t.body) };
 }
 
@@ -102,6 +107,10 @@ export interface NudgeFacts {
   activeToday: boolean;
   streak: number;
   quizAnsweredToday: boolean;
+  /** Finished today's Health Word. */
+  wordPlayedToday?: boolean;
+  /** A running challenge with others where I haven't scored today. */
+  challenge?: { rank: number; total: number; daysLeft: number; code: string } | null;
   passportIncomplete: boolean;
   /** Children with tasks left today. */
   kidsPending: { name: string; done: number; total: number; ref: string }[];
@@ -121,7 +130,8 @@ export interface NudgeChoice {
  * The one nudge to send today, or null. Rules:
  * - Already active today and no child waiting: say nothing.
  * - Ignored a week in a row: every 3rd day. Three weeks: once a week. Never nag.
- * - Most useful first: a child waiting, a streak at risk, a welcome back, today's question, the passport.
+ * - Most useful first: a child waiting, a friend challenge, a streak at risk, a welcome back,
+ *   today's question or Health Word (alternating days), the passport.
  */
 export function chooseNudge(f: NudgeFacts): NudgeChoice | null {
   const kid = f.kidsPending.find((k) => k.done < k.total);
@@ -129,9 +139,16 @@ export function chooseNudge(f: NudgeFacts): NudgeChoice | null {
   if (f.ignoredInARow >= 21 && f.dayNumber % 7 !== 0) return null;
   if (f.ignoredInARow >= 7 && f.ignoredInARow < 21 && f.dayNumber % 3 !== 0) return null;
   if (kid) return { kind: 'kids', params: { child: kid.name, done: kid.done, total: kid.total }, route: `/me/family/kids/${kid.ref}` };
+  if (f.challenge) {
+    const c = f.challenge;
+    return { kind: c.rank === 1 ? 'challengeLead' : 'challenge', params: { rank: c.rank, total: c.total, days: c.daysLeft }, route: `/me/play/challenges/${c.code}` };
+  }
   if (f.streak >= 2) return { kind: 'streak', params: { n: f.streak }, route: '/me/progress' };
   if (f.ignoredInARow >= 3) return { kind: 'welcomeBack', params: {}, route: '/me/progress' };
+  const wordFirst = f.dayNumber % 2 === 1;
+  if (wordFirst && !f.wordPlayedToday) return { kind: 'word', params: {}, route: '/me/play' };
   if (!f.quizAnsweredToday) return { kind: 'quiz', params: {}, route: '/me/progress' };
+  if (!f.wordPlayedToday) return { kind: 'word', params: {}, route: '/me/play' };
   if (f.passportIncomplete) return { kind: 'passport', params: {}, route: '/me/health-passport' };
   return null;
 }
