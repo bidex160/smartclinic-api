@@ -157,6 +157,12 @@ class EnvironmentVariables {
   @IsOptional() @IsString() FACILITY_CLAIM_CODE_WHATSAPP_TEMPLATE?: string;
   @IsOptional() @IsIn(["true", "false"]) FACILITY_AUTO_INVITES_ENABLED?: string;
   @IsOptional() @IsIn(["true", "false"]) PROVIDER_AUTO_APPROVAL_ENABLED?: string;
+  // Check-ups: free "Know your numbers" checks. Fee paid to the partner pharmacy per check ("NGN:1500,GHS:15").
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) FREE_CHECKS_PER_WEEK?: number;
+  @IsOptional() @IsString() FREE_CHECK_PROVIDER_FEE?: string;
+  @IsOptional() @IsIn(["true", "false"]) CHECKUP_REMINDERS_ENABLED?: string;
+  // Health shop: delivery fee per order, paid to the supplying pharmacy ("NGN:1500").
+  @IsOptional() @IsString() SHOP_DELIVERY_FEE?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) FACILITY_AUTO_INVITE_MIN_DEMAND?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) FACILITY_AUTO_INVITES_PER_HOUR?: number;
   // Nigeria Health Facility Registry API (https://hfr.fmohconnect.gov.ng/developers). Nightly sync when the key is set.

@@ -121,6 +121,24 @@ const CONTENT: Record<NotificationType, NotificationContent> = {
     title: "Your child's check-up is coming up",
     body: "Open SmartClinic to plan your child's routine check-up.",
   },
+  [NotificationType.CHECKUP_DUE]: {
+    subject: "Your next check-up step is due",
+    preheader: "It only takes a few minutes to book.",
+    title: "Your next check-up step is due",
+    body: "Open SmartClinic to see your plan and book your next check.",
+  },
+  [NotificationType.FREE_CHECK_DONE]: {
+    subject: "A free health check is done",
+    preheader: "See what the numbers mean.",
+    title: "A free health check is done",
+    body: "Open SmartClinic to see the results and the next step.",
+  },
+  [NotificationType.SHOP_ORDER_UPDATE]: {
+    subject: "Update on your SmartClinic order",
+    preheader: "Open SmartClinic to see where it is.",
+    title: "Update on your order",
+    body: "Open SmartClinic to see the latest on your order.",
+  },
   [NotificationType.CHALLENGE_JOINED]: {
     subject: "Someone joined your health challenge",
     preheader: "Check the board to see who is ahead.",

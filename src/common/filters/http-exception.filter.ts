@@ -11,6 +11,8 @@ import { Request, Response } from 'express';
 interface HttpExceptionResponse {
   error?: string;
   message?: string | string[];
+  /** Safe, structured facts the client needs to recover (e.g. how much to top up). */
+  details?: Record<string, unknown>;
 }
 
 @Catch()
@@ -57,6 +59,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
       statusCode: status,
       error,
       message,
+      ...(typeof exceptionResponse === 'object' && exceptionResponse.details && typeof exceptionResponse.details === 'object' && !Array.isArray(exceptionResponse.details)
+        ? { details: exceptionResponse.details }
+        : {}),
       timestamp: new Date().toISOString(),
       path: request.url,
     });
