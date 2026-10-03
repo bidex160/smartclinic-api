@@ -153,6 +153,27 @@ class EnvironmentVariables {
   /** Approved Meta template for facility invites; body params: facility name, claim link. */
   @IsOptional() @IsString() FACILITY_INVITE_WHATSAPP_TEMPLATE?: string;
   @IsOptional() @IsIn(["true", "false"]) FACILITY_REMINDERS_ENABLED?: string;
+  /** Meta "authentication" template for claim codes: body {{1}} = code, with a copy-code button. */
+  @IsOptional() @IsString() FACILITY_CLAIM_CODE_WHATSAPP_TEMPLATE?: string;
+  @IsOptional() @IsIn(["true", "false"]) FACILITY_AUTO_INVITES_ENABLED?: string;
+  @IsOptional() @IsIn(["true", "false"]) PROVIDER_AUTO_APPROVAL_ENABLED?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) FACILITY_AUTO_INVITE_MIN_DEMAND?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) FACILITY_AUTO_INVITES_PER_HOUR?: number;
+  // Nigeria Health Facility Registry API (https://hfr.fmohconnect.gov.ng/developers). Nightly sync when the key is set.
+  @IsOptional() @IsString() HFR_API_KEY?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) HFR_API_BASE_URL?: string;
+  @IsOptional() @IsIn(["true", "false"]) FACILITY_REGISTRY_SYNC_ENABLED?: string;
+  // Google Maps place IDs for review/directions links (Text Search, IDs only).
+  @IsOptional() @IsString() GOOGLE_PLACES_API_KEY?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) GOOGLE_PLACES_HOURLY_LIMIT?: number;
+  // SMS for claim codes: termii (Nigeria) or africastalking. "test" logs codes locally (never in production).
+  @IsOptional() @IsIn(["termii", "africastalking", "test", "none"]) SMS_PROVIDER?: string;
+  @IsOptional() @IsString() TERMII_API_KEY?: string;
+  @IsOptional() @IsString() TERMII_SENDER_ID?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) TERMII_BASE_URL?: string;
+  @IsOptional() @IsString() AFRICASTALKING_USERNAME?: string;
+  @IsOptional() @IsString() AFRICASTALKING_API_KEY?: string;
+  @IsOptional() @IsString() AFRICASTALKING_SENDER_ID?: string;
   @IsOptional() @IsString() NUDGE_WHATSAPP_LANGUAGES?: string;
   // Wellness points toward Health Checks: value of ONE point per currency, in major units ("NGN:5,GHS:0.04,RWF:4").
   @IsOptional() @IsString() WELLNESS_POINT_VALUES?: string;

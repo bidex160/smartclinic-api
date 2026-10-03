@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
+import { mapsLinks } from '../facility-outreach/registry/google-places';
 import { Patient } from '../patients/entities/patient.entity';
 import { PatientStatus } from '../patients/enums/patient-status.enum';
 import { CurrentProviderService } from '../providers/current-provider.service';
@@ -24,20 +25,57 @@ export class PartnerFacilityDirectoryService {
   ) {}
 
   async directory(user: User, query: PartnerFacilityDirectoryQueryDto) {
-    await this.patient(user.id);
+    const patient = await this.patient(user.id);
     const qb = this.listings.createQueryBuilder('listing')
       .leftJoinAndSelect('listing.provider', 'provider')
       .where('listing.active = true');
     if (query.facilityType) qb.andWhere('listing.facilityType = :type', { type: query.facilityType });
     if (query.stateOrRegion) qb.andWhere('listing.stateOrRegion ILIKE :state', { state: query.stateOrRegion });
-    if (query.city) qb.andWhere('listing.city ILIKE :city', { city: query.city });
-    if (query.q) qb.andWhere('(listing.displayName ILIKE :q OR listing.city ILIKE :q OR listing.stateOrRegion ILIKE :q)', { q: `%${query.q}%` });
-    qb.orderBy('listing.displayName', 'ASC')
+    if (query.city) qb.andWhere('(listing.city ILIKE :city OR listing.lga ILIKE :city)', { city: query.city });
+    if (query.q) qb.andWhere('(listing.displayName ILIKE :q OR listing.city ILIKE :q OR listing.stateOrRegion ILIKE :q OR listing.address ILIKE :q)', { q: `%${query.q.replace(/[%_]/g, '')}%` });
+    if (query.verifiedOnly) qb.andWhere('(listing.registryVerified = true OR EXISTS (SELECT 1 FROM provider_credentials pc WHERE pc.provider_id = listing.provider_id AND pc.status = \'VERIFIED\'))');
+    const near = typeof query.lat === 'number' && typeof query.lng === 'number';
+    if (near) {
+      // Equirectangular distance is plenty for sorting within a country; km = degrees × 111.
+      const cos = Math.cos((query.lat! * Math.PI) / 180);
+      qb.addSelect(`CASE WHEN listing.latitude IS NULL THEN NULL ELSE 111.0 * SQRT(POWER(listing.latitude - :lat, 2) + POWER((listing.longitude - :lng) * :cos, 2)) END`, 'distance_km')
+        .setParameters({ lat: query.lat, lng: query.lng, cos })
+        .orderBy('distance_km', 'ASC', 'NULLS LAST');
+    } else {
+      qb.orderBy('CASE WHEN listing.providerId IS NOT NULL THEN 0 WHEN listing.registryVerified THEN 1 ELSE 2 END', 'ASC');
+    }
+    qb.addOrderBy('listing.displayName', 'ASC')
       .addOrderBy('listing.stateOrRegion', 'ASC', 'NULLS LAST')
       .addOrderBy('listing.city', 'ASC', 'NULLS LAST')
-      .skip((query.page - 1) * query.limit).take(query.limit);
-    const [rows, total] = await qb.getManyAndCount();
-    return { items: rows.map(row => this.view(row)), page: query.page, limit: query.limit, total, totalPages: total ? Math.ceil(total / query.limit) : 0 };
+      .offset((query.page - 1) * query.limit).limit(query.limit);
+    const [{ entities, raw }, total] = await Promise.all([qb.getRawAndEntities(), qb.getCount()]);
+    const ids = entities.map((r) => r.id);
+    const contacts = new Map<string, { phone: string | null; whatsapp: string | null }>();
+    const asked = new Set<string>();
+    const verifiedProviders = new Set<string>();
+    if (ids.length) {
+      const rows: { listing_id: string; phone: string | null; whatsapp: string | null }[] = await this.listings.manager.query('SELECT listing_id, phone, whatsapp FROM facility_outreach WHERE listing_id = ANY($1::uuid[])', [ids]);
+      for (const r of rows) contacts.set(r.listing_id, { phone: r.phone, whatsapp: r.whatsapp });
+      for (const i of await this.interests.find({ where: { patientId: patient.id, listingId: In(ids) }, select: { listingId: true } })) asked.add(i.listingId);
+      const providerIds = entities.map((r) => r.providerId).filter((v): v is string => Boolean(v));
+      if (providerIds.length) {
+        const creds: { provider_id: string }[] = await this.listings.manager.query("SELECT provider_id FROM provider_credentials WHERE provider_id = ANY($1::uuid[]) AND status = 'VERIFIED'", [providerIds]);
+        for (const c of creds) verifiedProviders.add(c.provider_id);
+      }
+    }
+    // getRawAndEntities keeps the order of entities and raw rows aligned by id.
+    const distance = new Map<string, number | null>();
+    for (const r of raw as Record<string, unknown>[]) distance.set(String(r['listing_id']), r['distance_km'] == null ? null : Math.round(Number(r['distance_km']) * 10) / 10);
+    return {
+      items: entities.map((row) => ({
+        ...this.view(row),
+        contact: contacts.get(row.id) ?? { phone: row.registryPhone, whatsapp: null },
+        verified: row.registryVerified || (row.providerId ? verifiedProviders.has(row.providerId) : false),
+        alreadyAsked: asked.has(row.id),
+        distanceKm: near ? distance.get(row.id) ?? null : null,
+      })),
+      page: query.page, limit: query.limit, total, totalPages: total ? Math.ceil(total / query.limit) : 0,
+    };
   }
 
   async requestContact(user: User, listingId: string, consentAcknowledged: boolean) {
@@ -128,7 +166,11 @@ export class PartnerFacilityDirectoryService {
       sourceReference: row.sourceReference,
       displayName: row.displayName,
       facilityType: row.facilityType,
-      location: { city: row.city, stateOrRegion: row.stateOrRegion, countryCode: row.countryCode },
+      location: { city: row.city, stateOrRegion: row.stateOrRegion, countryCode: row.countryCode, address: row.address, lga: row.lga },
+      levelOfCare: row.levelOfCare,
+      ownership: row.ownership,
+      registryVerified: row.registryVerified,
+      ...mapsLinks(row),
       readiness: row.readiness,
       providerReference: row.provider?.providerReference ?? null,
       source: row.source,

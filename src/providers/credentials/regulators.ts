@@ -12,6 +12,8 @@ export interface Regulator {
   types: readonly ProviderType[];
   /** Where staff can check a number, when the regulator publishes one. */
   checkUrl?: string;
+  /** Only ever set by the system (registry match), never chosen by the provider. */
+  automatic?: boolean;
 }
 
 const PERSON = [ProviderType.INDIVIDUAL];
@@ -28,6 +30,8 @@ export const REGULATORS: readonly Regulator[] = [
   { code: 'HEFAMAA', name: 'Lagos State Health Facility Monitoring and Accreditation Agency (HEFAMAA)', countries: ['NG'], types: FACILITY },
   { code: 'NG_STATE_MOH', name: 'State Ministry of Health facility registration', countries: ['NG'], types: [...FACILITY, ProviderType.OTHER] },
   { code: 'FMOH', name: 'Federal Ministry of Health (federal hospitals)', countries: ['NG'], types: [ProviderType.HOSPITAL] },
+  // Set automatically when a facility claims its registry listing with a code; not offered as a choice at sign-up.
+  { code: 'NHFR', name: 'Nigeria Health Facility Registry (Federal Ministry of Health)', countries: ['NG'], types: [...FACILITY, ProviderType.PHARMACY], checkUrl: 'https://hfr.fmohconnect.gov.ng/facilitieslist', automatic: true },
   // Ghana
   { code: 'GMDC', name: 'Medical and Dental Council, Ghana', countries: ['GH'], types: PERSON },
   { code: 'NMC_GH', name: 'Nursing and Midwifery Council of Ghana', countries: ['GH'], types: PERSON },
@@ -47,12 +51,12 @@ export const REGULATORS: readonly Regulator[] = [
 
 export function regulatorsFor(countryCode: string | null | undefined, type: ProviderType | null | undefined): Regulator[] {
   const country = String(countryCode ?? '').toUpperCase();
-  const list = REGULATORS.filter((r) => r.code !== 'OTHER' && (!country || r.countries.includes(country)) && (!type || r.types.includes(type)));
+  const list = REGULATORS.filter((r) => r.code !== 'OTHER' && !r.automatic && (!country || r.countries.includes(country)) && (!type || r.types.includes(type)));
   return [...list, REGULATORS.find((r) => r.code === 'OTHER')!];
 }
 
 export function isRegulator(code: string): boolean {
-  return REGULATORS.some((r) => r.code === code);
+  return REGULATORS.some((r) => r.code === code && !r.automatic);
 }
 
 /** Doctors must say what they practise; facilities may list departments but don't have to. */

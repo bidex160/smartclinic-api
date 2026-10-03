@@ -151,7 +151,8 @@ export class AdminProvidersService {
     return this.get(id);
   }
 
-  async approve(id: string, actorUserId: string): Promise<AdminProviderDetailResponseDto> {
+  /** `actorUserId` null means approved automatically (licence confirmed from the national registry). */
+  async approve(id: string, actorUserId: string | null): Promise<AdminProviderDetailResponseDto> {
     await this.providers.manager.transaction(async (manager) => {
       const providerRepository = manager.getRepository(Provider);
       const provider = await providerRepository.findOne({ where: { id }, withDeleted: true, lock: { mode: "pessimistic_write" } });

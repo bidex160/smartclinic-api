@@ -14,6 +14,7 @@ import { ProviderConfigurationContextService } from './provider-configuration-co
 import { ProviderCredentialsService } from './credentials/provider-credentials.service';
 import { FacilityOutreachService } from '../facility-outreach/facility-outreach.service';
 import { ProviderOnboardingReadinessService } from './provider-onboarding-readiness.service';
+import { ProviderAutoApprovalService } from './provider-auto-approval.service';
 import { ReferralsService } from '../rewards/referrals.service';
 import { NotificationActionType } from '../notifications/enums/notification-action-type.enum';
 import { NotificationEntityType } from '../notifications/enums/notification-entity-type.enum';
@@ -34,6 +35,7 @@ export class ProviderOnboardingService {
     private readonly growthInvites?: ProviderGrowthInvitesService,
     @Optional() private readonly providerCredentials?: ProviderCredentialsService,
     @Optional() private readonly facilityOutreach?: FacilityOutreachService,
+    @Optional() private readonly autoApproval?: ProviderAutoApprovalService,
   ) {}
 
   async register(dto: RegisterProviderDto): Promise<ProviderOnboardingProfileResponseDto> {
@@ -55,6 +57,10 @@ export class ProviderOnboardingService {
         if (dto.claimToken && this.facilityOutreach) await this.facilityOutreach.claim(manager, dto.claimToken, provider);
         return provider;
       });
+      // Claimed from the registry with a code and licensed there: no need to wait for staff.
+      if (dto.claimToken && this.autoApproval && (await this.autoApproval.approveIfAutomatic(provider.id).catch(() => false))) {
+        return this.map((await this.providers.findOne({ where: { id: provider.id } })) ?? provider);
+      }
       return this.map(provider);
     } catch (error) {
       if (error instanceof QueryFailedError) throw new ConflictException('A provider account or application already exists for these details');

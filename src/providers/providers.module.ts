@@ -82,6 +82,7 @@ import { ProviderGrowthInvitesController } from './provider-growth-invites.contr
 import { InstitutionalVirtualCareService } from './institutional-virtual-care.service';
 import { InstitutionalVirtualCareController } from './institutional-virtual-care.controller';
 import { AdminProviderCredentialsController, ProviderCredentialsController, PublicSpecialtiesController } from './credentials/provider-credentials.controller';
+import { ProviderAutoApprovalService } from './provider-auto-approval.service';
 import { ProviderCredentialsService } from './credentials/provider-credentials.service';
 import { ClinicalSpecialty, ProviderCredential, ProviderSpecialty } from './credentials/credential.entities';
 
@@ -179,6 +180,7 @@ import { FacilityOutreachModule } from '../facility-outreach/facility-outreach.m
     ProviderCareServicesService,
     FindCareService,
     ProviderCareEligibilityService,
+    ProviderAutoApprovalService,
   ],
   exports: [
     ProviderCredentialsService,

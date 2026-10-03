@@ -38,6 +38,17 @@ export class FacilityOutreach {
   /** 0 = none sent yet, 1 = first reminder sent, 2 = second (last) reminder sent. */
   @Column({ name: 'reminder_stage', type: 'smallint', default: 0 }) reminderStage!: number;
   @Column({ name: 'next_reminder_at', type: 'timestamptz', nullable: true }) nextReminderAt!: Date | null;
+  /** Claim by code: sha256 of the 6-digit code sent to the facility's registered phone or email. */
+  @Column({ name: 'claim_code_hash', type: 'varchar', length: 64, nullable: true, select: false }) claimCodeHash?: string | null;
+  @Column({ name: 'claim_code_expires_at', type: 'timestamptz', nullable: true }) claimCodeExpiresAt!: Date | null;
+  @Column({ name: 'claim_code_attempts', type: 'smallint', default: 0 }) claimCodeAttempts!: number;
+  /** Codes sent since claim_code_window_at (a rolling day), to stop anyone flooding the facility. */
+  @Column({ name: 'claim_codes_sent', type: 'smallint', default: 0 }) claimCodesSent!: number;
+  @Column({ name: 'claim_code_window_at', type: 'timestamptz', nullable: true }) claimCodeWindowAt!: Date | null;
+  @Column({ name: 'claim_code_sent_at', type: 'timestamptz', nullable: true }) claimCodeSentAt!: Date | null;
+  /** Someone entered a code sent to the registered contact: they control the facility's official phone or email. */
+  @Column({ name: 'ownership_verified_at', type: 'timestamptz', nullable: true }) ownershipVerifiedAt!: Date | null;
+  @Column({ name: 'ownership_verified_via', type: 'varchar', length: 12, nullable: true }) ownershipVerifiedVia!: string | null;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;
 }
@@ -54,6 +65,12 @@ export enum OutreachEventKind {
   VISIT = 'VISIT',
   NOTE = 'NOTE',
   CLAIMED = 'CLAIMED',
+  /** A claim code was sent to the registered contact. */
+  CODE_SENT = 'CODE_SENT',
+  /** The code was entered correctly. */
+  OWNERSHIP_VERIFIED = 'OWNERSHIP_VERIFIED',
+  /** Licence confirmed from the national registry, no staff check needed. */
+  AUTO_VERIFIED = 'AUTO_VERIFIED',
 }
 
 /** Everything that happened with one facility: invites, reminders, calls, the claim. */
