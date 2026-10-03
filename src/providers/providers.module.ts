@@ -85,12 +85,15 @@ import { AdminProviderCredentialsController, ProviderCredentialsController, Publ
 import { ProviderCredentialsService } from './credentials/provider-credentials.service';
 import { ClinicalSpecialty, ProviderCredential, ProviderSpecialty } from './credentials/credential.entities';
 
+import { FacilityOutreachModule } from '../facility-outreach/facility-outreach.module';
+
 @Module({
   imports: [
     AuthModule,
     EmailModule,
     NotificationsModule,
     RewardsModule,
+    FacilityOutreachModule,
     TypeOrmModule.forFeature([
       ClinicalSpecialty,
       ProviderSpecialty,
