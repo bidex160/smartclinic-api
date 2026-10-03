@@ -59,6 +59,8 @@ import { PasswordResetService } from './password-reset.service';
     JwtAuthGuard,
     RolesGuard,
     JwtModule,
+    // JwtAuthGuard needs the User repository wherever it is used, so share it with importing modules.
+    TypeOrmModule,
   ],
 })
 export class AuthModule {}
