@@ -150,6 +150,9 @@ class EnvironmentVariables {
   // whose body has two parameters: {{1}} title, {{2}} message.
   @IsOptional() @IsIn(["true", "false"]) NUDGES_ENABLED?: string;
   @IsOptional() @IsString() NUDGE_WHATSAPP_TEMPLATE?: string;
+  /** Approved Meta template for facility invites; body params: facility name, claim link. */
+  @IsOptional() @IsString() FACILITY_INVITE_WHATSAPP_TEMPLATE?: string;
+  @IsOptional() @IsIn(["true", "false"]) FACILITY_REMINDERS_ENABLED?: string;
   @IsOptional() @IsString() NUDGE_WHATSAPP_LANGUAGES?: string;
   // Wellness points toward Health Checks: value of ONE point per currency, in major units ("NGN:5,GHS:0.04,RWF:4").
   @IsOptional() @IsString() WELLNESS_POINT_VALUES?: string;

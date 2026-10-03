@@ -32,6 +32,7 @@ import { CompanionModule } from './companion/companion.module';
 import { WellnessAdminModule } from './wellness-admin/wellness-admin.module';
 import { FamilyModule } from './family/family.module';
 import { PlayModule } from './play/play.module';
+import { FacilityOutreachModule } from './facility-outreach/facility-outreach.module';
 import { CohortContactModule } from './cohort/cohort-contact.module';
 import { SupportModule } from './support/support.module';
 import { ProviderRecruitmentInvitationsModule } from './provider-recruitment-invitations/provider-recruitment-invitations.module';
@@ -72,6 +73,7 @@ const persistenceDomainModules = configuration.database.enabled
       WellnessAdminModule,
       FamilyModule,
       PlayModule,
+      FacilityOutreachModule,
       CohortContactModule,
       SupportModule,
       ProviderRecruitmentInvitationsModule,

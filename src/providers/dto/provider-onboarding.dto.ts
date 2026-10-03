@@ -103,6 +103,11 @@ export class RegisterProviderDto extends ProviderProfileFieldsDto {
   @IsString()
   @MaxLength(60)
   licenceNumber?: string;
+  @ApiPropertyOptional({ description: "Facility claim link token (/claim/<token>)" })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z0-9_-]{20,80}$/)
+  claimToken?: string;
   @ApiPropertyOptional({ description: "Opaque provider-growth invitation token" })
   @IsOptional()
   @IsString()
