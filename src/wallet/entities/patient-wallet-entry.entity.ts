@@ -18,6 +18,7 @@ export enum PatientWalletEntryType {
   HOSPITAL_PAYMENT = "HOSPITAL_PAYMENT",
   REFUND = "REFUND",
   ADJUSTMENT = "ADJUSTMENT",
+  SHOP_PURCHASE = "SHOP_PURCHASE",
 }
 @Entity("patient_wallet_entries")
 @Index("UQ_patient_wallet_entry_idempotency", ["idempotencyKey"], {

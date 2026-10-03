@@ -158,9 +158,9 @@ export class HealthPassportService {
   }
 
   private async measurements(patientId: string) {
-    const [reported, checked] = await Promise.all([this.reportedMeasurements(patientId), this.providerMeasurements(patientId)]);
+    const [reported, checked, checkup] = await Promise.all([this.reportedMeasurements(patientId), this.providerMeasurements(patientId), this.checkupMeasurements(patientId)]);
     const latest = new Map<string, PassportMeasurement>();
-    for (const item of [...reported, ...checked].sort((a, b) => +new Date(b.recordedAt) - +new Date(a.recordedAt))) {
+    for (const item of [...reported, ...checked, ...checkup].sort((a, b) => +new Date(b.recordedAt) - +new Date(a.recordedAt))) {
       const key = `${item.type}:${item.provenance}`;
       if (!latest.has(key)) latest.set(key, item);
     }
@@ -188,6 +188,30 @@ export class HealthPassportService {
         sourceDomain: 'GUIDED_SELF_CHECK', sourceReference: row.selfCheck.reference,
       };
     });
+  }
+
+  /** Numbers from "Know your numbers": taken at home, or at a partner pharmacy. */
+  private async checkupMeasurements(patientId: string): Promise<PassportMeasurement[]> {
+    let rows: { id: string; source: string; systolic: number | null; diastolic: number | null; glucose_mmol: string | null; measured_at: Date; provider_reference: string | null; provider_name: string | null }[] = [];
+    try {
+      rows = await this.patients.manager.query(
+        `SELECT r.id, r.source, r.systolic, r.diastolic, r.glucose_mmol, r.measured_at, p.provider_reference, p.display_name AS provider_name
+         FROM vital_readings r LEFT JOIN providers p ON p.id = r.provider_id
+         WHERE r.patient_id = $1 ORDER BY r.measured_at DESC LIMIT 20`,
+        [patientId],
+      );
+    } catch {
+      return []; // before the migration has run
+    }
+    const out: PassportMeasurement[] = [];
+    for (const r of rows) {
+      const provenance = r.source === 'HOME' ? HealthPassportProvenance.REPORTED_BY_YOU : HealthPassportProvenance.CHECKED_BY_PROVIDER;
+      const provider = r.provider_reference ? { providerReference: r.provider_reference, displayName: r.provider_name ?? '' } : undefined;
+      const base = { recordedAt: new Date(r.measured_at), provenance, sourceDomain: 'CHECKUP', sourceReference: r.id, ...(provider ? { provider } : {}) };
+      if (r.systolic !== null) out.push({ ...base, type: 'BLOOD_PRESSURE', value: { systolic: r.systolic, diastolic: r.diastolic }, unit: 'mmHg' });
+      if (r.glucose_mmol !== null) out.push({ ...base, type: 'BLOOD_GLUCOSE', value: { value: Number(r.glucose_mmol) }, unit: 'mmol/L' });
+    }
+    return out;
   }
 
   private async providerMeasurements(patientId: string) {
