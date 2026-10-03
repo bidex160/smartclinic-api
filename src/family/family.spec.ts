@@ -36,8 +36,8 @@ describe('daily nudge rules', () => {
     expect(chooseNudge({ ...base, streak: 5 })).toMatchObject({ kind: 'streak', params: { n: 5 } });
     expect(chooseNudge({ ...base, ignoredInARow: 4 })?.kind).toBe('welcomeBack');
     expect(chooseNudge(base)?.kind).toBe('quiz');
-    expect(chooseNudge({ ...base, quizAnsweredToday: true, passportIncomplete: true })?.kind).toBe('passport');
-    expect(chooseNudge({ ...base, quizAnsweredToday: true })).toBeNull();
+    expect(chooseNudge({ ...base, quizAnsweredToday: true, wordPlayedToday: true, passportIncomplete: true })?.kind).toBe('passport');
+    expect(chooseNudge({ ...base, quizAnsweredToday: true, wordPlayedToday: true })).toBeNull();
   });
 
   it('backs off when ignored: every 3rd day after a week, weekly after three weeks', () => {
@@ -153,7 +153,8 @@ describe('NudgesService', () => {
     expect(sent).toHaveLength(0);
     await svc.dispatchDue(new Date('2026-10-03T07:10:00Z')); // 08:10 Lagos
     expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatchObject({ type: 'DAILY_NUDGE', title: 'Votre question santé est prête', entityType: 'WELLNESS', metadata: { route: '/me/progress', kind: 'quiz' }, idempotencyKey: 'nudge:u1:2026-10-03', email: { enabled: false } });
+    // 3 October is an odd day number, so the Health Word comes before the question.
+    expect(sent[0]).toMatchObject({ type: 'DAILY_NUDGE', title: nudgeText('fr', 'word', {}).title, entityType: 'WELLNESS', metadata: { route: '/me/play', kind: 'word' }, idempotencyKey: 'nudge:u1:2026-10-03', email: { enabled: false } });
     expect(saved[0]).toMatchObject({ lastSentDate: '2026-10-03', lastNudgedDate: '2026-10-03', ignoredInARow: 0 });
   });
 

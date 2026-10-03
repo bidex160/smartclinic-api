@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -15,6 +15,7 @@ import { Patient } from '../../patients/entities/patient.entity';
 import { PatientRelationshipRole, PatientRelationshipStatus } from '../../patients/enums/patient-relationship.enum';
 import { PatientStatus } from '../../patients/enums/patient-status.enum';
 import { localDateIn, longestStreak, streakEndingAt } from '../../patients/patient-daily-routine-completions.service';
+import { HealthChallengeParticipant, HealthWordGame } from '../../play/play.entities';
 import { User } from '../../users/entities/user.entity';
 import { HealthQuizAnswer } from './health-quiz-answer.entity';
 import { HEALTH_QUIZ, questionForDate } from './health-quiz.bank';
@@ -28,6 +29,8 @@ export const POINTS = {
   selfCheck: 20,
   healthCheck: 50,
   passportItem: 10,
+  wordPlayed: 5,
+  wordSolved: 5,
 } as const;
 
 export const LEVELS = [
@@ -53,6 +56,10 @@ export interface EngagementFacts {
   routineDates: string[];
   quizAnswers: number;
   quizCorrect: number;
+  /** Health Word games finished and solved. Optional so older callers keep working. */
+  wordPlayed?: number;
+  wordSolved?: number;
+  challengesJoined?: number;
 }
 
 /** Turns what a patient has done into points, a level, badges and passport completion. Pure, so it is easy to test. */
@@ -78,7 +85,9 @@ export function summarise(f: EngagementFacts, today: string) {
     new Set(f.routineDates).size * POINTS.routineDay +
     f.selfChecks * POINTS.selfCheck +
     f.healthChecks * POINTS.healthCheck +
-    doneItems * POINTS.passportItem;
+    doneItems * POINTS.passportItem +
+    (f.wordPlayed ?? 0) * POINTS.wordPlayed +
+    (f.wordSolved ?? 0) * POINTS.wordSolved;
 
   const level = [...LEVELS].reverse().find((l) => points >= l.min) ?? LEVELS[0];
   const next = LEVELS.find((l) => l.min > points) ?? null;
@@ -98,6 +107,9 @@ export function summarise(f: EngagementFacts, today: string) {
     badge('STREAK_30', 'Thirty-day streak', 'Active 30 days in a row', bestStreak >= 30, { current: bestStreak, target: 30 }),
     badge('QUIZ_10', 'Curious mind', 'Answered 10 daily quiz questions', f.quizAnswers >= 10, { current: f.quizAnswers, target: 10 }),
     badge('QUIZ_SHARP', 'Sharp', 'Got 20 quiz answers right', f.quizCorrect >= 20, { current: f.quizCorrect, target: 20 }),
+    badge('WORD_FINDER', 'Word finder', 'Solved your first Health Word', (f.wordSolved ?? 0) >= 1, { current: f.wordSolved ?? 0, target: 1 }),
+    badge('WORD_WIZARD', 'Word wizard', 'Solved 10 Health Words', (f.wordSolved ?? 0) >= 10, { current: f.wordSolved ?? 0, target: 10 }),
+    badge('CHALLENGER', 'Challenger', 'Took part in a health challenge with friends', (f.challengesJoined ?? 0) >= 1, { current: f.challengesJoined ?? 0, target: 1 }),
     badge('KNOW_YOUR_NUMBERS', 'Know your numbers', 'Recorded your blood group and genotype', f.bloodGroup && f.genotype, { current: Number(f.bloodGroup) + Number(f.genotype), target: 2 }),
     badge('FIRST_HEALTH_CHECK', 'Checked', 'Completed your first Smart Health Check', f.healthChecks > 0, { current: f.healthChecks, target: 1 }),
     badge('ROUTINE_BUILDER', 'Routine builder', 'Set up three daily routines', f.routines >= 3, { current: f.routines, target: 3 }),
@@ -132,6 +144,8 @@ export class EngagementService {
     @InjectRepository(GuidedSelfCheck) private readonly selfChecks: Repository<GuidedSelfCheck>,
     @InjectRepository(HealthCheckEncounter) private readonly encounters: Repository<HealthCheckEncounter>,
     @InjectRepository(HealthQuizAnswer) private readonly answers: Repository<HealthQuizAnswer>,
+    @Optional() @InjectRepository(HealthWordGame) private readonly words?: Repository<HealthWordGame>,
+    @Optional() @InjectRepository(HealthChallengeParticipant) private readonly challengeSeats?: Repository<HealthChallengeParticipant>,
   ) {}
 
   async overview(user: User, timezone: string, now = new Date()) {
@@ -190,7 +204,7 @@ export class EngagementService {
   }
 
   private async facts(patient: Patient, user: User): Promise<EngagementFacts> {
-    const [basics, routines, checkIns, ticks, dependants, selfChecks, healthChecks, quizAnswers, quizCorrect] = await Promise.all([
+    const [basics, routines, checkIns, ticks, dependants, selfChecks, healthChecks, quizAnswers, quizCorrect, wordPlayed, wordSolved, challengesJoined] = await Promise.all([
       this.basics.findOne({ where: { patientId: patient.id } }),
       this.routines.count({ where: { patientId: patient.id, enabled: true } }),
       this.checkIns.find({ where: { patientId: patient.id }, select: { localDate: true } }),
@@ -200,6 +214,9 @@ export class EngagementService {
       this.encounters.createQueryBuilder('e').innerJoin('e.booking', 'b').where('b.participantPatientId = :id', { id: patient.id }).andWhere('e.status = :status', { status: HealthCheckEncounterStatus.COMPLETED }).getCount(),
       this.answers.count({ where: { patientId: patient.id } }),
       this.answers.count({ where: { patientId: patient.id, correct: true } }),
+      this.words?.count({ where: { patientId: patient.id, finished: true } }) ?? 0,
+      this.words?.count({ where: { patientId: patient.id, solved: true } }) ?? 0,
+      this.challengeSeats?.count({ where: { userId: user.id } }) ?? 0,
     ]);
     return {
       dateOfBirth: Boolean(patient.dateOfBirth),
@@ -216,6 +233,9 @@ export class EngagementService {
       routineDates: ticks.map((t) => t.localDate),
       quizAnswers,
       quizCorrect,
+      wordPlayed,
+      wordSolved,
+      challengesJoined,
     };
   }
 }

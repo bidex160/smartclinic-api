@@ -16,6 +16,8 @@ import { PatientRelationshipRole, PatientRelationshipStatus } from '../patients/
 import { PatientStatus } from '../patients/enums/patient-status.enum';
 import { localDateIn, streakEndingAt } from '../patients/patient-daily-routine-completions.service';
 import { User } from '../users/entities/user.entity';
+import { ChallengesService } from '../play/challenges.service';
+import { HealthWordGame } from '../play/play.entities';
 import { WHATSAPP_PROVIDER, WhatsAppProvider } from '../whatsapp/adapters/whatsapp-provider.interface';
 import { safeTimezone } from './family-kids.service';
 import { ageInYears, KIDS_MAX_AGE, nextWellChildVisit } from './kids.content';
@@ -63,6 +65,8 @@ export class NudgesService implements OnModuleInit, OnModuleDestroy {
     @InjectRepository(ChildTaskCompletion) private readonly kidDone: Repository<ChildTaskCompletion>,
     @Optional() private readonly config?: ConfigService,
     @Optional() @Inject(WHATSAPP_PROVIDER) private readonly whatsapp?: WhatsAppProvider,
+    @Optional() @InjectRepository(HealthWordGame) private readonly words?: Repository<HealthWordGame>,
+    @Optional() private readonly challenges?: ChallengesService,
   ) {}
 
   onModuleInit(): void {
@@ -130,7 +134,8 @@ export class NudgesService implements OnModuleInit, OnModuleDestroy {
           `(p.createdAt >= :since
             OR EXISTS (SELECT 1 FROM patient_daily_check_ins c WHERE c.patient_id = p.id AND c.created_at >= :since)
             OR EXISTS (SELECT 1 FROM patient_daily_routine_completions r WHERE r.patient_id = p.id AND r.completed_at >= :since)
-            OR EXISTS (SELECT 1 FROM health_quiz_answers q WHERE q.patient_id = p.id AND q.created_at >= :since))`,
+            OR EXISTS (SELECT 1 FROM health_quiz_answers q WHERE q.patient_id = p.id AND q.created_at >= :since)
+            OR EXISTS (SELECT 1 FROM health_word_games w WHERE w.patient_id = p.id AND w.started_at >= :since))`,
           { since },
         )
         .getMany();
@@ -157,14 +162,15 @@ export class NudgesService implements OnModuleInit, OnModuleDestroy {
     const userId = patient.userId!;
     const language = ns?.language ?? 'en';
     const since = new Date(Date.parse(`${today}T12:00:00Z`) - ACTIVE_WITHIN_DAYS * 86_400_000).toISOString().slice(0, 10);
-    const [checkIns, ticks, quiz, basics] = await Promise.all([
+    const [checkIns, ticks, quiz, basics, words] = await Promise.all([
       this.checkIns.find({ where: { patientId: patient.id, localDate: MoreThanOrEqual(since) }, select: { localDate: true } }),
       this.ticks.find({ where: { patientId: patient.id, localDate: MoreThanOrEqual(since) }, select: { localDate: true } }),
       this.quiz.find({ where: { patientId: patient.id, localDate: MoreThanOrEqual(since) }, select: { localDate: true } }),
       this.basics.findOne({ where: { patientId: patient.id } }),
+      this.words?.find({ where: { patientId: patient.id, localDate: MoreThanOrEqual(since), finished: true }, select: { localDate: true } }) ?? Promise.resolve([] as HealthWordGame[]),
     ]);
     const day = (d: string | Date) => String(d instanceof Date ? d.toISOString() : d).slice(0, 10);
-    const activeDays = new Set([...checkIns, ...ticks, ...quiz].map((r) => day(r.localDate)));
+    const activeDays = new Set([...checkIns, ...ticks, ...quiz, ...words].map((r) => day(r.localDate)));
     const lastNudged = ns?.lastNudgedDate ? day(ns.lastNudgedDate) : null;
     const respondedSinceLast = lastNudged ? [...activeDays].some((d) => d >= lastNudged) : true;
 
@@ -184,6 +190,8 @@ export class NudgesService implements OnModuleInit, OnModuleDestroy {
       activeToday: activeDays.has(today),
       streak: streakEndingAt(today, activeDays),
       quizAnsweredToday: quiz.some((q) => day(q.localDate) === today),
+      wordPlayedToday: words.some((w) => day(w.localDate) === today),
+      challenge: this.challenges ? await this.challenges.nudgeFacts(userId, today).catch(() => null) : null,
       passportIncomplete: !basics?.bloodGroup || !basics?.genotype || !basics?.emergencyContactPhone,
       kidsPending: kids.filter((k) => k.total > 0).map((k) => ({ name: k.name, done: k.done, total: k.total, ref: k.ref })),
       ignoredInARow: ns?.ignoredInARow ?? 0,

@@ -29,6 +29,7 @@ import { RewardBookingRedemption } from '../rewards/entities/reward-booking-rede
 import { HealthPassportController } from './health-passport.controller';
 import { HealthPassportService } from './health-passport.service';
 import { User } from '../users/entities/user.entity';
+import { HealthChallengeParticipant, HealthWordGame } from '../play/play.entities';
 
 @Module({
   imports: [
@@ -57,6 +58,8 @@ import { User } from '../users/entities/user.entity';
       RewardBookingRedemption,
       WellnessPointAdjustment,
       AppSetting,
+      HealthWordGame,
+      HealthChallengeParticipant,
     ]),
   ],
   controllers: [HealthPassportController, EngagementController],
