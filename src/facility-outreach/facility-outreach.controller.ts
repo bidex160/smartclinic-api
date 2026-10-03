@@ -10,7 +10,10 @@ import { RateBudget } from '../companion/companion.controller';
 import { PartnerFacilityType } from '../patient-provider-connections/entities/partner-facility-listing.entity';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../users/enums/user-role.enum';
+import { CodeChannel, FacilityClaimCodeService } from './facility-claim-code.service';
 import { FacilityOutreachService, STAGES, type OutreachStage } from './facility-outreach.service';
+import { GooglePlaceMatcher } from './registry/google-places';
+import { FacilityRegistrySyncService } from './registry/registry-sync.service';
 
 export class OutreachQueryDto {
   @ApiPropertyOptional({ example: 'NG' }) @IsOptional() @Matches(/^[A-Za-z]{2}$/) countryCode?: string;
@@ -124,5 +127,88 @@ export class PublicFacilityClaimController {
     const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',')[0]?.trim();
     if (!this.budget.take(forwarded || req.ip || 'unknown')) throw new HttpException('Please wait a few minutes and try again', HttpStatus.TOO_MANY_REQUESTS);
     return this.outreach.preview(token);
+  }
+}
+
+// ---------- Registry sync (staff) ----------
+
+@ApiTags('Facility outreach')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.OPERATIONS)
+@Controller('admin/facility-registry')
+export class AdminFacilityRegistryController {
+  constructor(private readonly sync: FacilityRegistrySyncService, private readonly places: GooglePlaceMatcher) {}
+
+  @Get()
+  @ApiOperation({ summary: 'National registry sync: whether it is set up, totals, and the last runs' })
+  async status() {
+    return { ...(await this.sync.status()), googlePlaces: { configured: this.places.configured } };
+  }
+
+  @Post('sync')
+  @ApiOperation({ summary: 'Start a registry sync now (it also runs by itself every night)' })
+  start() {
+    if (!this.sync.configured) throw new HttpException('Add HFR_API_KEY to the server settings first', HttpStatus.CONFLICT);
+    void this.sync.start('STAFF');
+    return { started: true };
+  }
+}
+
+// ---------- Claim by code (public) ----------
+
+export class ClaimSearchDto {
+  @ApiProperty({ example: 'St Jude' }) @IsString() @MaxLength(120) q!: string;
+  @ApiPropertyOptional({ example: 'NG' }) @IsOptional() @Matches(/^[A-Za-z]{2}$/) countryCode?: string;
+  @ApiPropertyOptional({ example: 'Lagos' }) @IsOptional() @IsString() @MaxLength(120) stateOrRegion?: string;
+}
+
+export class SendClaimCodeDto {
+  @ApiProperty({ enum: ['SMS', 'WHATSAPP', 'EMAIL'] }) @IsIn(['SMS', 'WHATSAPP', 'EMAIL']) channel!: CodeChannel;
+}
+
+export class VerifyClaimCodeDto {
+  @ApiProperty({ example: '123456' }) @IsString() @Matches(/^\s*\d{3}\s?\d{3}\s*$/, { message: 'Enter the 6-digit code' }) code!: string;
+}
+
+type PublicReq = { headers: Record<string, string | string[] | undefined>; ip?: string };
+function clientKey(req: PublicReq): string {
+  return String(req.headers['x-forwarded-for'] ?? '').split(',')[0]?.trim() || req.ip || 'unknown';
+}
+
+@ApiTags('Facility outreach')
+@Controller('public/facility-claim-codes')
+export class PublicFacilityClaimCodeController {
+  private readonly searches = new RateBudget(60, 10 * 60_000);
+  private readonly sends = new RateBudget(10, 60 * 60_000);
+  private readonly checks = new RateBudget(30, 10 * 60_000);
+  constructor(private readonly codes: FacilityClaimCodeService) {}
+
+  @Get('search')
+  @ApiOperation({ summary: 'Find your facility to claim it. Contacts are masked.' })
+  search(@Query() q: ClaimSearchDto, @Req() req: PublicReq) {
+    if (!this.searches.take(clientKey(req))) throw new HttpException('Please wait a few minutes and try again', HttpStatus.TOO_MANY_REQUESTS);
+    return this.codes.search(q);
+  }
+
+  @Get(':listingId')
+  @ApiOperation({ summary: 'Where a claim code can be sent for this facility (masked)' })
+  channels(@Param('listingId', ParseUUIDPipe) id: string, @Req() req: PublicReq) {
+    if (!this.searches.take(clientKey(req))) throw new HttpException('Please wait a few minutes and try again', HttpStatus.TOO_MANY_REQUESTS);
+    return this.codes.channelsFor(id);
+  }
+
+  @Post(':listingId/send')
+  @ApiOperation({ summary: 'Send a 6-digit code to the facility’s registered phone, WhatsApp or email' })
+  send(@Param('listingId', ParseUUIDPipe) id: string, @Body() dto: SendClaimCodeDto, @Req() req: PublicReq) {
+    if (!this.sends.take(clientKey(req))) throw new HttpException('Too many codes. Please wait and try again.', HttpStatus.TOO_MANY_REQUESTS);
+    return this.codes.sendCode(id, dto.channel);
+  }
+
+  @Post(':listingId/verify')
+  @ApiOperation({ summary: 'Check the code; returns a claim token for sign-up' })
+  verify(@Param('listingId', ParseUUIDPipe) id: string, @Body() dto: VerifyClaimCodeDto, @Req() req: PublicReq) {
+    if (!this.checks.take(clientKey(req))) throw new HttpException('Too many tries. Please wait and try again.', HttpStatus.TOO_MANY_REQUESTS);
+    return this.codes.verifyCode(id, dto.code);
   }
 }

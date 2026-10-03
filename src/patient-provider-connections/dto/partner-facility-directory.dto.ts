@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { PartnerFacilityType } from '../entities/partner-facility-listing.entity';
 
 export class PartnerFacilityDirectoryQueryDto {
@@ -9,6 +9,11 @@ export class PartnerFacilityDirectoryQueryDto {
   @IsOptional() @IsEnum(PartnerFacilityType) facilityType?: PartnerFacilityType;
   @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @MaxLength(120) stateOrRegion?: string;
   @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @MaxLength(120) city?: string;
+  /** Near me: sort by distance from this point (never stored). */
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(-90) @Max(90) lat?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(-180) @Max(180) lng?: number;
+  /** Only facilities whose licence is current in the national registry, or that are verified on SmartClinic. */
+  @IsOptional() @Transform(({ value }) => value === true || value === 'true') @IsBoolean() verifiedOnly?: boolean;
 }
 
 export class RequestFacilityContactDto {

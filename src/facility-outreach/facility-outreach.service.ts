@@ -10,6 +10,7 @@ import { renderTransactionalEmail, sanitizeEmailSubject } from '../notifications
 import { PartnerFacilityListing, PartnerFacilityReadiness, PartnerFacilityType } from '../patient-provider-connections/entities/partner-facility-listing.entity';
 import { Provider } from '../providers/entities/provider.entity';
 import { ProviderType } from '../providers/enums/provider-type.enum';
+import { CredentialStatus, ProviderCredential } from '../providers/credentials/credential.entities';
 import { User } from '../users/entities/user.entity';
 import { WHATSAPP_PROVIDER, WhatsAppProvider } from '../whatsapp/adapters/whatsapp-provider.interface';
 import { csvObjects } from './csv';
@@ -22,6 +23,11 @@ const REMINDER_DAYS = [2, 5] as const; // first reminder 2 days after the invite
 const MAX_IMPORT_ROWS = 5000;
 const SCHEDULER_MS = 60 * 60_000;
 const DAY = 86_400_000;
+/** How long an entered claim code counts as proof of ownership while they finish signing up. */
+export const OWNERSHIP_PROOF_MS = 7 * DAY;
+/** Patients who must ask for a facility before we invite it automatically. */
+const DEFAULT_AUTO_INVITE_DEMAND = 3;
+const DEFAULT_AUTO_INVITES_PER_RUN = 100;
 
 export interface ContactInput {
   phone?: string | null;
@@ -103,6 +109,7 @@ export class FacilityOutreachService implements OnModuleInit, OnModuleDestroy {
     if (process.env['NODE_ENV'] === 'test' || this.config?.get('FACILITY_REMINDERS_ENABLED') === 'false') return;
     this.interval = setInterval(() => {
       this.sendReminders().catch((e) => this.logger.warn(`Facility reminders failed: ${e instanceof Error ? e.name : 'UNKNOWN'}`));
+      this.autoInvite().catch((e) => this.logger.warn(`Automatic invites failed: ${e instanceof Error ? e.name : 'UNKNOWN'}`));
     }, SCHEDULER_MS);
     this.interval.unref?.();
   }
@@ -271,28 +278,62 @@ export class FacilityOutreachService implements OnModuleInit, OnModuleDestroy {
     return { url: this.claimUrl(token), createdAt: row.claimTokenCreatedAt };
   }
 
+  /** The raw claim token, for the claim-by-code flow (which hands it straight to the browser). */
+  async issueClaimToken(listingId: string): Promise<string> {
+    const { url } = await this.claimLink(listingId);
+    return url.slice(url.lastIndexOf('/') + 1);
+  }
+
+  /**
+   * Patients asking for a facility is the signal to invite it. Every hour, facilities that enough
+   * patients have asked for, and that we haven't contacted yet, get the invite automatically
+   * (email now; WhatsApp too once Meta approves the template). Nobody has to press a button.
+   */
+  async autoInvite(): Promise<number> {
+    if (this.config?.get('FACILITY_AUTO_INVITES_ENABLED') === 'false') return 0;
+    const min = Math.max(1, Number(this.config?.get('FACILITY_AUTO_INVITE_MIN_DEMAND') ?? DEFAULT_AUTO_INVITE_DEMAND) || DEFAULT_AUTO_INVITE_DEMAND);
+    const cap = Math.max(1, Number(this.config?.get('FACILITY_AUTO_INVITES_PER_HOUR') ?? DEFAULT_AUTO_INVITES_PER_RUN) || DEFAULT_AUTO_INVITES_PER_RUN);
+    const wa = this.whatsappTemplateReady();
+    const due: { id: string }[] = await this.dataSource.query(
+      `SELECT l.id FROM partner_facility_listings l
+       JOIN (SELECT listing_id, COUNT(DISTINCT patient_id)::int AS n FROM partner_facility_interests GROUP BY listing_id) d ON d.listing_id = l.id
+       JOIN facility_outreach o ON o.listing_id = l.id
+       WHERE l.active AND l.provider_id IS NULL AND d.n >= $1 AND o.status = 'LISTED' AND o.invites_sent = 0
+         AND (o.email IS NOT NULL OR ($2::boolean AND (o.whatsapp IS NOT NULL OR o.phone IS NOT NULL)))
+       ORDER BY d.n DESC LIMIT $3`,
+      [min, wa, cap],
+    );
+    let sent = 0;
+    for (const { id } of due) {
+      const r = await this.invite(id, null).catch(() => null);
+      if (r?.sent.length) sent += 1;
+    }
+    return sent;
+  }
+
   /**
    * Send the invite. Email and (when Meta has approved the template) WhatsApp go automatically.
    * Otherwise we hand back ready-to-send WhatsApp and SMS links for staff to send from their phone.
    */
-  async invite(listingId: string, admin: User, channels: readonly ('EMAIL' | 'WHATSAPP')[] = ['EMAIL', 'WHATSAPP']) {
+  async invite(listingId: string, admin: User | null, channels: readonly ('EMAIL' | 'WHATSAPP')[] = ['EMAIL', 'WHATSAPP']) {
     const listing = await this.requireListing(listingId);
     const row = await this.row(listing.id);
     const { url } = await this.claimLink(listing.id);
     const demand = await this.demand(listing.id);
     const text = inviteText(listing.displayName, listing.city, demand, url);
+    const auto = !admin;
     const sent: string[] = [];
     if (channels.includes('EMAIL') && row.email) {
-      if (await this.sendEmail(row.email, listing, url, demand, `facility-invite:${listing.id}:${row.invitesSent + 1}`, false)) {
+      if (await this.sendEmail(row.email, listing, url, demand, `facility-invite:${listing.id}:${row.invitesSent + 1}${auto ? ':auto' : ''}`, false)) {
         sent.push('EMAIL');
-        await this.log(listing.id, OutreachEventKind.INVITE_EMAIL, row.email, admin.id);
+        await this.log(listing.id, OutreachEventKind.INVITE_EMAIL, row.email, admin?.id ?? null);
       }
     }
     const waNumber = row.whatsapp ?? row.phone;
     if (channels.includes('WHATSAPP') && waNumber && this.whatsappTemplateReady()) {
       if (await this.sendWhatsApp(waNumber, listing.displayName, url)) {
         sent.push('WHATSAPP');
-        await this.log(listing.id, OutreachEventKind.INVITE_WHATSAPP, waNumber, admin.id);
+        await this.log(listing.id, OutreachEventKind.INVITE_WHATSAPP, waNumber, admin?.id ?? null);
       }
     }
     if (sent.length) await this.markInvited(row);
@@ -346,6 +387,12 @@ export class FacilityOutreachService implements OnModuleInit, OnModuleDestroy {
       city: listing.city,
       interestedPatients: await this.demand(listing.id),
       claimed: Boolean(listing.providerId),
+      listingId: listing.id,
+      address: listing.address,
+      registryListed: listing.source === 'NHFR',
+      registryVerified: listing.registryVerified,
+      /** Already proved with a code: sign-up will confirm the licence automatically. */
+      ownershipVerified: canAutoVerify(listing, row),
     };
   }
 
@@ -366,6 +413,28 @@ export class FacilityOutreachService implements OnModuleInit, OnModuleDestroy {
     row.nextReminderAt = null;
     await repo.save(row);
     await manager.getRepository(FacilityOutreachEvent).insert({ listingId: listing.id, kind: OutreachEventKind.CLAIMED, note: `Claimed by ${provider.displayName}`.slice(0, 500), byUserId: null });
+    if (canAutoVerify(listing, row)) await this.autoVerify(manager, listing, provider);
+  }
+
+  /**
+   * The registry says the facility is licensed and operating, and the person signing up proved
+   * they control its registered phone or email. That is the licence check done: record it as
+   * verified, so the only thing left before going live is their own setup.
+   */
+  private async autoVerify(manager: EntityManager, listing: PartnerFacilityListing, provider: Provider): Promise<void> {
+    const creds = manager.getRepository(ProviderCredential);
+    const licenceNumber = (listing.registryUniqueId || listing.sourceReference).toUpperCase().replace(/[^A-Z0-9 /.\-]/g, '').slice(0, 60);
+    const taken = await creds.findOne({ where: { regulator: 'NHFR', licenceNumber }, select: { id: true, providerId: true } });
+    if (taken && taken.providerId !== provider.id) return;
+    const existing = await creds.findOne({ where: { providerId: provider.id } });
+    const now = new Date();
+    await creds.save({
+      ...(existing ?? {}), providerId: provider.id, regulator: 'NHFR', licenceNumber, status: CredentialStatus.VERIFIED,
+      submittedAt: existing?.submittedAt ?? now, verifiedAt: now, reviewedByUserId: null,
+      checkedVia: 'National Health Facility Registry (automatic)', reviewNote: [listing.registrationStatus, listing.licenceStatus].filter(Boolean).join(', ').slice(0, 500) || null,
+    });
+    await manager.getRepository(Provider).update({ id: provider.id }, { professionalReference: `NHFR ${licenceNumber}`.slice(0, 200) });
+    await manager.getRepository(FacilityOutreachEvent).insert({ listingId: listing.id, kind: OutreachEventKind.AUTO_VERIFIED, note: 'Licence confirmed from the national registry', byUserId: null });
   }
 
   // ---------- Reminders ----------
@@ -511,7 +580,9 @@ export class FacilityOutreachService implements OnModuleInit, OnModuleDestroy {
         demand
           ? `${demand} patient${demand === 1 ? ' has' : 's have'} asked to book or register with ${listing.displayName}${where} through SmartClinic.`
           : `${listing.displayName}${where} is listed on SmartClinic, where patients find and book care.`,
-        'Claim your free listing to receive their requests, take bookings and get paid. It takes about five minutes; we check your licence before you go live.',
+        listing.registryVerified
+          ? 'Claim your free listing to receive their requests, take bookings and get paid. It takes about five minutes: we send a code to your registered phone or email, and because your licence is current in the national registry, there is no paperwork to upload.'
+          : 'Claim your free listing to receive their requests, take bookings and get paid. It takes about five minutes; we check your licence before you go live.',
       ],
       action: { label: 'Claim your listing', url },
       footerNote: 'You received this because your facility is in a public health facility register. Reply to this email if you would rather not hear from us.',
@@ -528,6 +599,11 @@ export class FacilityOutreachService implements OnModuleInit, OnModuleDestroy {
       return false;
     }
   }
+}
+
+/** Licensed in the registry and the claimant proved they hold its registered contact, recently. */
+export function canAutoVerify(listing: Pick<PartnerFacilityListing, 'registryVerified'>, row: Pick<FacilityOutreach, 'ownershipVerifiedAt'>, now = new Date()): boolean {
+  return Boolean(listing.registryVerified && row.ownershipVerifiedAt && now.getTime() - new Date(row.ownershipVerifiedAt).getTime() <= OWNERSHIP_PROOF_MS);
 }
 
 export function inviteText(name: string, city: string | null, demand: number, url: string): string {

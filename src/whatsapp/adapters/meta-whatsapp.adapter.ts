@@ -19,7 +19,10 @@ export class MetaWhatsAppAdapter implements WhatsAppProvider {
       template: {
         name: input.template,
         language: { code: input.language },
-        components: input.bodyParams.length ? [{ type: 'body', parameters: input.bodyParams.map((text) => ({ type: 'text', text: text.slice(0, 900) })) }] : [],
+        components: [
+          ...(input.bodyParams.length ? [{ type: 'body', parameters: input.bodyParams.map((text) => ({ type: 'text', text: text.slice(0, 900) })) }] : []),
+          ...(input.codeButton ? [{ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: input.codeButton }] }] : []),
+        ],
       },
     });
   }
