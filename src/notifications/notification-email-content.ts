@@ -81,6 +81,20 @@ const CONTENT: Record<NotificationType, NotificationContent> = {
     body: "Your SmartClinic Network provider profile has been approved. Product-specific setup, services, and availability remain managed separately in your provider workspace.",
     ctaLabel: "Go to provider profile",
   },
+  [NotificationType.PROVIDER_LICENCE_VERIFIED]: {
+    subject: "Your licence has been verified",
+    preheader: "Patients will see a Verified badge on your profile.",
+    title: "Your licence is verified",
+    body: "We checked your licence with the regulator. Patients will see a Verified badge on your SmartClinic profile once your account is approved.",
+    ctaLabel: "Go to provider profile",
+  },
+  [NotificationType.PROVIDER_LICENCE_NEEDS_ATTENTION]: {
+    subject: "We couldn't verify your licence",
+    preheader: "Please check your licence details.",
+    title: "We couldn't verify your licence",
+    body: "We couldn't confirm your licence with the regulator. Sign in to check the number and upload a clear photo of your certificate.",
+    ctaLabel: "Review licence",
+  },
   [NotificationType.PROVIDER_REJECTED]: {
     subject: "Your provider profile needs attention",
     preheader: "Your provider profile requires changes before approval.",
