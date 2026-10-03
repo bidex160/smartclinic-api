@@ -75,3 +75,18 @@ describe('SupportService', () => {
     await expect(run({ name: 'Ada', phone: '+2348030000000', topic: 'SOMETHING' })).rejects.toBeDefined();
   });
 });
+
+describe('language feedback', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { scrub, LanguageFeedbackService } = require('./language-feedback');
+  it('removes emails and phone numbers people paste by mistake', () => {
+    expect(scrub('Call me on +250 788 123 456 or ada@example.test  please')).toBe('Call me on [number] or [email] please');
+  });
+  it('saves a report as open, with at most five matching keys', async () => {
+    const saved: Record<string, unknown>[] = [];
+    const repo = { create: (r: Record<string, unknown>) => r, save: async (r: Record<string, unknown>) => { saved.push(r); return { ...r, id: 'f1' }; } };
+    const svc = new LanguageFeedbackService(repo);
+    await expect(svc.create({ language: 'rw', shownText: ' Ikinyuranyo cy’isaha ', suggestion: 'Isaha y’aho uri', page: '/me/play', catalogKeys: ['a.b', 'a.b', 'c.d'] })).resolves.toEqual({ id: 'f1', received: true });
+    expect(saved[0]).toMatchObject({ language: 'rw', shownText: 'Ikinyuranyo cy’isaha', suggestion: 'Isaha y’aho uri', page: '/me/play', catalogKeys: ['a.b', 'c.d'], status: 'OPEN' });
+  });
+});
